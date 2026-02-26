@@ -1,0 +1,219 @@
+/* ... existing styles ... */
+
+/* Faction Description */
+.faction-description {
+  font-size: 1.1rem;
+  color: #555;
+  line-height: 1.6;
+  margin: 1.5rem 0;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.subtitle {
+  color: #5865f2;
+  font-size: 1.1rem;
+  margin-bottom: 1rem;
+}
+
+/* Faction Stats */
+.faction-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin: 3rem 0;
+}
+
+.stat-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border-top: 4px solid #5865f2;
+}
+
+.stat-card h4 {
+  font-size: 2.5rem;
+  color: #5865f2;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card p {
+  color: #666;
+  font-size: 1rem;
+}
+
+/* Groups Section */
+.groups-section {
+  margin: 4rem 0;
+  padding: 3rem 0;
+  border-top: 2px solid #e9ecef;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.groups-section h2 {
+  text-align: center;
+  margin-bottom: 0.5rem;
+  color: #2c3e50;
+}
+
+.section-intro {
+  text-align: center;
+  color: #666;
+  margin-bottom: 2rem;
+  font-size: 1.1rem;
+}
+
+/* Groups Grid */
+.groups-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-top: 2rem;
+}
+
+.group-card {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s, box-shadow 0.3s;
+  border-left: 5px solid #5865f2;
+  display: flex;
+  flex-direction: column;
+}
+
+.group-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.group-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+}
+
+.group-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  flex: 1;
+}
+
+.group-members {
+  background-color: #f0f2f5;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #666;
+  white-space: nowrap;
+  margin-left: 1rem;
+}
+
+.group-description {
+  padding: 1.5rem;
+  color: #555;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.group-footer {
+  padding: 1rem 1.5rem;
+  background-color: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.group-footer p {
+  margin: 0;
+}
+
+/* Call to Action Section */
+.cta-section {
+  background: linear-gradient(135deg, #5865f2 0%, #4752c4 100%);
+  color: white;
+  padding: 4rem 2rem;
+  border-radius: 8px;
+  text-align: center;
+  margin: 4rem 0;
+}
+
+.cta-section h2 {
+  margin-bottom: 1rem;
+  color: white;
+}
+
+.cta-section p {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
+/* Footer */
+.footer {
+  background-color: #2c3e50;
+  color: white;
+  padding: 2rem 0;
+  text-align: center;
+  margin-top: 4rem;
+}
+
+.footer p {
+  margin: 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .groups-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .group-header {
+    flex-direction: column;
+  }
+
+  .group-members {
+    margin-left: 0;
+    margin-top: 0.5rem;
+  }
+
+  .faction-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .cta-section {
+    padding: 2rem 1rem;
+  }
+
+  .faction-logo-corner {
+    position: relative;
+    top: 10px;    /* Adjust distance from top */
+    right: 1px;    /* Adjust distance from right */
+    width: 60px;    /* Set your preferred size */
+    height: auto;
+    z-index: 10;    /* Keeps it above other elements */
+  }
+
+  /* 3. Ensure the navbar doesn't cut off the image */
+  .navbar {
+    min-height: 80px;
+  }
+
+  /* Optional: Mobile fix to prevent overlap with nav links */
+  @media (max-width: 600px) {
+    .faction-logo-corner {
+      width: 50px;
+      top: 10px;
+      right: 10px;
+    }
+  }
+}

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>
+    <%= faction.name %> - SSG Server
+  </title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+  <div class="navbar">
+    <div class="container">
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px;">
+        <h1 style="margin: 0;">
+          <%= faction.name %>
+        </h1>
+
+        <!-- Main Stack (Image on top, Buttons on bottom) -->
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+
+          <!-- Logo -->
+          <img src="https://factionimages.torn.com/9b0aeb5d-75fe-4ff8-a528-0999948ffadf-53272.gif" alt="SSGLogo"
+            style="width: 400px; height: auto;"> <!-- Adjusted width for better fit -->
+
+          <!-- Buttons Row -->
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <button onclick="location.href='https://www.torn.com/factions.php?step=profile&ID=53272'" type="button"
+              class="btn" style="padding: 5px 15px;">
+              Join SSG
+            </button>
+
+            <% if (user) { %>
+              <div class="nav-links" style="display: flex; align-items: center; gap: 10px;">
+                <span style="font-size: 0.9rem;">Hi, <%= user.username %>!</span>
+                <a href="/dashboard" class="btn">Dashboard</a>
+                <a href="/logout" class="btn btn-danger">Logout</a>
+              </div>
+              <% } else { %>
+                <div class="nav-links">
+                  <a href="/auth/discord" class="btn btn-primary">Login with Discord</a>
+                </div>
+                <% } %>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- Faction Hero Section -->
+    <div class="hero">
+      <div class="faction-description">
+        <% faction.description.forEach(line=> { %>
+          <p style="margin-bottom: 10px;">
+            <%= line %>
+          </p>
+          <% }); %>
+      </div>
+    </div>
+
+    <!-- Faction Stats -->
+    <div class="faction-stats">
+      <div class="stat-card">
+        <h4>
+          <%= faction.memberCount %>
+        </h4>
+        <p>Total Members</p>
+      </div>
+      <div class="stat-card">
+        <h4>
+          <%= groups.length %>
+        </h4>
+        <p>Teams</p>
+      </div>
+    </div>
+
+    <!-- Groups Section -->
+    <section class="groups-section">
+      <h2>Our Groups</h2>
+      <p class="section-intro">Each division plays a vital role in our faction's success</p>
+
+      <div class="groups-grid">
+        <% groups.forEach(group=> { %>
+          <div class="group-card" data-color="<%= group.color %>">
+            <div class="group-header">
+              <h3>
+                <%= group.name %>
+              </h3>
+              <span class="group-members">
+                <%= group.members %> members
+              </span>
+            </div>
+            <p class="group-description">
+              <%= group.description %>
+            </p>
+            <div class="group-footer">
+              <p><strong>focus:</strong>
+                <%= group.focus %>
+              </p>
+            </div>
+          </div>
+          <% }); %>
+      </div>
+    </section>
+
+    <!-- Call to Action -->
+    <div class="cta-section">
+      <h2>Ready to Join?</h2>
+      <% if (!user) { %>
+        <p>Sign in with Discord to apply or learn more about our faction</p>
+        <a href="/auth/discord" class="btn btn-large btn-primary">Login with Discord</a>
+        <% } else { %>
+          <p>You're logged in! Check your dashboard for more options</p>
+          <a href="/dashboard" class="btn btn-large">Go to Dashboard</a>
+          <% } %>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <p>&copy; 2026 <%= faction.name %>. All rights reserved.</p>
+    </div>
+  </footer>
+</body>
+
+</html>

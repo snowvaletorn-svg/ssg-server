@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - SSG Server</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <div class="navbar">
+    <div class="container">
+      <h1>SSG Server</h1>
+      <div class="nav-links">
+        <span>Welcome, <%= user.username %>!</span>
+        <a href="/" class="btn">Home</a>
+        <a href="/logout" class="btn btn-danger">Logout</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="dashboard">
+      <h2>Dashboard</h2>
+
+      <!-- Sidebar Navigation -->
+      <div class="dashboard-layout">
+        <aside class="sidebar">
+          <nav class="sidebar-nav">
+            <a href="#profile" class="nav-item active" onclick="showSection('profile')">Profile</a>
+            <a href="#channels" class="nav-item" onclick="showSection('channels')">Channels</a>
+            <a href="#torn" class="nav-item" onclick="showSection('torn')">Torn API</a>
+          </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="dashboard-content">
+          
+          <!-- Profile Section -->
+          <section id="profile" class="section active">
+            <h3>Your Profile</h3>
+            <div class="profile-card">
+              <div class="profile-avatar">
+                <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png" alt="<%= user.username %>">
+              </div>
+              <div class="profile-info">
+                <p><strong>Username:</strong> <%= user.username %></p>
+                <p><strong>Email:</strong> <%= user.email %></p>
+                <p><strong>Discord ID:</strong> <%= user.id %></p>
+                <p><strong>Discriminator:</strong> <%= user.discriminator %></p>
+              </div>
+            </div>
+          </section>
+
+          <!-- Channels Section -->
+          <section id="channels" class="section">
+            <h3>Discord Channels</h3>
+            <div class="channels-container">
+              <% if (user.guilds && user.guilds.length > 0) { %>
+                <p>You are a member of <%= user.guilds.length %> server(s)</p>
+                <div class="guild-list">
+                  <% user.guilds.forEach(guild => { %>
+                    <div class="guild-item">
+                      <strong><%= guild.name %></strong>
+                      <p>Owner: <%= guild.owner ? 'Yes' : 'No' %></p>
+                      <button class="btn btn-small" onclick="linkChannels('<%= guild.id %>')">Link Channels</button>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } else { %>
+                <p>No servers found. Join a Discord server first!</p>
+              <% } %>
+            </div>
+          </section>
+
+          <!-- Torn API Section -->
+          <section id="torn" class="section">
+            <h3>Torn API Data</h3>
+            <div class="torn-container">
+              <button class="btn btn-primary" onclick="fetchTornData()">Fetch Torn Data</button>
+              <div id="torn-data" class="data-display"></div>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

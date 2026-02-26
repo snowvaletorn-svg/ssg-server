@@ -5,14 +5,21 @@ const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const cors = require('cors');
 const axios = require('axios');
+const path = require('path');
+const factionData = require('./data/factions');  // ADD THIS LINE
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// View engine setup
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Session Configuration
 app.use(session({
@@ -21,7 +28,7 @@ app.use(session({
   saveUninitialized: false,
   cookie: { 
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
@@ -33,7 +40,6 @@ passport.use(new DiscordStrategy({
     scope: ['identify', 'email', 'guilds']
   },
   (accessToken, refreshToken, profile, done) => {
-    // User profile from Discord
     profile.accessToken = accessToken;
     return done(null, profile);
   }
@@ -50,9 +56,21 @@ passport.deserializeUser((obj, done) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Middleware to check authentication
+const isAuthenticated = (req, res, next) => {
+  if (!req.user) {
+    return res.redirect('/');
+  }
+  next();
+};
+
 // Routes
 app.get('/', (req, res) => {
-  res.json({ message: 'SSG Server is running!' });
+  res.render('index', { 
+    user: req.user,
+    faction: factionData.faction,
+    groups: factionData.groups
+  });
 });
 
 // Discord OAuth Routes
@@ -66,31 +84,29 @@ app.get('/auth/discord/callback',
 );
 
 // Dashboard Route (Protected)
-app.get('/dashboard', (req, res) => {
-  if (!req.user) {
-    return res.status(401).json({ error: 'Not authenticated' });
-  }
-  res.json({
-    message: 'Welcome to your dashboard!',
-    user: req.user
-  });
+app.get('/dashboard', isAuthenticated, (req, res) => {
+  res.render('dashboard', { user: req.user });
 });
 
 // Logout Route
 app.get('/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
-    res.json({ message: 'Logged out successfully' });
+    res.redirect('/');
   });
 });
 
-// Torn API Route Example
-app.get('/api/torn/user', async (req, res) => {
-  try {
-    if (!req.user) {
-      return res.status(401).json({ error: 'Not authenticated' });
-    }
+// API Routes (Protected)
+app.get('/', (req, res) => {
+  res.render('index', { 
+    user: req.user,
+    faction: factionData.faction,
+    groups: factionData.groups
+  });
+});
 
+app.get('/api/torn/user', isAuthenticated, async (req, res) => {
+  try {
     const tornResponse = await axios.get(`https://api.torn.com/user/?selections=profile&key=${process.env.TORN_API_KEY}`);
     res.json(tornResponse.data);
   } catch (error) {
