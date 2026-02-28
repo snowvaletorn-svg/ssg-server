@@ -25,11 +25,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Session Configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  // NO 'store' property here
+  resave: true,                // Force session to save even if not modified
+  saveUninitialized: true,     // Create session even if not logged in yet
+  proxy: true,                 // CRITICAL: Tells express to trust Render's proxy
   cookie: { 
-    secure: false, // Set to false for the initial Render test
+    secure: true,              // Must be true for HTTPS
+    sameSite: 'lax',           // Required for cross-site redirects (Discord -> Your site)
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
