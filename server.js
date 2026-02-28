@@ -16,23 +16,16 @@ const PORT = process.env.PORT || 3000;
 // 1. SESSION STORE CONFIGURATION
 // Use MongoDB in production (Render), MemoryStore locally
 let sessionStore;
+
 if (isProduction && process.env.MONGO_URI) {
-  // Try version 4+ syntax, fallback to version 3 syntax if it fails
-  try {
-    sessionStore = MongoStore.create({
-      mongoUrl: process.env.MONGO_URI,
-      collectionName: 'sessions',
-      ttl: 14 * 24 * 60 * 60
-    });
-  } catch (e) {
-    // Legacy version 3 syntax
-    sessionStore = new MongoStore({
-      url: process.env.MONGO_URI,
-      collection: 'sessions',
-      ttl: 14 * 24 * 60 * 60
-    });
-  }
+  // Use the modern static .create() method
+  sessionStore = MongoStore.create({
+    mongoUrl: process.env.MONGO_URI,
+    collectionName: 'sessions',
+    ttl: 14 * 24 * 60 * 60 // 14 days
+  });
 } else {
+  // Fallback for local testing
   sessionStore = new session.MemoryStore();
 }
 
