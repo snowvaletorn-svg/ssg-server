@@ -7,6 +7,7 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const factionData = require('./data/factions');  // ADD THIS LINE
+const isProduction = process.env.NODE_ENV === 'production';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,12 +26,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Session Configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: true,                // Force session to save even if not modified
-  saveUninitialized: true,     // Create session even if not logged in yet
-  proxy: true,                 // CRITICAL: Tells express to trust Render's proxy
+  resave: false,               // Prevents session race conditions
+  saveUninitialized: false,    // Don't create empty sessions
+  proxy: isProduction,         // Only trust proxy in production (e.g., Render)
   cookie: { 
-    secure: true,              // Must be true for HTTPS
-    sameSite: 'lax',           // Required for cross-site redirects (Discord -> Your site)
+    secure: isProduction,      // Required for HTTPS; must be false for local HTTP
+    sameSite: 'lax',           // Allows Discord to redirect back with the cookie
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
@@ -82,7 +83,9 @@ app.get('/auth/discord', passport.authenticate('discord'));
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
   (req, res) => {
-    res.redirect('/dashboard');
+    req.session.save(() => {
+      res.redirect('/dashboard');
+    });
   }
 );
 
