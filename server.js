@@ -6,7 +6,7 @@ const DiscordStrategy = require('passport-discord').Strategy;
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
-const factionData = require('../data/factions');  // ADD THIS LINE
+const factionData = require('./data/factions');  // ADD THIS LINE
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,21 +14,22 @@ app.set('trust proxy', 1);
 
 // View engine setup
 app.set('view engine', 'ejs');
-app.set('views', path.join(process.cwd(), 'views'));
+app.set('views', path.join(__dirname, 'views'));
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(process.cwd(), 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Session Configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
+  // NO 'store' property here
   cookie: { 
-    secure: true, //required by Vercel
+    secure: false, // Set to false for the initial Render test
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
