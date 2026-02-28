@@ -51,14 +51,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 3. SESSION MIDDLEWARE
 app.use(session({
   store: sessionStore,
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
-  proxy: isProduction,
+  proxy: isProduction, // Crucial for Render
   cookie: { 
-    secure: isProduction, // Must be false for localhost HTTP
-    sameSite: 'lax',      // Required for Discord OAuth redirect
-    maxAge: 24 * 60 * 60 * 1000
+    // This is the key: true for Render (HTTPS), false for Localhost (HTTP)
+    secure: isProduction, 
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true
   }
 }));
 
@@ -108,15 +110,9 @@ app.get('/auth/discord', passport.authenticate('discord'));
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
   (req, res) => {
-    console.log("=== Login Success ===");
-    console.log("User ID:", req.user.id);
-    console.log("Session ID:", req.sessionID);
-
+    // Manually save the session to the database (MongoDB)
     req.session.save((err) => {
-      if (err) {
-        console.error("Session Save Error:", err);
-        return next(err);
-      }
+      if (err) return next(err);
       res.redirect('/dashboard');
     });
   }
