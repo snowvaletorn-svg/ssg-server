@@ -5,7 +5,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>
-    <%= faction.name %> - SSG Server
+    S.S.G - Strategy | Strength | Growth - SSG Server
   </title>
   <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -14,115 +14,230 @@
   <div class="navbar">
     <div class="container">
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 20px;">
-        <h1 style="margin: 0;">
-          <%= faction.name %>
-        </h1>
-
         <!-- Main Stack (Image on top, Buttons on bottom) -->
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px;">
+        <div
+          style="display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; text-align: center;">
 
-          <!-- Logo -->
+          <!-- Logo: Expands to full width with a cap for quality -->
           <img src="https://factionimages.torn.com/9b0aeb5d-75fe-4ff8-a528-0999948ffadf-53272.gif" alt="SSGLogo"
-            style="width: 400px; height: auto;"> <!-- Adjusted width for better fit -->
+            style="width: 100%; max-width: 1000px; height: auto; display: block;">
+          <h1 style="margin: 0;">
+            S.S.G - Strategy | Strength | Growth
+          </h1>
 
-          <!-- Buttons Row -->
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <button onclick="location.href='https://www.torn.com/factions.php?step=profile&ID=53272'" type="button"
-              class="btn" style="padding: 5px 15px;">
-              Join SSG
-            </button>
-
-            <% if (user) { %>
-              <div class="nav-links" style="display: flex; align-items: center; gap: 10px;">
-                <span style="font-size: 0.9rem;">Hi, <%= user.username %>!</span>
-                <a href="/dashboard" class="btn">Dashboard</a>
-                <a href="/logout" class="btn btn-danger">Logout</a>
+          <% if (user) { %>
+            <!-- Centered Text and Buttons -->
+            <div class="nav-links"
+              style="display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 15px; margin-top: 10px;">
+              <span style="font-size: 1rem; width: 100%; margin-bottom: 5px;">Hi, <strong>
+                  <%= user.username %>
+                </strong>!</span>
+              <a href="/dashboard" class="btn" style="min-width: 120px;">Dashboard</a>
+              <a href="/logout" class="btn btn-danger" style="min-width: 120px;">Logout</a>
+            </div>
+            <% } else { %>
+              <div class="nav-links" style="margin-top: 10px;">
+                <a href="/auth/discord" class="btn btn-primary">Discord Login</a>
               </div>
-              <% } else { %>
-                <div class="nav-links">
-                  <a href="/auth/discord" class="btn btn-primary">Login with Discord</a>
-                </div>
-                <% } %>
-          </div>
+              <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
 
+  <div class="container">
+    <!-- Faction Description Section -->
+    <div class="hero">
+      <div class="faction-description">
+        <p>Welcome to S.S.G, where strategy, strength, and growth define everything we do.
+          </br>
+          We're more than just a faction we're a team built on trust, teamwork, and the drive to succeed together.
+          </br>
+          We strive to maintain a safe and fun environment to play, grow, and dominate the city together.
+          </br>
+          We also have a Day Care should you also need it. </p>
+        <div class="desc-grid">
+          <div class="desc-card">
+            <h4>Strategy</h4>
+            <p>Every move we make is calculated.</p>
+          </div>
+          <div class="desc-card">
+            <h4>Strength</h4>
+            <p>We train hard, fight smart, and back each other up in every war.</p>
+          </div>
+          <div class="desc-card">
+            <h4>Growth</h4>
+            <p>Whether you're a seasoned fighter or just starting out, </br>
+              we'll help you level up fast with guidance, faction parks, group activities, competition, and team
+              building exercises.</p>
+          </div>
+        </div>
+        <h2>Perks</h2>
+        <div class="perks-grid">
+          <div class="perks-card">
+            <h4>Weapons</h4>
+            <p>Provided by the faction</p>
+          </div>
+          <div class="perks-card">
+            <h4>Armor</h4>
+            <p>Provided by the faction</p>
+          </div>
+          <div class="perks-card">
+            <h4>Medical</h4>
+            <p>Ipecac, Medical kits, morphine, and blood bags provided by the faction to be used anytime</p>
+          </div>
+          <div class="perks-card">
+            <h4>Consumables</h4>
+            <p>Candy to be used anytime for jumps</p>
+          </div>
+          <div class="perks-card">
+            <h4>Drugs</h4>
+            <p>Xanax and Vicodin supplied by the faction during war</p>
+          </div>
+        </div>
+        <div class="perks-grid">
+          <div class="perks-card">
+            <h4>Travel</h4>
+            <p>Carry an additional 7 items</p>
+          </div>
+          <div class="perks-card">
+            <h4>Travel Cost</h4>
+            <p>Reduced by 15%</p>
+          </div>
+        </div>
+        <div>
+          <h2>What we expect from you:</h2>
+          <ul>
+            <li>Daily activity in discord and in game</li>
+            <li>Join OC (90% payout)</li>
+            <li>Join In with war and chaining</li>
+            <li>Join our S.S.G Discord and Torn Stats</li>
+            <li>Chat as much as you can and be a team player</li>
+            <li>Most Importantly, have fun!</li>
+          </ul>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="container">
-    <!-- Faction Hero Section -->
-    <div class="hero">
-      <div class="faction-description">
-        <% faction.description.forEach(line=> { %>
-          <p style="margin-bottom: 10px;">
-            <%= line %>
-          </p>
-          <% }); %>
-      </div>
+  <!-- Faction Stats -->
+  <div class="faction-stats">
+    <div class="stat-card">
+      <h4>
+        29
+      </h4>
+      <p>Total Members</p>
     </div>
-
-    <!-- Faction Stats -->
-    <div class="faction-stats">
-      <div class="stat-card">
-        <h4>
-          <%= faction.memberCount %>
-        </h4>
-        <p>Total Members</p>
-      </div>
-      <div class="stat-card">
-        <h4>
-          <%= groups.length %>
-        </h4>
-        <p>Teams</p>
-      </div>
-    </div>
-
-    <!-- Groups Section -->
-    <section class="groups-section">
-      <h2>Our Groups</h2>
-      <p class="section-intro">Each division plays a vital role in our faction's success</p>
-
-      <div class="groups-grid">
-        <% groups.forEach(group=> { %>
-          <div class="group-card" data-color="<%= group.color %>">
-            <div class="group-header">
-              <h3>
-                <%= group.name %>
-              </h3>
-              <span class="group-members">
-                <%= group.members %> members
-              </span>
-            </div>
-            <p class="group-description">
-              <%= group.description %>
-            </p>
-            <div class="group-footer">
-              <p><strong>focus:</strong>
-                <%= group.focus %>
-              </p>
-            </div>
-          </div>
-          <% }); %>
-      </div>
-    </section>
-
-    <!-- Call to Action -->
-    <div class="cta-section">
-      <h2>Ready to Join?</h2>
-      <% if (!user) { %>
-        <p>Sign in with Discord to apply or learn more about our faction</p>
-        <a href="/auth/discord" class="btn btn-large btn-primary">Login with Discord</a>
-        <% } else { %>
-          <p>You're logged in! Check your dashboard for more options</p>
-          <a href="/dashboard" class="btn btn-large">Go to Dashboard</a>
-          <% } %>
+    <div class="stat-card">
+      <h4>
+        5
+      </h4>
+      <p>Teams</p>
     </div>
   </div>
 
+  <!-- Groups Section -->
+  <section class="groups-section">
+    <h2>Our Groups</h2>
+    <p class="section-intro">Each division plays a vital role in our faction's success</p>
+    <div class="groups-grid">
+      <!--Ownership Card-->
+      <div class="owner-card">
+        <div class="group-header">
+          <h3>
+            Ownership
+          </h3>
+          <span class="group-members">
+            3 Members</span>
+        </div>
+        <p class="group-description">
+          These 3 members own the faction and have final decision on all aspect of the faction. All three members are available to assist, train, and answer questions.
+        </p>
+        <div class="group-footer">
+            <p><strong>focus:</strong>
+              Our goal is to ensure you understand what you are doing no matter the team you are on.
+            </p>
+          </div>
+      </div>
+      <!--Leadership Card-->
+      <div class="lead-card">
+        <div class="group-header">
+          <h3>
+            Leadership
+          </h3>
+          <span class="group-members">
+            2 Members</span>
+        </div>
+        <p class="group-description">
+          These members help to determine the path that the faction is on. Leadership is available to help answer questions as they arise.
+        </p>
+        <div class="group-footer">
+            <p><strong>focus:</strong>
+              Assisting ownership in day-to-day operations and to ensure members of each team have what they need to succeed.
+            </p>
+          </div>
+      </div>
+      <!--Strategy Card-->
+      <div class="strat-card">
+        <div class="group-header">
+          <h3>
+            Strategy
+          </h3>
+          <span class="group-members">
+            4 Members</span>
+        </div>
+        <p class="group-description">
+              This team is made up of members who are greater than level 15 and have shown the ability to help leadership plan and execute war plans. This team is a leadership invite only.
+        </p>
+        <div class="group-footer">
+            <p><strong>focus:</strong>
+              To ensure members of Strength and Growth understand the war strategy, war rules, and are prepared to war.
+            </p>
+          </div>
+      </div>
+      <!--Strength Card-->
+      <div class="stren-card">
+        <div class="group-header">
+          <h3>
+            Strength
+          </h3>
+          <span class="group-members">
+            17 Members</span>
+        </div>
+        <p class="group-description">
+          This team is made up of members at level 15 or greater. Their focus is on stats (and playing the rest of the game).
+        </p>
+        <div class="group-footer">
+            <p><strong>focus:</strong>
+                  Making money to purchase items for stats growth and to be able to rent a Private Island with an airstrip.
+            </p>
+          </div>
+      </div>
+      <!--Growth Card-->
+      <div class="grow-card">
+        <div class="group-header">
+          <h3>
+            Growth
+          </h3>
+          <span class="group-members">
+            3 Members</span>
+        </div>
+        <p class="group-description">
+          This team is made up of members under level 15.
+        </p>
+        <div class="group-footer">
+            <p><strong>focus:</strong>
+              Making their way to level 15 through attacks (leaving their opponent), crimes, and training in the gym.
+            </p>
+          </div>
+      </div>
+    </div>
+  </section>
+
   <footer class="footer">
     <div class="container">
-      <p>&copy; 2026 <%= faction.name %>. All rights reserved.</p>
+      <p>&copy; 2026 S.S.G - Strategy | Strength | Growth. All rights reserved.</p>
     </div>
   </footer>
 </body>

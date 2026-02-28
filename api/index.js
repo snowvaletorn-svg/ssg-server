@@ -6,20 +6,20 @@ const DiscordStrategy = require('passport-discord').Strategy;
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
-const factionData = require('./data/factions');  // ADD THIS LINE
+const factionData = require('../data/factions');  // ADD THIS LINE
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // View engine setup
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+app.set('views', path.join(process.cwd(), 'views'));
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(process.cwd(), 'public')));
 
 // Session Configuration
 app.use(session({
@@ -118,3 +118,4 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`SSG Server listening on http://localhost:${PORT}`);
 });
+module.exports = app;

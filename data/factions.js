@@ -44,32 +44,9 @@ const groups = [
 // Addition: Calculate total members by summing the 'members' property of each group
 const totalMembers = groups.reduce((sum, group) => sum + group.members, 0);
 
-const description = [
-"Welcome to S.S.G, where strategy, strength, and growth define everything we do.",
-"We're more than just a faction we're a team built on trust, teamwork, and the drive to succeed together.",
-"Strategy: Every move we make is calculated.",
-"Strength: We train hard, fight smart, and back each other up In every war.",
-"Growth: Whether you're a seasoned fighter or just starting out, we'll help you level up fast with guidance, faction parks, group activities, competition, and team building exercises.",
-"Travel perks and team missions keep our members active and rewarded.",
-"A safe and fun environment to play, grow. and dominate the city together. We also have a Day Care should you so need it.",
-
-"What we need from you:",
-"Daily activity",
-"Join OC (90% payout)",
-"Join In with war and chaining",
-"Join our S.S.G Discord and Torn Stats",
-"Chat as much as you can and be a team player",
-"Most Importantly, have fun!",
-"If you're looking for a home that values teamwork, friendship, progress, and power then S.S.G Is where you belong.",
-"Join us and grow stronger every day."];
-
-// 1. Remove empty strings so the spacing isn't messy
-const cleanedDescription = description.filter(line => line.trim() !== "");
-
 const factionData = {
   faction: {
     name: "S.S.G - Strategy | Strength | Growth",
-    description: cleanedDescription,
     memberCount: totalMembers, // This will now be 29
   },
   groups: groups
