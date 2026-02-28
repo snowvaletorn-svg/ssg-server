@@ -18,14 +18,21 @@ const PORT = process.env.PORT || 3000;
 let sessionStore;
 
 if (isProduction && process.env.MONGO_URI) {
-  // Use the modern static .create() method
-  sessionStore = MongoStore.create({
-    mongoUrl: process.env.MONGO_URI,
-    collectionName: 'sessions',
-    ttl: 14 * 24 * 60 * 60 // 14 days
-  });
+  // Check if we are on Version 4+ (.create exists) or Version 3 (new MongoStore exists)
+  if (typeof MongoStore.create === 'function') {
+    sessionStore = MongoStore.create({
+      mongoUrl: process.env.MONGO_URI,
+      collectionName: 'sessions',
+      ttl: 14 * 24 * 60 * 60
+    });
+  } else {
+    // Fallback for older versions (v3)
+    sessionStore = new MongoStore({
+      url: process.env.MONGO_URI,
+      collection: 'sessions'
+    });
+  }
 } else {
-  // Fallback for local testing
   sessionStore = new session.MemoryStore();
 }
 
@@ -121,7 +128,7 @@ app.get('/logout', (req, res) => {
 // 7. API ROUTES
 app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   try {
-    const tornResponse = await axios.get(`https://api.torn.com{process.env.TORN_API_KEY}`);
+    const tornResponse = await axios.get('https://api.torn.com' + process.env.TORN_API_KEY);
     res.json(tornResponse.data);
   } catch (error) {
     res.status(500).json({ error: error.message });
