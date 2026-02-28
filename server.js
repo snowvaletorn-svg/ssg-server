@@ -1,53 +1,42 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
-const factionData = require('./data/factions');  // ADD THIS LINE
-const isProduction = process.env.NODE_ENV === 'production';
+const factionData = require('./data/factions');
 
+const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const pg = require('pg');
-const pgSession = require('connect-pg-simple')(session);
-
-const pgPool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL, // Use the "Internal Database URL" from Render
-  ssl: isProduction ? { rejectUnauthorized: false } : false
-});
-
-// Define the store conditionally
+// 1. SESSION STORE CONFIGURATION
+// Use MongoDB in production (Render), MemoryStore locally
 let sessionStore;
+if (isProduction && process.env.MONGO_URI) {
+  sessionStore = MongoStore.create({
+    mongoUrl: process.env.MONGO_URI,
+    collectionName: 'sessions',
+    ttl: 14 * 24 * 60 * 60 // 14 days
+  });
+} else {
+  sessionStore = new session.MemoryStore();
+}
 
-app.set('trust proxy', 1);
-
-// View engine setup
+// 2. APP SETTINGS & MIDDLEWARE
+app.set('trust proxy', 1); // Essential for Render HTTPS
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Session Configuration
-if (isProduction) {
-  sessionStore = new pgSession({
-    pool: pgPool,
-    tableName: 'user_sessions',
-    createTableIfMissing: true
-  });
-} else {
-  // Use default MemoryStore for local testing to avoid PG errors
-  sessionStore = new session.MemoryStore();
-}
-
-// Update your app.use(session(...))
+// 3. SESSION MIDDLEWARE
 app.use(session({
   store: sessionStore,
   secret: process.env.SESSION_SECRET || 'your-secret-key',
@@ -55,13 +44,13 @@ app.use(session({
   saveUninitialized: false,
   proxy: isProduction,
   cookie: { 
-    secure: isProduction,
-    sameSite: 'lax',
+    secure: isProduction, // Must be false for localhost HTTP
+    sameSite: 'lax',      // Required for Discord OAuth redirect
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
 
-// Passport Configuration
+// 4. PASSPORT CONFIGURATION
 passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
@@ -85,7 +74,7 @@ passport.deserializeUser((obj, done) => {
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Middleware to check authentication
+// 5. AUTH MIDDLEWARE
 const isAuthenticated = (req, res, next) => {
   if (!req.user) {
     return res.redirect('/');
@@ -93,7 +82,7 @@ const isAuthenticated = (req, res, next) => {
   next();
 };
 
-// Routes
+// 6. ROUTES
 app.get('/', (req, res) => {
   res.render('index', { 
     user: req.user,
@@ -102,13 +91,12 @@ app.get('/', (req, res) => {
   });
 });
 
-// Discord OAuth Routes
 app.get('/auth/discord', passport.authenticate('discord'));
 
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
   (req, res) => {
-    // Manually save the session before redirecting to ensure it's in the store
+    // Force session save before redirect to ensure production stability
     req.session.save((err) => {
       if (err) return next(err);
       res.redirect('/dashboard');
@@ -116,12 +104,10 @@ app.get('/auth/discord/callback',
   }
 );
 
-// Dashboard Route (Protected)
 app.get('/dashboard', isAuthenticated, (req, res) => {
   res.render('dashboard', { user: req.user });
 });
 
-// Logout Route
 app.get('/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
@@ -129,17 +115,19 @@ app.get('/logout', (req, res) => {
   });
 });
 
+// 7. API ROUTES
 app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   try {
-    const tornResponse = await axios.get(`https://api.torn.com/user/?selections=profile&key=${process.env.TORN_API_KEY}`);
+    const tornResponse = await axios.get(`https://api.torn.com{process.env.TORN_API_KEY}`);
     res.json(tornResponse.data);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Start Server
+// 8. START SERVER
 app.listen(PORT, () => {
   console.log(`SSG Server listening on http://localhost:${PORT}`);
 });
+
 module.exports = app;
