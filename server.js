@@ -11,6 +11,18 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const pg = require('pg');
+const pgSession = require('connect-pg-simple')(session);
+
+const pgPool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL, // Use the "Internal Database URL" from Render
+  ssl: isProduction ? { rejectUnauthorized: false } : false
+});
+
+// Define the store conditionally
+let sessionStore;
+
 app.set('trust proxy', 1);
 
 // View engine setup
@@ -24,14 +36,27 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Session Configuration
+if (isProduction) {
+  sessionStore = new pgSession({
+    pool: pgPool,
+    tableName: 'user_sessions',
+    createTableIfMissing: true
+  });
+} else {
+  // Use default MemoryStore for local testing to avoid PG errors
+  sessionStore = new session.MemoryStore();
+}
+
+// Update your app.use(session(...))
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || 'your-secret-key',
-  resave: false,               // Prevents session race conditions
-  saveUninitialized: false,    // Don't create empty sessions
-  proxy: isProduction,         // Only trust proxy in production (e.g., Render)
+  resave: false,
+  saveUninitialized: false,
+  proxy: isProduction,
   cookie: { 
-    secure: isProduction,      // Required for HTTPS; must be false for local HTTP
-    sameSite: 'lax',           // Allows Discord to redirect back with the cookie
+    secure: isProduction,
+    sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
@@ -83,7 +108,9 @@ app.get('/auth/discord', passport.authenticate('discord'));
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
   (req, res) => {
-    req.session.save(() => {
+    // Manually save the session before redirecting to ensure it's in the store
+    req.session.save((err) => {
+      if (err) return next(err);
       res.redirect('/dashboard');
     });
   }
@@ -99,15 +126,6 @@ app.get('/logout', (req, res) => {
   req.logout((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
     res.redirect('/');
-  });
-});
-
-// API Routes (Protected)
-app.get('/', (req, res) => {
-  res.render('index', { 
-    user: req.user,
-    faction: factionData.faction,
-    groups: factionData.groups
   });
 });
 
