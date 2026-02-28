@@ -108,9 +108,15 @@ app.get('/auth/discord', passport.authenticate('discord'));
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
   (req, res) => {
-    // Force session save before redirect to ensure production stability
+    console.log("=== Login Success ===");
+    console.log("User ID:", req.user.id);
+    console.log("Session ID:", req.sessionID);
+
     req.session.save((err) => {
-      if (err) return next(err);
+      if (err) {
+        console.error("Session Save Error:", err);
+        return next(err);
+      }
       res.redirect('/dashboard');
     });
   }
