@@ -51,16 +51,18 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 3. SESSION MIDDLEWARE
 app.use(session({
   store: sessionStore,
-  secret: process.env.SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
-  proxy: isProduction, // Crucial for Render
+  // Force proxy to true in production to handle Render's SSL
+  proxy: isProduction, 
   cookie: { 
-    // This is the key: true for Render (HTTPS), false for Localhost (HTTP)
     secure: isProduction, 
     sameSite: 'lax',
     maxAge: 24 * 60 * 60 * 1000,
-    httpOnly: true
+    httpOnly: true,
+    // Add this: it helps with .onrender.com domain restrictions
+    domain: isProduction ? '.onrender.com' : undefined 
   }
 }));
 
@@ -68,7 +70,8 @@ app.use(session({
 passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL,
+    // FORCE this to the full absolute URL for one test:
+    callbackURL: "https://ssg-server.onrender.com", 
     scope: ['identify', 'email', 'guilds']
   },
   (accessToken, refreshToken, profile, done) => {
