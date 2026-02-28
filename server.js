@@ -14,22 +14,24 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 1. SESSION STORE CONFIGURATION
-// Use MongoDB in production (Render), MemoryStore locally
 let sessionStore;
 
 if (isProduction && process.env.MONGO_URI) {
-  // Check if we are on Version 4+ (.create exists) or Version 3 (new MongoStore exists)
-  if (typeof MongoStore.create === 'function') {
+  // Logic to handle different versions of connect-mongo (v3, v4, v5)
+  // This avoids the "not a constructor" error by checking for .create first
+  if (MongoStore.create) {
     sessionStore = MongoStore.create({
       mongoUrl: process.env.MONGO_URI,
       collectionName: 'sessions',
       ttl: 14 * 24 * 60 * 60
     });
   } else {
-    // Fallback for older versions (v3)
-    sessionStore = new MongoStore({
-      url: process.env.MONGO_URI,
-      collection: 'sessions'
+    // If .create doesn't exist, we fall back to the constructor
+    // but we ensure we are calling the right property
+    const Store = MongoStore.default || MongoStore;
+    sessionStore = new Store({
+      mongoUrl: process.env.MONGO_URI,
+      collectionName: 'sessions'
     });
   }
 } else {
