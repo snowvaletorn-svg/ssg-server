@@ -17,11 +17,21 @@ const PORT = process.env.PORT || 3000;
 // Use MongoDB in production (Render), MemoryStore locally
 let sessionStore;
 if (isProduction && process.env.MONGO_URI) {
-  sessionStore = MongoStore.create({
-    mongoUrl: process.env.MONGO_URI,
-    collectionName: 'sessions',
-    ttl: 14 * 24 * 60 * 60 // 14 days
-  });
+  // Try version 4+ syntax, fallback to version 3 syntax if it fails
+  try {
+    sessionStore = MongoStore.create({
+      mongoUrl: process.env.MONGO_URI,
+      collectionName: 'sessions',
+      ttl: 14 * 24 * 60 * 60
+    });
+  } catch (e) {
+    // Legacy version 3 syntax
+    sessionStore = new MongoStore({
+      url: process.env.MONGO_URI,
+      collection: 'sessions',
+      ttl: 14 * 24 * 60 * 60
+    });
+  }
 } else {
   sessionStore = new session.MemoryStore();
 }
