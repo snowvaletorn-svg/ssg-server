@@ -10,6 +10,7 @@ const factionData = require('../data/factions');  // ADD THIS LINE
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.set('trust proxy', 1);
 
 // View engine setup
 app.set('view engine', 'ejs');
@@ -27,7 +28,7 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   cookie: { 
-    secure: process.env.NODE_ENV === 'production',
+    secure: true, //required by Vercel
     maxAge: 24 * 60 * 60 * 1000
   }
 }));
