@@ -71,7 +71,7 @@ passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
     // FORCE this to the full absolute URL for one test:
-    callbackURL: "https://ssg-server.onrender.com",
+    callbackURL: "https://ssg-server.onrender.com/auth/discord/callback",
     scope: ['identify', 'email', 'guilds']
   },
   (accessToken, refreshToken, profile, done) => {
