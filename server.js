@@ -57,13 +57,12 @@ app.use(session({
   // Force proxy to true in production to handle Render's SSL
   proxy: isProduction, 
   cookie: { 
-    secure: isProduction, 
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
-    httpOnly: true,
-    // Add this: it helps with .onrender.com domain restrictions
-    domain: isProduction ? '.onrender.com' : undefined 
-  }
+  secure: isProduction, 
+  sameSite: 'lax',
+  maxAge: 24 * 60 * 60 * 1000,
+  httpOnly: true
+  // Remove the domain line
+}
 }));
 
 // 4. PASSPORT CONFIGURATION
@@ -71,7 +70,7 @@ passport.use(new DiscordStrategy({
     clientID: process.env.DISCORD_CLIENT_ID,
     clientSecret: process.env.DISCORD_CLIENT_SECRET,
     // FORCE this to the full absolute URL for one test:
-    callbackURL: "https://ssg-server.onrender.com/auth/discord/callback",
+    callbackURL: process.env.DISCORD_CALLBACK_URL,
     scope: ['identify', 'email', 'guilds']
   },
   (accessToken, refreshToken, profile, done) => {
@@ -112,8 +111,7 @@ app.get('/auth/discord', passport.authenticate('discord'));
 
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
-  (req, res) => {
-    // Manually save the session to the database (MongoDB)
+  (req, res, next) => {  // <-- add next here
     req.session.save((err) => {
       if (err) return next(err);
       res.redirect('/dashboard');
