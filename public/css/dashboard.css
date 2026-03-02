@@ -1,0 +1,624 @@
+/* ── Dashboard Layout ──────────────────────────────────────────────────── */
+.dashboard {
+  padding: 2rem 0 4rem;
+}
+
+.dashboard-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 2rem;
+  margin-top: 1.5rem;
+  align-items: start;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+.sidebar {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  overflow: hidden;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-item {
+  display: block;
+  padding: 0.9rem 1.25rem;
+  color: #a0a0a0;
+  text-decoration: none;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-left: 3px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+  color: #c0bcbc;
+  background: #1e1d1d;
+  border-left-color: #3611b0;
+}
+
+.nav-item.active {
+  color: #fff;
+  background: #1e1d1d;
+  border-left-color: #3611b0;
+}
+
+/* ── Main Content ──────────────────────────────────────────────────────── */
+.dashboard-content {
+  min-width: 0;
+}
+
+.section {
+  display: none;
+}
+
+.section.active {
+  display: block;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #2a2828;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #c0bcbc;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────────── */
+.card {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 0.85rem 1.25rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #c0bcbc;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: #1a1919;
+  border-bottom: 1px solid #2a2828;
+}
+
+.card-body {
+  padding: 1.25rem;
+}
+
+/* ── Profile ───────────────────────────────────────────────────────────── */
+.profile-card {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  padding: 1.75rem;
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+.profile-avatar img {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 3px solid #3611b0;
+  display: block;
+}
+
+.avatar-placeholder {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 3px solid #3611b0;
+  background: #2a2828;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #3611b0;
+}
+
+.profile-name {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.75rem;
+}
+
+.profile-detail {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  align-items: flex-start;
+}
+
+.profile-detail .label {
+  color: #666;
+  min-width: 90px;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  padding-top: 2px;
+}
+
+.profile-detail .value {
+  color: #c0bcbc;
+  flex: 1;
+}
+
+.profile-detail .value.mono,
+.mono {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.85rem;
+}
+
+/* Role Badges */
+.role-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-right: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.role-badge.role-ownership  { background: rgba(0, 76, 255, 0.2); color: #004cff; border: 1px solid #004cff; }
+.role-badge.role-leadership { background: rgba(207, 62, 229, 0.2); color: #cf3ee5; border: 1px solid #cf3ee5; }
+.role-badge.role-strategy   { background: rgba(255, 0, 0, 0.2); color: #ff4444; border: 1px solid #ff4444; }
+.role-badge.role-strength   { background: rgba(230, 126, 34, 0.2); color: #e67e22; border: 1px solid #e67e22; }
+.role-badge.role-growth     { background: rgba(46, 204, 113, 0.2); color: #2ecc71; border: 1px solid #2ecc71; }
+
+/* ── API Key Form ──────────────────────────────────────────────────────── */
+.input-group {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.form-input {
+  flex: 1;
+  background: #0c0c0c;
+  border: 1px solid #2a2828;
+  border-radius: 6px;
+  padding: 0.6rem 0.9rem;
+  color: #c0bcbc;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-input:focus {
+  border-color: #3611b0;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: #555;
+  margin-top: 0.5rem;
+}
+
+.hint a {
+  color: #3611b0;
+}
+
+.success-text { color: #2ecc71; font-size: 0.9rem; }
+.muted        { color: #555; font-size: 0.9rem; }
+.mt-1         { margin-top: 0.75rem; }
+.mt-2         { margin-top: 1.5rem; }
+.hidden       { display: none; }
+
+/* ── Channel Feed ──────────────────────────────────────────────────────── */
+.channel-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.toolbar-label {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  font-size: 0.85rem;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.channel-dropdown {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 6px;
+  padding: 0.55rem 0.9rem;
+  color: #c0bcbc;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+  min-width: 220px;
+}
+
+.channel-dropdown:focus {
+  border-color: #3611b0;
+}
+
+.channel-feed {
+  background: #0f0f0f;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  min-height: 400px;
+  max-height: 600px;
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.channel-placeholder,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 300px;
+  text-align: center;
+  color: #444;
+}
+
+.placeholder-icon,
+.empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.75rem;
+  opacity: 0.5;
+}
+
+/* Messages */
+.message-item {
+  display: flex;
+  gap: 0.85rem;
+  padding: 0.6rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.message-item:hover {
+  background: #161515;
+}
+
+.msg-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: #2a2828;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  color: #666;
+  overflow: hidden;
+}
+
+.msg-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-header {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-bottom: 0.2rem;
+}
+
+.msg-author {
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #fff;
+}
+
+.msg-time {
+  font-size: 0.75rem;
+  color: #444;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.msg-content {
+  font-size: 0.9rem;
+  color: #a0a0a0;
+  line-height: 1.5;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.msg-content a {
+  color: #3611b0;
+}
+
+.channel-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: #444;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.1em;
+}
+
+.channel-error {
+  padding: 1rem;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid rgba(255, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #ff4444;
+  font-size: 0.9rem;
+}
+
+/* ── Torn Stats ────────────────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stat-tile {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  padding: 1.1rem;
+  text-align: center;
+  border-top: 3px solid #3611b0;
+}
+
+.stat-tile .stat-value {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #3611b0;
+  line-height: 1;
+  margin-bottom: 0.3rem;
+}
+
+.stat-tile .stat-label {
+  font-size: 0.75rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+}
+
+/* Faction member table */
+.members-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.members-table th {
+  text-align: left;
+  padding: 0.6rem 0.9rem;
+  background: #1a1919;
+  color: #666;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid #2a2828;
+}
+
+.members-table td {
+  padding: 0.6rem 0.9rem;
+  color: #a0a0a0;
+  border-bottom: 1px solid #1a1919;
+}
+
+.members-table tr:hover td {
+  background: #161515;
+  color: #c0bcbc;
+}
+
+.status-online  { color: #2ecc71; }
+.status-offline { color: #444; }
+.status-hospital{ color: #e67e22; }
+.status-jail    { color: #ff4444; }
+.status-travel  { color: #004cff; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-block;
+  padding: 0.5rem 1.1rem;
+  background: #2a2828;
+  color: #c0bcbc;
+  text-decoration: none;
+  border-radius: 6px;
+  border: 1px solid #3a3838;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn:hover {
+  background: #333;
+  color: #fff;
+}
+
+.btn-primary {
+  background: #3611b0;
+  color: #fff;
+  border-color: #3611b0;
+}
+
+.btn-primary:hover {
+  background: #4a1fd4;
+  border-color: #4a1fd4;
+}
+
+.btn-danger {
+  background: rgba(255, 68, 68, 0.15);
+  color: #ff4444;
+  border-color: rgba(255, 68, 68, 0.3);
+}
+
+.btn-danger:hover {
+  background: rgba(255, 68, 68, 0.25);
+}
+
+.btn-outline {
+  background: transparent;
+  border-color: #3a3838;
+  color: #666;
+}
+
+.btn-outline:hover {
+  border-color: #3611b0;
+  color: #c0bcbc;
+}
+
+.btn-small {
+  padding: 0.35rem 0.8rem;
+  font-size: 0.85rem;
+}
+
+/* ── Navbar ────────────────────────────────────────────────────────────── */
+.navbar {
+  background: #0f0f0f;
+  border-bottom: 1px solid #2a2828;
+  min-height: 60px;
+}
+
+.navbar .container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+}
+
+.navbar h1 {
+  margin: 0;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.5rem;
+  color: #fff;
+  letter-spacing: 0.1em;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.welcome-text {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.welcome-text strong {
+  color: #c0bcbc;
+}
+
+/* ── Scrollbar styling ─────────────────────────────────────────────────── */
+.channel-feed::-webkit-scrollbar { width: 6px; }
+.channel-feed::-webkit-scrollbar-track { background: #0f0f0f; }
+.channel-feed::-webkit-scrollbar-thumb { background: #2a2828; border-radius: 3px; }
+.channel-feed::-webkit-scrollbar-thumb:hover { background: #3611b0; }
+
+/* ── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .dashboard-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    overflow-x: auto;
+  }
+
+  .nav-item {
+    white-space: nowrap;
+    border-left: none;
+    border-bottom: 3px solid transparent;
+  }
+
+  .nav-item.active,
+  .nav-item:hover {
+    border-left: none;
+    border-bottom-color: #3611b0;
+  }
+
+  .profile-card {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .profile-detail {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .input-group {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

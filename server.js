@@ -7,39 +7,65 @@ const DiscordStrategy = require('passport-discord').Strategy;
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
+const mongoose = require('mongoose');
 const factionData = require('./data/factions');
+const User = require('./models/User');
 
 const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 1. SESSION STORE CONFIGURATION
-let sessionStore;
+// ─── CONSTANTS ───────────────────────────────────────────────────────────────
+const SSG_GUILD_ID = '1432576178383753309';
 
+const CHANNELS = {
+  announcements: { id: '1466403384038002844', name: '📢 Announcements' },
+  growth: { id: '1435061563118850199', name: '🌱 Growth Training' },
+  strength: { id: '1454519260960391494', name: '💪 Strength Training' },
+  strategy: { id: '1454519584445960234', name: '♟️ Strategy' },
+  war: { id: '1435065561494196254', name: '⚔️ War Chat' },
+};
+
+const ROLES = {
+  ownership: '1433161746365026334',
+  leadership: '1462906795860295802',
+  strategy: '1435059774722015232',
+  strength: '1435060058063896698',
+  growth: '1435060175525384303',
+};
+
+// Which channels each role can access
+const ROLE_CHANNEL_ACCESS = {
+  [ROLES.ownership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.leadership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.strategy]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.strength]: ['announcements', 'strength', 'war'],
+  [ROLES.growth]: ['announcements', 'growth', 'war'],
+};
+
+// ─── MONGODB ──────────────────────────────────────────────────────────────────
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI, {
+  serverSelectionTimeoutMS: 5000,
+  family: 4,
+  tls: true
+})
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
+}
+
+// ─── SESSION STORE ────────────────────────────────────────────────────────────
+let sessionStore;
 if (isProduction && process.env.MONGO_URI) {
-  // Logic to handle different versions of connect-mongo (v3, v4, v5)
-  // This avoids the "not a constructor" error by checking for .create first
-  if (MongoStore.create) {
-    sessionStore = MongoStore.create({
-      mongoUrl: process.env.MONGO_URI,
-      collectionName: 'sessions',
-      ttl: 14 * 24 * 60 * 60
-    });
-  } else {
-    // If .create doesn't exist, we fall back to the constructor
-    // but we ensure we are calling the right property
-    const Store = MongoStore.default || MongoStore;
-    sessionStore = new Store({
-      mongoUrl: process.env.MONGO_URI,
-      collectionName: 'sessions'
-    });
-  }
+  sessionStore = MongoStore.create
+    ? MongoStore.create({ mongoUrl: process.env.MONGO_URI, collectionName: 'sessions', ttl: 14 * 24 * 60 * 60 })
+    : new (MongoStore.default || MongoStore)({ mongoUrl: process.env.MONGO_URI, collectionName: 'sessions' });
 } else {
   sessionStore = new session.MemoryStore();
 }
 
-// 2. APP SETTINGS & MIDDLEWARE
-app.set('trust proxy', 1); // Essential for Render HTTPS
+// ─── APP SETTINGS & MIDDLEWARE ────────────────────────────────────────────────
+app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -48,59 +74,87 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// 3. SESSION MIDDLEWARE
+// ─── SESSION ──────────────────────────────────────────────────────────────────
 app.use(session({
   store: sessionStore,
   secret: process.env.SESSION_SECRET || 'your-secret-key',
   resave: false,
   saveUninitialized: false,
-  // Force proxy to true in production to handle Render's SSL
-  proxy: isProduction, 
-  cookie: { 
-  secure: isProduction, 
-  sameSite: 'lax',
-  maxAge: 24 * 60 * 60 * 1000,
-  httpOnly: true
-  // Remove the domain line
-}
+  proxy: isProduction,
+  cookie: {
+    secure: isProduction,
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true
+  }
 }));
 
-// 4. PASSPORT CONFIGURATION
+// ─── PASSPORT ────────────────────────────────────────────────────────────────
 passport.use(new DiscordStrategy({
-    clientID: process.env.DISCORD_CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    // FORCE this to the full absolute URL for one test:
-    callbackURL: process.env.DISCORD_CALLBACK_URL,
-    scope: ['identify', 'email', 'guilds']
-  },
-  (accessToken, refreshToken, profile, done) => {
-    profile.accessToken = accessToken;
+  clientID: process.env.DISCORD_CLIENT_ID,
+  clientSecret: process.env.DISCORD_CLIENT_SECRET,
+  callbackURL: process.env.DISCORD_CALLBACK_URL,
+  scope: ['identify', 'email', 'guilds', 'guilds.members.read']
+},
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      profile.accessToken = accessToken;
+
+      // Fetch user's roles in SSG server
+      const memberRes = await axios.get(
+        `https://discord.com/api/v10/users/@me/guilds/${SSG_GUILD_ID}/member`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      profile.ssgRoles = memberRes.data.roles || [];
+      profile.ssgNick = memberRes.data.nick || profile.username;
+    } catch (err) {
+      console.error('Could not fetch SSG member data:', err.response?.data || err.message);
+      profile.ssgRoles = [];
+      profile.ssgNick = profile.username;
+    }
+
+    // Upsert user in MongoDB
+    try {
+      await User.findOneAndUpdate(
+        { discordId: profile.id },
+        { discordId: profile.id, username: profile.username },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } catch (err) {
+      console.error('MongoDB upsert error:', err.message);
+    }
+
     return done(null, profile);
   }
 ));
 
-passport.serializeUser((user, done) => {
-  done(null, user);
-});
-
-passport.deserializeUser((obj, done) => {
-  done(null, obj);
-});
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((obj, done) => done(null, obj));
 
 app.use(passport.initialize());
 app.use(passport.session());
 
-// 5. AUTH MIDDLEWARE
+// ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
 const isAuthenticated = (req, res, next) => {
-  if (!req.user) {
-    return res.redirect('/');
-  }
+  if (!req.user) return res.redirect('/');
   next();
 };
 
-// 6. ROUTES
+// ─── HELPER: Get accessible channels for a user based on their roles ──────────
+function getAccessibleChannels(ssgRoles) {
+  const accessible = new Set();
+  for (const roleId of ssgRoles) {
+    const channels = ROLE_CHANNEL_ACCESS[roleId];
+    if (channels) channels.forEach(ch => accessible.add(ch));
+  }
+  // If no SSG roles matched, show only announcements as a fallback
+  if (accessible.size === 0) accessible.add('announcements');
+  return [...accessible].map(key => ({ key, ...CHANNELS[key] }));
+}
+
+// ─── ROUTES ───────────────────────────────────────────────────────────────────
 app.get('/', (req, res) => {
-  res.render('index', { 
+  res.render('index', {
     user: req.user,
     faction: factionData.faction,
     groups: factionData.groups
@@ -111,7 +165,7 @@ app.get('/auth/discord', passport.authenticate('discord'));
 
 app.get('/auth/discord/callback',
   passport.authenticate('discord', { failureRedirect: '/' }),
-  (req, res, next) => {  // <-- add next here
+  (req, res, next) => {
     req.session.save((err) => {
       if (err) return next(err);
       res.redirect('/dashboard');
@@ -119,8 +173,14 @@ app.get('/auth/discord/callback',
   }
 );
 
-app.get('/dashboard', isAuthenticated, (req, res) => {
-  res.render('dashboard', { user: req.user });
+app.get('/dashboard', isAuthenticated, async (req, res) => {
+  const dbUser = await User.findOne({ discordId: req.user.id });
+  const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
+  res.render('dashboard', {
+    user: req.user,
+    accessibleChannels,
+    tornApiKey: dbUser?.tornApiKey || null
+  });
 });
 
 app.get('/logout', (req, res) => {
@@ -130,17 +190,103 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// 7. API ROUTES
-app.get('/api/torn/user', isAuthenticated, async (req, res) => {
+// ─── API: Fetch Discord channel messages ──────────────────────────────────────
+app.get('/api/discord/channel/:channelId', isAuthenticated, async (req, res) => {
+  const { channelId } = req.params;
+
+  // Verify this channel is in our allowed list
+  const allowed = Object.values(CHANNELS).map(c => c.id);
+  if (!allowed.includes(channelId)) {
+    return res.status(403).json({ error: 'Channel not permitted' });
+  }
+
+  // Verify user has access to this specific channel
+  const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
+  const hasAccess = accessibleChannels.some(c => c.id === channelId);
+  if (!hasAccess) {
+    return res.status(403).json({ error: 'You do not have access to this channel' });
+  }
+
   try {
-    const tornResponse = await axios.get('https://api.torn.com' + process.env.TORN_API_KEY);
-    res.json(tornResponse.data);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+    const response = await axios.get(
+      `https://discord.com/api/v10/channels/${channelId}/messages?limit=10`,
+      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    console.error('Discord API error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to fetch messages', details: err.response?.data });
   }
 });
 
-// 8. START SERVER
+// ─── API: Save Torn API key ───────────────────────────────────────────────────
+app.post('/api/torn/key', isAuthenticated, async (req, res) => {
+  const { apiKey } = req.body;
+  if (!apiKey || apiKey.trim() === '') {
+    return res.status(400).json({ error: 'API key is required' });
+  }
+  try {
+    // Validate the key against Torn API before saving
+    const tornRes = await axios.get(`https://api.torn.com/user/?selections=basic&key=${apiKey.trim()}`);
+    if (tornRes.data.error) {
+      return res.status(400).json({ error: 'Invalid Torn API key: ' + tornRes.data.error.error });
+    }
+    await User.findOneAndUpdate(
+      { discordId: req.user.id },
+      { tornApiKey: apiKey.trim() },
+      { upsert: true }
+    );
+    res.json({ success: true, player: tornRes.data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Fetch personal Torn stats ──────────────────────────────────────────
+app.get('/api/torn/user', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
+    }
+    const tornRes = await axios.get(
+      `https://api.torn.com/user/?selections=basic,stats,profile&key=${dbUser.tornApiKey}`
+    );
+    res.json(tornRes.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/discord/members', isAuthenticated, async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://discord.com/api/v10/guilds/${SSG_GUILD_ID}/members?limit=1000`,
+      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+    );
+    res.json(response.data);
+  } catch (err) {
+    console.error('Discord members error:', err.response?.data || err.message);
+    res.status(500).json({ error: 'Failed to fetch members' });
+  }
+});
+
+// ─── API: Fetch faction stats (uses server-level faction key) ─────────────────
+app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
+  try {
+    if (!process.env.TORN_FACTION_API_KEY) {
+      return res.status(400).json({ error: 'No faction API key configured on server.' });
+    }
+    const tornRes = await axios.get(
+      `https://api.torn.com/faction/?selections=basic,members&key=${process.env.TORN_FACTION_API_KEY}`
+    );
+    res.json(tornRes.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── START SERVER ─────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`SSG Server listening on http://localhost:${PORT}`);
 });
