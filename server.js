@@ -46,12 +46,12 @@ const ROLE_CHANNEL_ACCESS = {
 // ─── MONGODB ──────────────────────────────────────────────────────────────────
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
-  serverSelectionTimeoutMS: 5000,
-  family: 4,
-  tls: true
-})
-  .then(() => console.log('MongoDB connected'))
-  .catch(err => console.error('MongoDB connection error:', err));
+    serverSelectionTimeoutMS: 5000,
+    family: 4,
+    tls: true
+  })
+    .then(() => console.log('MongoDB connected'))
+    .catch(err => console.error('MongoDB connection error:', err));
 }
 
 // ─── SESSION STORE ────────────────────────────────────────────────────────────
@@ -226,8 +226,9 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
     return res.status(400).json({ error: 'API key is required' });
   }
   try {
-    // Validate the key against Torn API before saving
-    const tornRes = await axios.get(`https://api.torn.com/user/?selections=basic&key=${apiKey.trim()}`);
+    const tornRes = await axios.get(
+      `https://api.torn.com/user/?selections=basic&key=${apiKey.trim()}`  // ← was dbUser.tornApiKey
+    );
     if (tornRes.data.error) {
       return res.status(400).json({ error: 'Invalid Torn API key: ' + tornRes.data.error.error });
     }
@@ -250,8 +251,28 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=basic,stats,profile&key=${dbUser.tornApiKey}`
+      `https://api.torn.com/user/?selections=basic,profile,bars&key=${dbUser.tornApiKey}`
     );
+
+    // Enrich with faction member data if faction key exists
+    if (process.env.TORN_FACTION_API_KEY) {
+      try {
+        const factionRes = await axios.get(
+          `https://api.torn.com/v2/faction/?selections=members&key=${process.env.TORN_FACTION_API_KEY}`
+        );
+        const myMemberData = factionRes.data.members?.find(
+          m => m.id === tornRes.data.player_id
+        );
+        /*console.log('My player ID:', tornRes.data.player_id);*/
+        /*console.log('My member data:', JSON.stringify(myMemberData, null, 2));*/
+        if (myMemberData) {
+          tornRes.data.revive_setting = myMemberData.revive_setting;
+        }
+      } catch (err) {
+        console.error('Could not enrich with faction data:', err.message);
+      }
+    }
+
     res.json(tornRes.data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -278,7 +299,7 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No faction API key configured on server.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/faction/?selections=basic,members&key=${process.env.TORN_FACTION_API_KEY}`
+      `https://api.torn.com/v2/faction/?selections=basic,members&key=${process.env.TORN_FACTION_API_KEY}`
     );
     res.json(tornRes.data);
   } catch (err) {
