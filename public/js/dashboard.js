@@ -6,6 +6,7 @@ function showSection(sectionId, el) {
   if (el) el.classList.add('active');
 
   if (sectionId === 'torn') { fetchTornUser(); fetchCrimeExp(); }
+  if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
 }
@@ -234,6 +235,17 @@ function renderTornUser(d) {
             ${infoBadge('HP', `${d.competition.current_hp}/${d.competition.max_hp}`)}
           </div>
         </div>` : ''}
+        ${d.personalstats ? `
+<div style="margin-top:1.25rem;">
+  <div class="badge-label">Battle Stats</div>
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+    ${infoBadge('Strength', formatNum(d.personalstats.strength))}
+    ${infoBadge('Defense', formatNum(d.personalstats.defense))}
+    ${infoBadge('Speed', formatNum(d.personalstats.speed))}
+    ${infoBadge('Dexterity', formatNum(d.personalstats.dexterity))}
+    ${infoBadge('Total', formatNum(d.personalstats.totalstats))}
+  </div>
+</div>` : ''}
       </div>
     </div>`;
 }

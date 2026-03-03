@@ -21,26 +21,26 @@ const SSG_GUILD_ID = '1432576178383753309';
 
 const CHANNELS = {
   announcements: { id: '1466403384038002844', name: '📢 Announcements' },
-  growth:        { id: '1435061563118850199', name: '🌱 Growth Training' },
-  strength:      { id: '1454519260960391494', name: '💪 Strength Training' },
-  strategy:      { id: '1454519584445960234', name: '♟️ Strategy' },
-  war:           { id: '1435065561494196254', name: '⚔️ War Chat' },
+  growth: { id: '1435061563118850199', name: '🌱 Growth Training' },
+  strength: { id: '1454519260960391494', name: '💪 Strength Training' },
+  strategy: { id: '1454519584445960234', name: '♟️ Strategy' },
+  war: { id: '1435065561494196254', name: '⚔️ War Chat' },
 };
 
 const ROLES = {
-  ownership:  '1433161746365026334',
+  ownership: '1433161746365026334',
   leadership: '1462906795860295802',
-  strategy:   '1435059774722015232',
-  strength:   '1435060058063896698',
-  growth:     '1435060175525384303',
+  strategy: '1435059774722015232',
+  strength: '1435060058063896698',
+  growth: '1435060175525384303',
 };
 
 const ROLE_CHANNEL_ACCESS = {
-  [ROLES.ownership]:  ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.ownership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
   [ROLES.leadership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.strategy]:   ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.strength]:   ['announcements', 'strength', 'war'],
-  [ROLES.growth]:     ['announcements', 'growth', 'war'],
+  [ROLES.strategy]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.strength]: ['announcements', 'strength', 'war'],
+  [ROLES.growth]: ['announcements', 'growth', 'war'],
 };
 
 // ─── HELPER: Get faction API key (DB first, ENV fallback) ─────────────────────
@@ -102,11 +102,11 @@ app.use(session({
 
 // ─── PASSPORT ────────────────────────────────────────────────────────────────
 passport.use(new DiscordStrategy({
-    clientID: process.env.DISCORD_CLIENT_ID,
-    clientSecret: process.env.DISCORD_CLIENT_SECRET,
-    callbackURL: process.env.DISCORD_CALLBACK_URL,
-    scope: ['identify', 'email', 'guilds', 'guilds.members.read']
-  },
+  clientID: process.env.DISCORD_CLIENT_ID,
+  clientSecret: process.env.DISCORD_CLIENT_SECRET,
+  callbackURL: process.env.DISCORD_CALLBACK_URL,
+  scope: ['identify', 'email', 'guilds', 'guilds.members.read']
+},
   async (accessToken, refreshToken, profile, done) => {
     try {
       profile.accessToken = accessToken;
@@ -115,11 +115,11 @@ passport.use(new DiscordStrategy({
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
       profile.ssgRoles = memberRes.data.roles || [];
-      profile.ssgNick  = memberRes.data.nick || profile.username;
+      profile.ssgNick = memberRes.data.nick || profile.username;
     } catch (err) {
       console.error('Could not fetch SSG member data:', err.response?.data || err.message);
       profile.ssgRoles = [];
-      profile.ssgNick  = profile.username;
+      profile.ssgNick = profile.username;
     }
 
     try {
@@ -303,7 +303,7 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=basic,profile,bars&key=${dbUser.tornApiKey}`
+      `https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${dbUser.tornApiKey}`
     );
 
     const factionKey = await getFactionApiKey();
@@ -327,6 +327,18 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   }
 });
 
+app.get('/api/torn/friends', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    if (!dbUser?.tornApiKey) return res.status(400).json({ error: 'No API key saved.' });
+    const tornRes = await axios.get(
+      `https://api.torn.com/v2/user/?selections=friends&key=${dbUser.tornApiKey}`
+    );
+    res.json(tornRes.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ─── API: Personal crime XP (merits) ─────────────────────────────────────────
 app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
   try {

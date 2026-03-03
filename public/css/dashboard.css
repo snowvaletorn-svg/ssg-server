@@ -116,6 +116,7 @@
   display: flex;
   gap: 2rem;
   align-items: flex-start;
+  color:#004cff;
 }
 
 .profile-avatar img {
@@ -158,7 +159,7 @@
 }
 
 .profile-detail .label {
-  color: #666;
+  color: #959494;
   min-width: 90px;
   font-family: 'Rajdhani', sans-serif;
   font-weight: 600;
@@ -191,6 +192,7 @@
   text-transform: uppercase;
   margin-right: 0.4rem;
   margin-bottom: 0.3rem;
+  color:#a0a0a0
 }
 
 .role-badge.role-ownership  { background: rgba(0, 76, 255, 0.2); color: #004cff; border: 1px solid #004cff; }
@@ -251,7 +253,7 @@
 .toolbar-label {
   font-family: 'Rajdhani', sans-serif;
   font-weight: 600;
-  color: #666;
+  color: #a1a0a0;
   text-transform: uppercase;
   font-size: 0.85rem;
   letter-spacing: 0.05em;
@@ -416,6 +418,7 @@
   padding: 1.1rem;
   text-align: center;
   border-top: 3px solid #3611b0;
+  color:#a0a0a0
 }
 
 .stat-tile .stat-value {
