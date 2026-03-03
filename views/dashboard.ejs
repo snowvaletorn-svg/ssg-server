@@ -1,19 +1,25 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Dashboard - SSG Server</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/dashboard.css">
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Montserrat:wght@400;600;700&display=swap"
+    rel="stylesheet">
 </head>
+
 <body>
   <div class="navbar">
     <div class="container">
       <h1>SSG Server</h1>
       <div class="nav-links">
-        <span class="welcome-text">Welcome, <strong><%= user.ssgNick || user.username %></strong></span>
+        <span class="welcome-text">Welcome, <strong>
+            <%= user.ssgNick || user.username %>
+          </strong></span>
         <a href="/" class="btn">Home</a>
         <a href="/logout" class="btn btn-danger">Logout</a>
       </div>
@@ -22,16 +28,16 @@
 
   <div class="container">
     <div class="dashboard">
-
       <div class="dashboard-layout">
 
         <!-- Sidebar -->
         <aside class="sidebar">
           <nav class="sidebar-nav">
-            <a href="#profile"    class="nav-item active"  onclick="showSection('profile', this)">👤 Profile</a>
-            <a href="#channels"   class="nav-item"         onclick="showSection('channels', this)">💬 Channels</a>
-            <a href="#torn"       class="nav-item"         onclick="showSection('torn', this)">🎮 Torn Stats</a>
-            <a href="#faction"    class="nav-item"         onclick="showSection('faction', this)">⚔️ Faction</a>
+            <a href="#profile" class="nav-item active" onclick="showSection('profile', this)">👤 Profile</a>
+            <a href="#channels" class="nav-item" onclick="showSection('channels', this)">💬 Channels</a>
+            <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Torn Stats</a>
+            <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
+            <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
           </nav>
         </aside>
 
@@ -46,64 +52,103 @@
             <div class="profile-card">
               <div class="profile-avatar">
                 <% if (user.avatar) { %>
-                  <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png" alt="<%= user.username %>">
-                <% } else { %>
-                  <div class="avatar-placeholder"><%= user.username.charAt(0).toUpperCase() %></div>
-                <% } %>
+                  <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png"
+                    alt="<%= user.username %>">
+                  <% } else { %>
+                    <div class="avatar-placeholder">
+                      <%= user.username.charAt(0).toUpperCase() %>
+                    </div>
+                    <% } %>
               </div>
               <div class="profile-info">
-                <div class="profile-name"><%= user.ssgNick || user.username %></div>
-                <div class="profile-detail"><span class="label">Username</span><span class="value"><%= user.username %></span></div>
-                <div class="profile-detail"><span class="label">Email</span><span class="value"><%= user.email || 'Not provided' %></span></div>
-                <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono"><%= user.id %></span></div>
-                <% if (user.ssgRoles && user.ssgRoles.length > 0) { %>
+                <div class="profile-name">
+                  <%= user.ssgNick || user.username %>
+                </div>
+                <div class="profile-detail"><span class="label">Username</span><span class="value">
+                    <%= user.username %>
+                  </span></div>
+                <div class="profile-detail"><span class="label">Email</span><span class="value">
+                    <%= user.email || 'Not provided' %>
+                  </span></div>
+                <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono">
+                    <%= user.id %>
+                  </span></div>
+                <% if (user.ssgRoles && user.ssgRoles.length> 0) { %>
                   <div class="profile-detail"><span class="label">SSG Roles</span>
                     <span class="value">
                       <% 
-                        const roleNames = {
-                          '1433161746365026334': 'Ownership',
-                          '1462906795860295802': 'Leadership',
-                          '1435059774722015232': 'Strategy',
-                          '1435060058063896698': 'Strength',
-                          '1435060175525384303': 'Growth'
-                        };
-                        const myRoles = user.ssgRoles
-                          .filter(r => roleNames[r])
-                          .map(r => roleNames[r]);
+                      const roleNames = { 
+                        '1433161746365026334' : 'Ownership' , 
+                        '1462906795860295802' : 'Leadership', 
+                        '1435059774722015232' : 'Strategy' , 
+                        '1435060058063896698' : 'Strength',
+                        '1435060175525384303' : 'Growth' 
+                      };
+                      const myRoles=user.ssgRoles.filter(r=> roleNames[r]).map(r => roleNames[r]);
                       %>
-                      <% if (myRoles.length > 0) { %>
-                        <% myRoles.forEach(role => { %>
-                          <span class="role-badge role-<%= role.toLowerCase() %>"><%= role %></span>
-                        <% }); %>
-                      <% } else { %>
-                        <span class="muted">No SSG roles assigned</span>
-                      <% } %>
+                        <% if (myRoles.length> 0) { %>
+                          <% myRoles.forEach(role=> { %>
+                            <span class="role-badge role-<%= role.toLowerCase() %>">
+                              <%= role %>
+                            </span>
+                            <% }); %>
+                              <% } else { %>
+                                <span class="muted">No SSG roles assigned</span>
+                                <% } %>
                     </span>
                   </div>
-                <% } %>
+                  <% } %>
               </div>
             </div>
 
-            <!-- Torn API Key Setup -->
+            <!-- Personal Torn API Key -->
             <div class="card mt-2">
               <div class="card-header">🔑 Torn API Key</div>
               <div class="card-body">
                 <% if (tornApiKey) { %>
                   <p class="success-text">✅ Torn API key is saved.</p>
                   <button class="btn btn-small btn-outline" onclick="showKeyForm()">Update Key</button>
-                <% } else { %>
-                  <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
-                <% } %>
-                <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
-                  <div class="input-group mt-1">
-                    <input type="text" id="torn-key-input" class="form-input" placeholder="Enter your Torn API key..." />
-                    <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
-                  </div>
-                  <p class="hint">Get your key at <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">torn.com → Preferences → API</a></p>
-                </div>
-                <div id="key-status" class="mt-1"></div>
+                  <% } else { %>
+                    <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
+                    <% } %>
+                      <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
+                        <div class="input-group mt-1">
+                          <input type="text" id="torn-key-input" class="form-input"
+                            placeholder="Enter your Torn API key..." />
+                          <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
+                        </div>
+                        <p class="hint">Get your key at <a href="https://www.torn.com/preferences.php#tab=api"
+                            target="_blank" rel="noopener">torn.com → Preferences → API</a></p>
+                      </div>
+                      <div id="key-status" class="mt-1"></div>
               </div>
             </div>
+
+            <!-- Faction API Key (Ownership only) -->
+            <% if (isOwner) { %>
+              <div class="card mt-2">
+                <div class="card-header">🏰 Faction API Key <span
+                    style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
+                <div class="card-body">
+                  <% if (hasFactionKey) { %>
+                    <p class="success-text">✅ Faction API key is configured.</p>
+                    <button class="btn btn-small btn-outline" onclick="showFactionKeyForm()">Update Key</button>
+                    <% } else { %>
+                      <p class="muted">No faction API key set. Configure one to enable faction features for all members.
+                      </p>
+                      <% } %>
+                        <div id="faction-key-form" class="<%= hasFactionKey ? 'hidden' : '' %>">
+                          <div class="input-group mt-1">
+                            <input type="text" id="faction-key-input" class="form-input"
+                              placeholder="Enter faction Torn API key..." />
+                            <button class="btn btn-primary" onclick="saveFactionKey()">Save Key</button>
+                          </div>
+                          <p class="hint">Use a faction leader/co-leader's Torn API key with faction permissions.</p>
+                        </div>
+                        <div id="faction-key-status" class="mt-1"></div>
+                </div>
+              </div>
+              <% } %>
           </section>
 
           <!-- ── CHANNELS ── -->
@@ -111,32 +156,32 @@
             <div class="section-header">
               <h3>Discord Channels</h3>
             </div>
-
-            <% if (accessibleChannels && accessibleChannels.length > 0) { %>
+            <% if (accessibleChannels && accessibleChannels.length> 0) { %>
               <div class="channel-toolbar">
                 <label for="channel-select" class="toolbar-label">Select Channel:</label>
                 <select id="channel-select" class="channel-dropdown" onchange="loadChannel(this.value)">
                   <option value="">— Choose a channel —</option>
-                  <% accessibleChannels.forEach(ch => { %>
-                    <option value="<%= ch.id %>"><%= ch.name %></option>
-                  <% }); %>
+                  <% accessibleChannels.forEach(ch=> { %>
+                    <option value="<%= ch.id %>">
+                      <%= ch.name %>
+                    </option>
+                    <% }); %>
                 </select>
                 <button class="btn btn-small btn-outline" onclick="refreshMessages()">↻ Refresh</button>
               </div>
-
               <div id="channel-feed" class="channel-feed">
                 <div class="channel-placeholder">
                   <span class="placeholder-icon">💬</span>
                   <p>Select a channel above to load messages</p>
                 </div>
               </div>
-            <% } else { %>
-              <div class="empty-state">
-                <span class="empty-icon">🔒</span>
-                <p>You don't have any SSG channel access yet.</p>
-                <p class="muted">Contact leadership to get your roles assigned.</p>
-              </div>
-            <% } %>
+              <% } else { %>
+                <div class="empty-state">
+                  <span class="empty-icon">🔒</span>
+                  <p>You don't have any SSG channel access yet.</p>
+                  <p class="muted">Contact leadership to get your roles assigned.</p>
+                </div>
+                <% } %>
           </section>
 
           <!-- ── TORN STATS ── -->
@@ -145,12 +190,22 @@
               <h3>Your Torn Stats</h3>
               <button class="btn btn-primary btn-small" onclick="fetchTornUser()">↻ Refresh</button>
             </div>
-
             <div id="torn-user-data">
               <div class="empty-state">
                 <span class="empty-icon">🎮</span>
                 <p>Click Refresh to load your Torn stats.</p>
                 <p class="muted">Make sure your API key is saved in your profile.</p>
+              </div>
+            </div>
+
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>Crime XP</h3>
+              <button class="btn btn-primary btn-small" onclick="fetchCrimeExp()">↻ Refresh</button>
+            </div>
+            <div id="crime-exp-data">
+              <div class="empty-state">
+                <span class="empty-icon">🔪</span>
+                <p>Click Refresh to load your crime XP.</p>
               </div>
             </div>
           </section>
@@ -169,6 +224,54 @@
             </div>
           </section>
 
+          <!-- ── TRAVEL ── -->
+          <section id="travel" class="section">
+            <div class="section-header">
+              <h3>Travel Status</h3>
+              <button class="btn btn-primary btn-small" onclick="fetchTravel()">↻ Refresh</button>
+            </div>
+            <div id="travel-status">
+              <div class="empty-state">
+                <span class="empty-icon">✈️</span>
+                <p>Click Refresh to load your travel status.</p>
+              </div>
+            </div>
+
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>Foreign Stock</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <select id="travel-country-select" class="channel-dropdown" onchange="filterStockByCountry(this.value)"
+                  style="min-width:180px;">
+                  <option value="">— All Countries —</option>
+                  <option value="mex">Mexico</option>
+                  <option value="cay">Cayman Islands</option>
+                  <option value="can">Canada</option>
+                  <option value="haw">Hawaii</option>
+                  <option value="uni">United Kingdom</option>
+                  <option value="arg">Argentina</option>
+                  <option value="swi">Switzerland</option>
+                  <option value="jap">Japan</option>
+                  <option value="chi">China</option>
+                  <option value="uae">UAE</option>
+                  <option value="sou">South Africa</option>
+                </select>
+                <select id="stock-sort" class="channel-dropdown" onchange="sortStock()">
+                  <option value="type">Sort: Type</option>
+                  <option value="name">Sort: Name</option>
+                  <option value="quantity">Sort: Quantity</option>
+                  <option value="cost">Sort: Cost</option>
+                </select>
+                <button class="btn btn-small btn-outline" onclick="fetchYataStock()">↻ Refresh Stock</button>
+              </div>
+            </div>
+            <div id="yata-stock-data">
+              <div class="empty-state">
+                <span class="empty-icon">🛍️</span>
+                <p>Select a country or click Refresh Stock to load available items.</p>
+              </div>
+            </div>
+          </section>
+
         </main>
       </div>
     </div>
@@ -176,4 +279,5 @@
 
   <script src="/js/dashboard.js"></script>
 </body>
+
 </html>
