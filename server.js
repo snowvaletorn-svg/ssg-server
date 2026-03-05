@@ -373,7 +373,11 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
     }
     await User.findOneAndUpdate(
       { discordId: req.user.id },
-      { tornApiKey: apiKey.trim() },
+      {
+        tornApiKey: apiKey.trim(),
+        tornPlayerId: tornRes.data.player_id,
+        tornName: tornRes.data.name
+      },
       { upsert: true }
     );
     res.json({ success: true, player: tornRes.data });
@@ -513,20 +517,15 @@ app.get('/api/admin/members', isAuthenticated, isLeadershipOrOwnership, async (r
     const factionMembers = factionRes.data.members || [];
 
     // Get all dashboard users from MongoDB
-    const dbUsers = await User.find({}, 'discordId username tornApiKey lastSeen');
-
-    // Build a map of torn player names to db users (best effort matching by username)
-    const dbUserMap = {};
-    dbUsers.forEach(u => {
-      dbUserMap[u.discordId] = u;
-    });
+    const dbUsers = await User.find({}, 'discordId username tornApiKey tornPlayerId tornName lastSeen');
 
     // Return faction members enriched with dashboard data
-    // We match by tornApiKey -> player lookup isn't direct, so we return db users separately
     res.json({
       factionMembers,
       dbUsers: dbUsers.map(u => ({
         username: u.username,
+        tornPlayerId: u.tornPlayerId,
+        tornName: u.tornName,
         hasApiKey: !!u.tornApiKey,
         lastSeen: u.lastSeen
       }))

@@ -698,9 +698,11 @@ function renderAdminMembers(data) {
   const factionMembers = data.factionMembers || [];
   const dbUsers        = data.dbUsers || [];
 
-  // Build lookup by username (best effort)
-  const dbByUsername = {};
-  dbUsers.forEach(u => { dbByUsername[u.username.toLowerCase()] = u; });
+  // Build lookup by Torn player ID
+  const dbByTornId = {};
+  dbUsers.forEach(u => {
+    if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u;
+  });
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Leadership': 2,
@@ -714,10 +716,9 @@ function renderAdminMembers(data) {
       return aO !== bO ? aO - bO : a.name.localeCompare(b.name);
     })
     .map(m => {
-      // Try to match by name
-      const dbUser    = dbByUsername[m.name.toLowerCase()];
-      const hasKey    = dbUser?.hasApiKey ? '✅ Yes' : '❌ No';
-      const lastSeen  = dbUser?.lastSeen
+      const dbUser   = dbByTornId[m.id];
+      const hasKey   = dbUser?.hasApiKey ? '✅ Yes' : '❌ No';
+      const lastSeen = dbUser?.lastSeen
         ? new Date(dbUser.lastSeen).toLocaleString()
         : '—';
       const seenClass = !dbUser?.lastSeen ? 'color:#555;' :
