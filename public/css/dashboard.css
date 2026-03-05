@@ -583,6 +583,52 @@
   color: #c0bcbc;
 }
 
+/* ── Training ──────────────────────────────────────────────────────────── */
+.training-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.training-card {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  overflow: hidden;
+  border-top: 3px solid #3611b0;
+  transition: border-color 0.2s;
+}
+
+.training-card:hover {
+  border-top-color: #4a1fd4;
+}
+
+.training-card-header {
+  padding: 0.85rem 1.25rem;
+  font-family: 'Rajdhani', sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #c0bcbc;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: #1a1919;
+  border-bottom: 1px solid #2a2828;
+}
+
+.training-card-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.training-desc {
+  color: #888;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
 /* ── Scrollbar styling ─────────────────────────────────────────────────── */
 .channel-feed::-webkit-scrollbar { width: 6px; }
 .channel-feed::-webkit-scrollbar-track { background: #0f0f0f; }

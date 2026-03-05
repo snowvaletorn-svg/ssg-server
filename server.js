@@ -42,6 +42,44 @@ const ROLE_CHANNEL_ACCESS = {
   [ROLES.strength]: ['announcements', 'strength', 'war'],
   [ROLES.growth]: ['announcements', 'growth', 'war'],
 };
+const TRAINING_CHANNELS = [
+  {
+    id: '1435414594410512494',
+    name: '📊 Stats Training',
+    description: 'Advanced stat training guides and strategies.',
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength]
+  },
+  {
+    id: '1435416169946415194',
+    name: '💰 Money Making Training',
+    description: 'Guides on making money to fund your stats growth.',
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength]
+  },
+  {
+    id: '1435413325725958165',
+    name: '⬆️ Level Training',
+    description: 'Everything you need to know about leveling up fast.',
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+  },
+  {
+    id: '1435414982316654746',
+    name: '🔗 Chains',
+    description: 'Detailed walkthrough on what chains are.',
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+  },
+  {
+    id: '1435416378709508138',
+    name: '🫆 Crimes Training',
+    description: 'Guide for all members on Crimes in Torn',
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+  },
+  {
+    id: '1435416812706857225',
+    name: '🗝️ Organized Crimes Training',
+    description: 'Guide for all members on Organized Crimes in Torn',
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+  },
+];
 
 // ─── HELPER: Get faction API key ──────────────────────────────────────────────
 async function getFactionApiKey() {
@@ -189,14 +227,14 @@ app.get('/', async (req, res) => {
       const factionMembers = tornRes.data.members || [];
 
       const positionMap = {
-        'Leader':        'Ownership',
-        'Minerva':       'Ownership',
-        'Co-leader':     'Ownership',
-        'Leadership':    'Leadership',
+        'Leader': 'Ownership',
+        'Minerva': 'Ownership',
+        'Co-leader': 'Ownership',
+        'Leadership': 'Leadership',
         'Team Strategy': 'Strategy',
         'Team Strength': 'Strength',
-        'Team Growth':   'Growth',
-        'Recruit':       'Growth'
+        'Team Growth': 'Growth',
+        'Recruit': 'Growth'
       };
 
       const counts = {};
@@ -255,9 +293,14 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const isLeadership = req.user.ssgRoles?.includes(ROLES.leadership) || false;
   const factionKey = await getFactionApiKey();
 
+  const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
+    ch.roles.some(r => (req.user.ssgRoles || []).includes(r))
+  );
+
   res.render('dashboard', {
     user: req.user,
     accessibleChannels,
+    accessibleTraining,
     tornApiKey: dbUser?.tornApiKey || null,
     isOwner,
     isLeadership,

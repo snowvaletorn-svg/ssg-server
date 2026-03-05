@@ -38,6 +38,7 @@
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Torn Stats</a>
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
+            <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
             <% if (isOwner || isLeadership) { %>
               <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
               <% } %>
@@ -70,7 +71,7 @@
                 <div class="profile-detail"><span class="label">Username</span><span class="value">
                     <%= user.username %>
                   </span></div>
-                  <!-- Removed email and discord ID for security purposes -->
+                <!-- Removed email and discord ID for security purposes -->
                 <!--<div class="profile-detail"><span class="label">Email</span><span class="value">
                     <%= user.email || 'Not provided' %>
                   </span></div>
@@ -80,14 +81,11 @@
                 <% if (user.ssgRoles && user.ssgRoles.length> 0) { %>
                   <div class="profile-detail"><span class="label">SSG Roles</span>
                     <span class="value">
-                      <% const roleNames= { 
-                        '1433161746365026334' : 'Ownership' , 
-                        '1462906795860295802' : 'Leadership',
-                        '1435059774722015232' : 'Strategy' , 
-                        '1435060058063896698' : 'Strength', 
-                        '1435060175525384303' : 'Growth'}; 
-                        const myRoles=user.ssgRoles.filter(r=> roleNames[r]).map(r=> roleNames[r]);
-                      %>
+                      <% const roleNames={ '1433161746365026334' : 'Ownership' , '1462906795860295802' : 'Leadership'
+                        , '1435059774722015232' : 'Strategy' , '1435060058063896698' : 'Strength'
+                        , '1435060175525384303' : 'Growth' }; const myRoles=user.ssgRoles.filter(r=>
+                        roleNames[r]).map(r=> roleNames[r]);
+                        %>
                         <% if (myRoles.length> 0) { %>
                           <% myRoles.forEach(function(role) { %>
                             <span class="role-badge role-<%= role.toLowerCase() %>">
@@ -299,7 +297,38 @@
               </div>
             </div>
           </section>
-
+          <!-- ── TRAINING ── -->
+          <section id="training" class="section">
+            <div class="section-header">
+              <h3>Training Resources</h3>
+            </div>
+            <% if (accessibleTraining && accessibleTraining.length> 0) { %>
+              <div class="training-grid">
+                <% accessibleTraining.forEach(function(ch) { %>
+                  <div class="training-card">
+                    <div class="training-card-header">
+                      <%= ch.name %>
+                    </div>
+                    <div class="training-card-body">
+                      <p class="training-desc">
+                        <%= ch.description %>
+                      </p>
+                      <a href="https://discord.com/channels/1432576178383753309/<%= ch.id %>" target="_blank"
+                        rel="noopener" class="btn btn-primary">
+                        Open in Discord ↗
+                      </a>
+                    </div>
+                  </div>
+                  <% }); %>
+              </div>
+              <% } else { %>
+                <div class="empty-state">
+                  <span class="empty-icon">🔒</span>
+                  <p>You don't have access to any training channels.</p>
+                  <p class="muted">Contact leadership to get your roles assigned.</p>
+                </div>
+                <% } %>
+          </section>
           <!-- ── ADMIN ── -->
           <% if (isOwner || isLeadership) { %>
             <section id="admin" class="section">
