@@ -5,9 +5,10 @@ function showSection(sectionId, el) {
   document.getElementById(sectionId).classList.add('active');
   if (el) el.classList.add('active');
 
-  if (sectionId === 'torn') { fetchTornUser(); fetchCrimeExp(); }
+  if (sectionId === 'torn')    { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
   if (sectionId === 'faction') { fetchFaction(); }
-  if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
+  if (sectionId === 'travel')  { fetchTravel(); fetchYataStock(); }
+  if (sectionId === 'admin')   { fetchAdminMembers(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
 }
 
@@ -17,15 +18,15 @@ function showKeyForm() {
 }
 
 async function saveTornKey() {
-  const input = document.getElementById('torn-key-input');
+  const input    = document.getElementById('torn-key-input');
   const statusEl = document.getElementById('key-status');
-  const key = input.value.trim();
+  const key      = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res = await fetch('/api/torn/key', {
+    const res  = await fetch('/api/torn/key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -46,15 +47,15 @@ function showFactionKeyForm() {
 }
 
 async function saveFactionKey() {
-  const input = document.getElementById('faction-key-input');
+  const input    = document.getElementById('faction-key-input');
   const statusEl = document.getElementById('faction-key-status');
-  const key = input.value.trim();
+  const key      = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res = await fetch('/api/torn/faction-key', {
+    const res  = await fetch('/api/torn/faction-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -86,7 +87,7 @@ function refreshMessages() {
 async function fetchSSGMembers() {
   if (Object.keys(memberCache).length > 0) return;
   try {
-    const res = await fetch('/api/discord/members');
+    const res  = await fetch('/api/discord/members');
     const data = await res.json();
     if (res.ok) {
       data.forEach(m => {
@@ -103,7 +104,7 @@ async function fetchMessages(channelId) {
   feed.innerHTML = '<div class="channel-loading">LOADING MESSAGES...</div>';
   await fetchSSGMembers();
   try {
-    const res = await fetch(`/api/discord/channel/${channelId}`);
+    const res  = await fetch(`/api/discord/channel/${channelId}`);
     const data = await res.json();
     if (!res.ok) { feed.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load messages'}</div>`; return; }
     if (!data.length) { feed.innerHTML = '<div class="channel-placeholder"><span class="placeholder-icon">💬</span><p>No messages found</p></div>'; return; }
@@ -114,13 +115,13 @@ async function fetchMessages(channelId) {
 }
 
 function renderMessage(msg) {
-  const author = msg.author;
-  const avatarUrl = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
-  const avatarHtml = avatarUrl
+  const author      = msg.author;
+  const avatarUrl   = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
+  const avatarHtml  = avatarUrl
     ? `<img src="${avatarUrl}" alt="${escapeHtml(author.username)}">`
     : `<span>${escapeHtml(author.username.charAt(0).toUpperCase())}</span>`;
-  const timestamp = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const content = formatContent(msg.content, msg.mentions);
+  const timestamp   = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const content     = formatContent(msg.content, msg.mentions);
   const displayName = memberCache[author.id] || author.global_name || author.username;
 
   return `
@@ -162,7 +163,7 @@ function formatContent(text, mentions) {
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
 // ── Torn User Stats ───────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ async function fetchTornUser() {
   const container = document.getElementById('torn-user-data');
   container.innerHTML = '<div class="channel-loading">LOADING TORN DATA...</div>';
   try {
-    const res = await fetch('/api/torn/user');
+    const res  = await fetch('/api/torn/user');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTornUser(data);
@@ -180,12 +181,12 @@ async function fetchTornUser() {
 }
 
 function renderTornUser(d) {
-  const lifeBar = d.life ? `${d.life.current}/${d.life.maximum}` : 'N/A';
+  const lifeBar   = d.life   ? `${d.life.current}/${d.life.maximum}`     : 'N/A';
   const energyBar = d.energy ? `${d.energy.current}/${d.energy.maximum}` : 'N/A';
-  const nerveBar = d.nerve ? `${d.nerve.current}/${d.nerve.maximum}` : 'N/A';
-  const happyBar = d.happy ? `${d.happy.current}/${d.happy.maximum}` : 'N/A';
-  const married = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
-  const job = d.job?.position && d.job?.company_name !== 'None'
+  const nerveBar  = d.nerve  ? `${d.nerve.current}/${d.nerve.maximum}`   : 'N/A';
+  const happyBar  = d.happy  ? `${d.happy.current}/${d.happy.maximum}`   : 'N/A';
+  const married   = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
+  const job       = d.job?.position && d.job?.company_name !== 'None'
     ? `${d.job.position} at ${d.job.company_name}` : d.job?.job || 'Unemployed';
 
   return `
@@ -236,16 +237,140 @@ function renderTornUser(d) {
           </div>
         </div>` : ''}
         ${d.personalstats ? `
-<div style="margin-top:1.25rem;">
-  <div class="badge-label">Battle Stats</div>
-  <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-    ${infoBadge('Strength', formatNum(d.personalstats.strength))}
-    ${infoBadge('Defense', formatNum(d.personalstats.defense))}
-    ${infoBadge('Speed', formatNum(d.personalstats.speed))}
-    ${infoBadge('Dexterity', formatNum(d.personalstats.dexterity))}
-    ${infoBadge('Total', formatNum(d.personalstats.totalstats))}
-  </div>
-</div>` : ''}
+        <div style="margin-top:1.25rem;">
+          <div class="badge-label">Battle Stats</div>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            ${infoBadge('Strength', formatNum(d.personalstats.strength))}
+            ${infoBadge('Defense', formatNum(d.personalstats.defense))}
+            ${infoBadge('Speed', formatNum(d.personalstats.speed))}
+            ${infoBadge('Dexterity', formatNum(d.personalstats.dexterity))}
+            ${infoBadge('Total', formatNum(d.personalstats.totalstats))}
+          </div>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Honors, Merits & Awards ───────────────────────────────────────────────────
+async function fetchHonors() {
+  const container = document.getElementById('honors-data');
+  container.innerHTML = '<div class="channel-loading">LOADING HONORS & MERITS...</div>';
+  try {
+    const res  = await fetch('/api/torn/honors');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderHonors(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+let honorsCache = null;
+
+function renderHonors(data) {
+  honorsCache = data;
+  const filterEl = document.getElementById('honors-filter');
+  const sortEl   = document.getElementById('honors-sort');
+  const filter   = filterEl ? filterEl.value : 'all';
+  const sort     = sortEl   ? sortEl.value   : 'earned-first';
+  renderHonorsTable(data, filter, sort);
+}
+
+function filterHonors() {
+  if (honorsCache) renderHonors(honorsCache);
+}
+
+function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
+  const container = document.getElementById('honors-table-container');
+  const awarded   = new Set(data.honors_awarded || []);
+  const allHonors = data.all_honors || {};
+  const merits    = data.merits || {};
+
+  const rarityOrder = {
+    'Extremely Rare': 0, 'Very Rare': 1, 'Rare': 2,
+    'Limited': 3, 'Uncommon': 4, 'Common': 5, 'Very Common': 6
+  };
+  const rarityColor = {
+    'Very Common': '#888', 'Common': '#4caf50', 'Uncommon': '#4a90e2',
+    'Limited': '#9b59b6', 'Rare': '#f0a500', 'Very Rare': '#e67e22',
+    'Extremely Rare': '#e74c3c'
+  };
+
+  let honorEntries = Object.entries(allHonors).filter(([, h]) => h.type !== 1);
+  const earned     = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
+  const totalPct   = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
+
+  // Apply filter
+  if (filter === 'earned')    honorEntries = honorEntries.filter(([id]) =>  awarded.has(parseInt(id)));
+  if (filter === 'unearned')  honorEntries = honorEntries.filter(([id]) => !awarded.has(parseInt(id)));
+
+  // Apply sort
+  honorEntries.sort((a, b) => {
+    const aE  = awarded.has(parseInt(a[0]));
+    const bE  = awarded.has(parseInt(b[0]));
+    const aRO = rarityOrder[a[1].rarity] ?? 99;
+    const bRO = rarityOrder[b[1].rarity] ?? 99;
+
+    switch (sort) {
+      case 'earned-first':   return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
+      case 'unearned-first': return aE !== bE ? (aE ? 1 : -1) : aRO - bRO;
+      case 'rarity-asc':     return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'rarity-desc':    return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'name':           return (a[1].name || '').localeCompare(b[1].name || '');
+      default:               return 0;
+    }
+  });
+
+  const honorRows = honorEntries.map(([id, honor]) => {
+    const isEarned = awarded.has(parseInt(id));
+    const color    = rarityColor[honor.rarity] || '#888';
+    return `<tr style="opacity:${isEarned ? '1' : '0.35'};">
+      <td style="width:24px;">${isEarned ? '✅' : '⬜'}</td>
+      <td>${escapeHtml(honor.name || 'Unknown')}</td>
+      <td style="color:#888;font-size:0.8rem;">${escapeHtml(honor.description || '')}</td>
+      <td style="text-align:center;"><span style="color:${color};font-size:0.78rem;">${honor.rarity || '—'}</span></td>
+    </tr>`;
+  }).join('');
+
+  const meritRows = Object.entries(merits).map(([key, val]) => {
+    const maxVal = 10;
+    const pct    = Math.min(Math.round((val / maxVal) * 100), 100);
+    const color  = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
+    return `<tr>
+      <td>${formatMeritName(key)}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${val}/${maxVal}</td>
+      <td style="width:120px;">
+        <div style="background:#2a2828;border-radius:4px;height:8px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:${color};border-radius:4px;"></div>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        Honors & Awards
+        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([,h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
+      </div>
+      <div style="background:#2a2828;border-radius:4px;height:8px;margin:0 1rem 1rem;overflow:hidden;">
+        <div style="width:${totalPct}%;height:100%;background:#4caf50;border-radius:4px;"></div>
+      </div>
+      <div style="overflow-x:auto;max-height:500px;overflow-y:auto;">
+        <table class="members-table">
+          <thead><tr><th style="width:24px;"></th><th>Name</th><th>Description</th><th style="text-align:center;">Rarity</th></tr></thead>
+          <tbody>${honorRows || '<tr><td colspan="4" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">Merits</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr><th>Merit</th><th style="text-align:center;">Progress</th><th style="width:120px;">Bar</th></tr></thead>
+          <tbody>${meritRows || '<tr><td colspan="3" class="muted" style="padding:1rem;">No merit data</td></tr>'}</tbody>
+        </table>
       </div>
     </div>`;
 }
@@ -255,7 +380,7 @@ async function fetchCrimeExp() {
   const container = document.getElementById('crime-exp-data');
   container.innerHTML = '<div class="channel-loading">LOADING CRIME XP...</div>';
   try {
-    const res = await fetch('/api/torn/crimeexp');
+    const res  = await fetch('/api/torn/crimeexp');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderCrimeExp(data.merits || data);
@@ -265,7 +390,6 @@ async function fetchCrimeExp() {
 }
 
 function renderCrimeExp(merits) {
-  // Filter to crime-related merits only
   const crimeKeys = Object.entries(merits).filter(([key]) =>
     key.toLowerCase().includes('crime') ||
     key.toLowerCase().includes('theft') ||
@@ -284,12 +408,7 @@ function renderCrimeExp(merits) {
     key.toLowerCase().includes('assassination')
   );
 
-  if (crimeKeys.length === 0) {
-    // Show all merits if no crime-specific ones found
-    return renderAllMerits(merits);
-  }
-
-  const rows = crimeKeys.map(([key, val]) => `
+  const rows = (crimeKeys.length > 0 ? crimeKeys : Object.entries(merits)).map(([key, val]) => `
     <tr>
       <td>${formatMeritName(key)}</td>
       <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${val}</td>
@@ -307,25 +426,6 @@ function renderCrimeExp(merits) {
     </div>`;
 }
 
-function renderAllMerits(merits) {
-  const rows = Object.entries(merits).map(([key, val]) => `
-    <tr>
-      <td>${formatMeritName(key)}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${val}</td>
-    </tr>`).join('');
-
-  return `
-    <div class="card">
-      <div class="card-header">All Merits</div>
-      <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr><th>Merit</th><th style="text-align:right;">Level</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
-}
-
 function formatMeritName(key) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
@@ -335,18 +435,30 @@ async function fetchFaction() {
   const container = document.getElementById('faction-data');
   container.innerHTML = '<div class="channel-loading">LOADING FACTION DATA...</div>';
   try {
-    const res = await fetch('/api/torn/faction');
+    const res  = await fetch('/api/torn/faction');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderFaction(data);
+
+    // Also fetch member stats if admin
+    let statsMap = {};
+    try {
+      const statsRes = await fetch('/api/admin/member-stats');
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        (statsData.stats || []).forEach(s => { statsMap[s.player_id] = s; });
+      }
+    } catch {}
+
+    container.innerHTML = renderFaction(data, statsMap);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
-function renderFaction(d) {
-  const basic = d.basic;
+function renderFaction(d, statsMap = {}) {
+  const basic   = d.basic;
   const members = d.members || [];
+  const hasStats = Object.keys(statsMap).length > 0;
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Leadership': 2,
@@ -361,8 +473,10 @@ function renderFaction(d) {
       return (b.level || 0) - (a.level || 0);
     })
     .map(m => {
-      const status = m.last_action?.status || 'Offline';
+      const status      = m.last_action?.status || 'Offline';
       const statusClass = `status-${status.toLowerCase()}`;
+      const memberStats = statsMap[m.id];
+      const totalStats  = memberStats ? formatNum(memberStats.totalstats) : '—';
       return `<tr>
         <td>${escapeHtml(m.name)}</td>
         <td>${m.level || '—'}</td>
@@ -370,6 +484,7 @@ function renderFaction(d) {
         <td class="${statusClass}">${status}</td>
         <td>${m.days_in_faction ?? '—'}d</td>
         <td>${m.revive_setting || '—'}</td>
+        ${hasStats ? `<td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${totalStats}</td>` : ''}
       </tr>`;
     }).join('');
 
@@ -384,8 +499,11 @@ function renderFaction(d) {
       <div class="card-header">Member Roster</div>
       <div style="overflow-x:auto;">
         <table class="members-table">
-          <thead><tr><th>Name</th><th>Level</th><th>Position</th><th>Status</th><th>Days</th><th>Revive</th></tr></thead>
-          <tbody>${memberRows || '<tr><td colspan="6" class="muted" style="padding:1rem;">No member data</td></tr>'}</tbody>
+          <thead><tr>
+            <th>Name</th><th>Level</th><th>Position</th><th>Status</th><th>Days</th><th>Revive</th>
+            ${hasStats ? '<th>Total Stats</th>' : ''}
+          </tr></thead>
+          <tbody>${memberRows || '<tr><td colspan="7" class="muted" style="padding:1rem;">No member data</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -396,7 +514,7 @@ async function fetchTravel() {
   const container = document.getElementById('travel-status');
   container.innerHTML = '<div class="channel-loading">LOADING TRAVEL STATUS...</div>';
   try {
-    const res = await fetch('/api/torn/travel');
+    const res  = await fetch('/api/torn/travel');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTravelStatus(data.travel || data);
@@ -418,8 +536,8 @@ function renderTravelStatus(t) {
       </div>`;
   }
 
-  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
-  const isReturning = t.destination === 'Torn';
+  const arrivalTime  = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
+  const isReturning  = t.destination === 'Torn';
 
   return `
     <div class="card">
@@ -442,10 +560,9 @@ let itemCatalogCache = null;
 async function fetchItemCatalog() {
   if (itemCatalogCache) return itemCatalogCache;
   try {
-    const res = await fetch('/api/torn/items');
+    const res  = await fetch('/api/torn/items');
     const data = await res.json();
     if (res.ok && data.items) {
-      // Build a map of item ID -> category
       itemCatalogCache = {};
       Object.entries(data.items).forEach(([id, item]) => {
         itemCatalogCache[id] = item.type;
@@ -461,7 +578,6 @@ async function fetchYataStock() {
   const container = document.getElementById('yata-stock-data');
   container.innerHTML = '<div class="channel-loading">LOADING FOREIGN STOCK...</div>';
   try {
-    // Fetch both in parallel
     const [stockRes, catalog] = await Promise.all([
       fetch('/api/yata/travel'),
       fetchItemCatalog()
@@ -470,7 +586,7 @@ async function fetchYataStock() {
     if (!stockRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     yataStockCache = { data, catalog };
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort = document.getElementById('stock-sort').value;
+    const selectedSort    = document.getElementById('stock-sort').value;
     renderYataStock(data, catalog, selectedCountry, selectedSort);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -489,7 +605,7 @@ function filterStockByCountry(countryCode) {
 function sortStock() {
   if (yataStockCache) {
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort = document.getElementById('stock-sort').value;
+    const selectedSort    = document.getElementById('stock-sort').value;
     renderYataStock(yataStockCache.data, yataStockCache.catalog, selectedCountry, selectedSort);
   }
 }
@@ -498,10 +614,10 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   const container = document.getElementById('yata-stock-data');
 
   const countryNames = {
-    mex: '🇲🇽 Mexico', cay: '🏝️ Cayman Islands', can: '🇨🇦 Canada',
-    haw: '🌺 Hawaii', uni: '🇬🇧 United Kingdom', arg: '🇦🇷 Argentina',
-    swi: '🇨🇭 Switzerland', jap: '🇯🇵 Japan', chi: '🇨🇳 China',
-    uae: '🇦🇪 UAE', sou: '🇿🇦 South Africa'
+    mex: 'Mexico', cay: 'Cayman Islands', can: 'Canada',
+    haw: 'Hawaii', uni: 'United Kingdom', arg: 'Argentina',
+    swi: 'Switzerland', jap: 'Japan', chi: 'China',
+    uae: 'UAE', sou: 'South Africa'
   };
 
   const stockData = data.stocks || {};
@@ -514,8 +630,8 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   }
 
   const html = entries.map(([code, country]) => {
-    const name = countryNames[code] || code;
-    const items = (country.stocks || []).filter(item => item.quantity > 0);
+    const name       = countryNames[code] || code;
+    const items      = (country.stocks || []).filter(item => item.quantity > 0);
     const lastUpdate = country.update ? new Date(country.update * 1000).toLocaleTimeString() : 'Unknown';
 
     if (!items.length) return `
@@ -524,12 +640,11 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
         <div class="card-body"><p class="muted">No items in stock.</p></div>
       </div>`;
 
-    // Sort items
     const sorted = [...items].sort((a, b) => {
       switch (sortBy) {
-        case 'name': return a.name.localeCompare(b.name);
+        case 'name':     return a.name.localeCompare(b.name);
         case 'quantity': return b.quantity - a.quantity;
-        case 'cost': return b.cost - a.cost;
+        case 'cost':     return b.cost - a.cost;
         case 'type':
         default: {
           const typeA = catalog?.[a.id] || 'ZZZ';
@@ -565,6 +680,127 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   container.innerHTML = html;
 }
 
+// ── Admin Panel ───────────────────────────────────────────────────────────────
+async function fetchAdminMembers() {
+  const container = document.getElementById('admin-members-data');
+  container.innerHTML = '<div class="channel-loading">LOADING MEMBER ACTIVITY...</div>';
+  try {
+    const res  = await fetch('/api/admin/members');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderAdminMembers(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderAdminMembers(data) {
+  const factionMembers = data.factionMembers || [];
+  const dbUsers        = data.dbUsers || [];
+
+  // Build lookup by username (best effort)
+  const dbByUsername = {};
+  dbUsers.forEach(u => { dbByUsername[u.username.toLowerCase()] = u; });
+
+  const positionOrder = {
+    'Leader': 0, 'Co-leader': 1, 'Leadership': 2,
+    'Team Strategy': 3, 'Team Strength': 4, 'Team Growth': 5, 'Recruit': 6
+  };
+
+  const rows = factionMembers
+    .sort((a, b) => {
+      const aO = positionOrder[a.position] ?? 99;
+      const bO = positionOrder[b.position] ?? 99;
+      return aO !== bO ? aO - bO : a.name.localeCompare(b.name);
+    })
+    .map(m => {
+      // Try to match by name
+      const dbUser    = dbByUsername[m.name.toLowerCase()];
+      const hasKey    = dbUser?.hasApiKey ? '✅ Yes' : '❌ No';
+      const lastSeen  = dbUser?.lastSeen
+        ? new Date(dbUser.lastSeen).toLocaleString()
+        : '—';
+      const seenClass = !dbUser?.lastSeen ? 'color:#555;' :
+        (Date.now() - new Date(dbUser.lastSeen) < 7 * 24 * 60 * 60 * 1000) ? 'color:#4caf50;' : 'color:#f0a500;';
+
+      return `<tr>
+        <td>${escapeHtml(m.name)}</td>
+        <td>${m.position || '—'}</td>
+        <td>${hasKey}</td>
+        <td style="${seenClass}font-size:0.85rem;">${lastSeen}</td>
+      </tr>`;
+    }).join('');
+
+  const registeredCount = dbUsers.filter(u => u.hasApiKey).length;
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1.5rem;">
+      ${statTile(factionMembers.length, 'Faction Members')}
+      ${statTile(dbUsers.length, 'Dashboard Users')}
+      ${statTile(registeredCount, 'API Keys Saved')}
+    </div>
+    <div class="card">
+      <div class="card-header">Member Activity</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr><th>Name</th><th>Position</th><th>API Key</th><th>Last Seen</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="4" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+async function fetchMemberStats() {
+  const container = document.getElementById('admin-stats-data');
+  container.innerHTML = '<div class="channel-loading">LOADING MEMBER STATS... (this may take a moment)</div>';
+  try {
+    const res  = await fetch('/api/admin/member-stats');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderMemberStats(data.stats || []);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderMemberStats(stats) {
+  if (!stats.length) {
+    return '<div class="empty-state"><p class="muted">No members with saved API keys found.</p></div>';
+  }
+
+  const sorted = [...stats].sort((a, b) => (b.totalstats || 0) - (a.totalstats || 0));
+
+  const rows = sorted.map((m, i) => `
+    <tr>
+      <td style="color:#555;font-size:0.8rem;">${i + 1}</td>
+      <td>${escapeHtml(m.name)}</td>
+      <td style="text-align:center;">${m.level || '—'}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.strength)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.defense)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.speed)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.dexterity)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-weight:600;">${formatNum(m.totalstats)}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-header">Member Stats (${stats.length} members)</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>#</th><th>Name</th><th style="text-align:center;">Lvl</th>
+            <th style="text-align:right;">STR</th>
+            <th style="text-align:right;">DEF</th>
+            <th style="text-align:right;">SPD</th>
+            <th style="text-align:right;">DEX</th>
+            <th style="text-align:right;">Total</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function statTile(value, label) {
   return `<div class="stat-tile"><div class="stat-value">${value ?? '—'}</div><div class="stat-label">${label}</div></div>`;
@@ -580,7 +816,7 @@ function infoBadge(label, value) {
 function formatNum(n) {
   if (n == null) return '—';
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000)         return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 }

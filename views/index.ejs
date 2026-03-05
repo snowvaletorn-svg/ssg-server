@@ -82,9 +82,18 @@
       <div class="stat-card" style="margin-top: 40px; text-align: left; border-top: 4px solid var(--growth-color);">
         <h2 style="margin-top: 0;">What we expect from you:</h2>
         <ul style="color: var(--black);">
-          <li>Daily activity in discord and in game</li>
-          <li>Join OC (90% payout)</li>
-          <li>Join In with war and chaining</li>
+          <li>Daily activity in discord and in game
+            <ul>
+              <li>Flying for plushies/flowers/drugs</li>
+              <li>Performing Crimes, using nerve</li>
+              <li>For those under level 15, working towards level 15</li>
+              <li>For those over level 15, building stats</li>
+            </ul>
+          </li>
+          <li>Participate in Organized Crimes (OCs) (90% payout)</li>
+          <li>Participate in war and chains</li>
+          <li>Members are expected to respond to tagged messages</li>
+          <li>Members will not sell losses</li>
           <li>Most Importantly, have fun!</li>
         </ul>
       </div>
@@ -95,7 +104,9 @@
   <div class="container">
     <div class="faction-stats">
       <div class="stat-card">
-        <h4>29</h4>
+        <h4>
+          <%= faction.memberCount %>
+        </h4>
         <p>Total Members</p>
       </div>
       <div class="stat-card">
@@ -107,75 +118,28 @@
 
   <!-- Groups Section -->
   <section class="container">
-    <div class="groups-section">
-      <h2>Our Groups</h2>
-      <p class="section-intro">Each division plays a vital role in our faction's success</p>
-      <div class="groups-grid">
-        <div class="owner-card">
-          <div class="group-header">
-            <h3>Ownership</h3><span class="group-members">3 Members</span>
-          </div>
-          <p class="group-description">Owners have final decision on all aspects and are available to assist/train.</p>
-          <div class="group-footer">
-            <p><strong>Focus:</strong> Ensuring understanding across all teams.</p>
-          </div>
-        </div>
-        <div class="lead-card">
-          <div class="group-header">
-            <h3>Leadership</h3><span class="group-members">2 Members</span>
-          </div>
-          <p class="group-description">Helping determine the faction path and day-to-day operations.</p>
-          <div class="group-footer">
-            <p><strong>Focus:</strong> Team success and operations.</p>
-          </div>
-        </div>
-        <div class="strat-card">
-          <div class="group-header">
-            <h3>Strategy</h3><span class="group-members">4 Members</span>
-          </div>
-          <p class="group-description">Level 15+ members who plan and execute war rules.</p>
-          <div class="group-footer">
-            <p><strong>Focus:</strong> Preparing Strength and Growth for war.</p>
-          </div>
-        </div>
-        <!--Strength Card-->
-        <div class="stren-card">
+    <div class="groups-grid">
+      <% groups.forEach(function(group) { %>
+        <div
+          class="<%= group.name.toLowerCase() === 'ownership' ? 'owner-card' : group.name.toLowerCase() === 'leadership' ? 'lead-card' : group.name.toLowerCase() === 'strategy' ? 'strat-card' : group.name.toLowerCase() === 'strength' ? 'stren-card' : 'grow-card' %>">
           <div class="group-header">
             <h3>
-              Strength
+              <%= group.name %>
             </h3>
             <span class="group-members">
-              17 Members</span>
+              <%= group.members %> Members
+            </span>
           </div>
           <p class="group-description">
-            This team is made up of members at level 15 or greater. Their focus is on stats (and playing the rest of the
-            game).
+            <%= group.description %>
           </p>
           <div class="group-footer">
-            <p><strong>focus:</strong>
-              Making money to purchase items for stats growth and to be able to rent a Private Island with an airstrip.
+            <p><strong>Focus:</strong>
+              <%= group.focus %>
             </p>
           </div>
         </div>
-        <!--Growth Card-->
-        <div class="grow-card">
-          <div class="group-header">
-            <h3>
-              Growth
-            </h3>
-            <span class="group-members">
-              3 Members</span>
-          </div>
-          <p class="group-description">
-            This team is made up of members under level 15.
-          </p>
-          <div class="group-footer">
-            <p><strong>focus:</strong>
-              Making their way to level 15 through attacks (leaving their opponent), crimes, and training in the gym.
-            </p>
-          </div>
-        </div>
-      </div>
+        <% }); %>
     </div>
     </div>
   </section>

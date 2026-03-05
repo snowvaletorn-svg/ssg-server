@@ -43,7 +43,7 @@ const ROLE_CHANNEL_ACCESS = {
   [ROLES.growth]: ['announcements', 'growth', 'war'],
 };
 
-// ─── HELPER: Get faction API key (DB first, ENV fallback) ─────────────────────
+// ─── HELPER: Get faction API key ──────────────────────────────────────────────
 async function getFactionApiKey() {
   try {
     const config = await FactionConfig.findOne({ key: 'config' });
@@ -125,7 +125,7 @@ passport.use(new DiscordStrategy({
     try {
       await User.findOneAndUpdate(
         { discordId: profile.id },
-        { discordId: profile.id, username: profile.username },
+        { discordId: profile.id, username: profile.username, lastSeen: new Date() },
         { upsert: true, returnDocument: 'after' }
       );
     } catch (err) {
@@ -155,6 +155,14 @@ const isOwnership = (req, res, next) => {
   next();
 };
 
+const isLeadershipOrOwnership = (req, res, next) => {
+  const roles = req.user?.ssgRoles || [];
+  if (!roles.includes(ROLES.ownership) && !roles.includes(ROLES.leadership)) {
+    return res.status(403).json({ error: 'Leadership or Ownership role required.' });
+  }
+  next();
+};
+
 // ─── HELPER ──────────────────────────────────────────────────────────────────
 function getAccessibleChannels(ssgRoles) {
   const accessible = new Set();
@@ -167,11 +175,51 @@ function getAccessibleChannels(ssgRoles) {
 }
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
+  let liveGroups = factionData.groups;
+  let totalMembers = factionData.faction.memberCount;
+
+  try {
+    const factionKey = await getFactionApiKey();
+    if (factionKey) {
+      const tornRes = await axios.get(
+        `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`
+      );
+
+      const factionMembers = tornRes.data.members || [];
+
+      const positionMap = {
+        'Leader':        'Ownership',
+        'Minerva':       'Ownership',
+        'Co-leader':     'Ownership',
+        'Leadership':    'Leadership',
+        'Team Strategy': 'Strategy',
+        'Team Strength': 'Strength',
+        'Team Growth':   'Growth',
+        'Recruit':       'Growth'
+      };
+
+      const counts = {};
+      factionMembers.forEach(m => {
+        const groupName = positionMap[m.position];
+        if (groupName) counts[groupName] = (counts[groupName] || 0) + 1;
+      });
+
+      liveGroups = factionData.groups.map(g => ({
+        ...g,
+        members: counts[g.name] ?? g.members
+      }));
+
+      totalMembers = factionMembers.length;
+    }
+  } catch (err) {
+    console.error('Could not fetch live faction data for home page:', err.message);
+  }
+
   res.render('index', {
     user: req.user,
-    faction: factionData.faction,
-    groups: factionData.groups
+    faction: { ...factionData.faction, memberCount: totalMembers },
+    groups: liveGroups
   });
 });
 
@@ -188,9 +236,23 @@ app.get('/auth/discord/callback',
 );
 
 app.get('/dashboard', isAuthenticated, async (req, res) => {
+  const ssgRoles = req.user.ssgRoles || [];
+  const allowedRoles = Object.values(ROLES);
+  const hasRole = ssgRoles.some(r => allowedRoles.includes(r));
+
+  if (!hasRole) {
+    return res.redirect('/?error=no_access');
+  }
+
+  await User.findOneAndUpdate(
+    { discordId: req.user.id },
+    { lastSeen: new Date() }
+  );
+
   const dbUser = await User.findOne({ discordId: req.user.id });
   const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
   const isOwner = req.user.ssgRoles?.includes(ROLES.ownership) || false;
+  const isLeadership = req.user.ssgRoles?.includes(ROLES.leadership) || false;
   const factionKey = await getFactionApiKey();
 
   res.render('dashboard', {
@@ -198,6 +260,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     accessibleChannels,
     tornApiKey: dbUser?.tornApiKey || null,
     isOwner,
+    isLeadership,
     hasFactionKey: !!factionKey
   });
 });
@@ -327,18 +390,31 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   }
 });
 
-app.get('/api/torn/friends', isAuthenticated, async (req, res) => {
+// ─── API: Personal honors, merits, awards ────────────────────────────────────
+app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ discordId: req.user.id });
-    if (!dbUser?.tornApiKey) return res.status(400).json({ error: 'No API key saved.' });
-    const tornRes = await axios.get(
-      `https://api.torn.com/v2/user/?selections=friends&key=${dbUser.tornApiKey}`
-    );
-    res.json(tornRes.data);
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+    const [userRes, tornRes] = await Promise.all([
+      axios.get(`https://api.torn.com/user/?selections=honors,merits&key=${dbUser.tornApiKey}`),
+      axios.get(`https://api.torn.com/torn/?selections=honors&key=${dbUser.tornApiKey}`)
+    ]);
+    if (userRes.data.error) {
+      return res.status(400).json({ error: userRes.data.error.error });
+    }
+    res.json({
+      honors_awarded: userRes.data.honors_awarded || [],
+      honors_time: userRes.data.honors_time || {},
+      merits: userRes.data.merits || {},
+      all_honors: tornRes.data.honors || {}
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
 // ─── API: Personal crime XP (merits) ─────────────────────────────────────────
 app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
   try {
@@ -369,6 +445,84 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
       `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`
     );
     res.json(tornRes.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Admin panel — faction members with dashboard activity ───────────────
+app.get('/api/admin/members', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) {
+      return res.status(400).json({ error: 'No faction API key configured.' });
+    }
+
+    // Get faction members from Torn
+    const factionRes = await axios.get(
+      `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
+    );
+    const factionMembers = factionRes.data.members || [];
+
+    // Get all dashboard users from MongoDB
+    const dbUsers = await User.find({}, 'discordId username tornApiKey lastSeen');
+
+    // Build a map of torn player names to db users (best effort matching by username)
+    const dbUserMap = {};
+    dbUsers.forEach(u => {
+      dbUserMap[u.discordId] = u;
+    });
+
+    // Return faction members enriched with dashboard data
+    // We match by tornApiKey -> player lookup isn't direct, so we return db users separately
+    res.json({
+      factionMembers,
+      dbUsers: dbUsers.map(u => ({
+        username: u.username,
+        hasApiKey: !!u.tornApiKey,
+        lastSeen: u.lastSeen
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Member total stats (Leadership/Ownership only) ─────────────────────
+app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    // Get all users with API keys
+    const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey username');
+
+    // Fetch personalstats for each member in parallel (limit to avoid rate limiting)
+    const results = await Promise.allSettled(
+      dbUsers.map(async (u) => {
+        try {
+          const tornRes = await axios.get(
+            `https://api.torn.com/user/?selections=basic,personalstats&key=${u.tornApiKey}`
+          );
+          if (tornRes.data.error) return null;
+          return {
+            name: tornRes.data.name,
+            player_id: tornRes.data.player_id,
+            level: tornRes.data.level,
+            totalstats: tornRes.data.personalstats?.totalstats || 0,
+            strength: tornRes.data.personalstats?.strength || 0,
+            defense: tornRes.data.personalstats?.defense || 0,
+            speed: tornRes.data.personalstats?.speed || 0,
+            dexterity: tornRes.data.personalstats?.dexterity || 0,
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const stats = results
+      .filter(r => r.status === 'fulfilled' && r.value !== null)
+      .map(r => r.value);
+
+    res.json({ stats });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

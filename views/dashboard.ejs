@@ -38,6 +38,9 @@
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Torn Stats</a>
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
+            <% if (isOwner || isLeadership) { %>
+              <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
+              <% } %>
           </nav>
         </aside>
 
@@ -67,27 +70,26 @@
                 <div class="profile-detail"><span class="label">Username</span><span class="value">
                     <%= user.username %>
                   </span></div>
-                <div class="profile-detail"><span class="label">Email</span><span class="value">
+                  <!-- Removed email and discord ID for security purposes -->
+                <!--<div class="profile-detail"><span class="label">Email</span><span class="value">
                     <%= user.email || 'Not provided' %>
                   </span></div>
                 <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono">
                     <%= user.id %>
-                  </span></div>
+                  </span></div>-->
                 <% if (user.ssgRoles && user.ssgRoles.length> 0) { %>
                   <div class="profile-detail"><span class="label">SSG Roles</span>
                     <span class="value">
-                      <% 
-                      const roleNames = { 
+                      <% const roleNames= { 
                         '1433161746365026334' : 'Ownership' , 
-                        '1462906795860295802' : 'Leadership', 
+                        '1462906795860295802' : 'Leadership',
                         '1435059774722015232' : 'Strategy' , 
-                        '1435060058063896698' : 'Strength',
-                        '1435060175525384303' : 'Growth' 
-                      };
-                      const myRoles=user.ssgRoles.filter(r=> roleNames[r]).map(r => roleNames[r]);
+                        '1435060058063896698' : 'Strength', 
+                        '1435060175525384303' : 'Growth'}; 
+                        const myRoles=user.ssgRoles.filter(r=> roleNames[r]).map(r=> roleNames[r]);
                       %>
                         <% if (myRoles.length> 0) { %>
-                          <% myRoles.forEach(role=> { %>
+                          <% myRoles.forEach(function(role) { %>
                             <span class="role-badge role-<%= role.toLowerCase() %>">
                               <%= role %>
                             </span>
@@ -161,7 +163,7 @@
                 <label for="channel-select" class="toolbar-label">Select Channel:</label>
                 <select id="channel-select" class="channel-dropdown" onchange="loadChannel(this.value)">
                   <option value="">— Choose a channel —</option>
-                  <% accessibleChannels.forEach(ch=> { %>
+                  <% accessibleChannels.forEach(function(ch) { %>
                     <option value="<%= ch.id %>">
                       <%= ch.name %>
                     </option>
@@ -197,6 +199,32 @@
                 <p class="muted">Make sure your API key is saved in your profile.</p>
               </div>
             </div>
+
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>Honors, Merits & Awards</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <select id="honors-filter" class="channel-dropdown" onchange="filterHonors()">
+                  <option value="all">All</option>
+                  <option value="earned">Earned only</option>
+                  <option value="unearned">Not earned</option>
+                </select>
+                <select id="honors-sort" class="channel-dropdown" onchange="filterHonors()">
+                  <option value="earned-first">Earned first</option>
+                  <option value="unearned-first">Unearned first</option>
+                  <option value="rarity-asc">Rarity (rarest first)</option>
+                  <option value="rarity-desc">Rarity (common first)</option>
+                  <option value="name">Name A-Z</option>
+                </select>
+                <button class="btn btn-primary btn-small" onclick="fetchHonors()">↻ Refresh</button>
+              </div>
+            </div>
+            <div id="honors-data">
+              <div class="empty-state">
+                <span class="empty-icon">🏅</span>
+                <p>Click Refresh to load your honors, merits and awards.</p>
+              </div>
+            </div>
+            <div id="honors-table-container"></div>
 
             <div class="section-header" style="margin-top:2rem;">
               <h3>Crime XP</h3>
@@ -271,6 +299,41 @@
               </div>
             </div>
           </section>
+
+          <!-- ── ADMIN ── -->
+          <% if (isOwner || isLeadership) { %>
+            <section id="admin" class="section">
+              <div class="section-header">
+                <h3>Admin Panel</h3>
+              </div>
+
+              <!-- Dashboard Activity -->
+              <div class="section-header" style="margin-top:0;">
+                <h3>Member Dashboard Activity</h3>
+                <button class="btn btn-primary btn-small" onclick="fetchAdminMembers()">↻ Refresh</button>
+              </div>
+              <div id="admin-members-data">
+                <div class="empty-state">
+                  <span class="empty-icon">🛡️</span>
+                  <p>Click Refresh to load member activity.</p>
+                </div>
+              </div>
+
+              <!-- Member Total Stats -->
+              <div class="section-header" style="margin-top:2rem;">
+                <h3>Member Total Stats</h3>
+                <button class="btn btn-primary btn-small" onclick="fetchMemberStats()">↻ Refresh</button>
+              </div>
+              <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">Only members who have saved their API key
+                are shown.</p>
+              <div id="admin-stats-data">
+                <div class="empty-state">
+                  <span class="empty-icon">📊</span>
+                  <p>Click Refresh to load member stats.</p>
+                </div>
+              </div>
+            </section>
+            <% } %>
 
         </main>
       </div>

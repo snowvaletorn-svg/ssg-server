@@ -4,7 +4,7 @@ const userSchema = new mongoose.Schema({
   discordId: { type: String, required: true, unique: true },
   username: { type: String, required: true },
   tornApiKey: { type: String, default: null },
-  isFactionKeyHolder: { type: Boolean, default: false },
+  lastSeen: { type: Date, default: null },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

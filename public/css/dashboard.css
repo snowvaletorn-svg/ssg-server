@@ -83,6 +83,17 @@
   text-transform: uppercase;
 }
 
+/* ── Badge Label ───────────────────────────────────────────────────────── */
+.badge-label {
+  color: #a0a0a0;
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
 /* ── Cards ─────────────────────────────────────────────────────────────── */
 .card {
   background: #161515;
