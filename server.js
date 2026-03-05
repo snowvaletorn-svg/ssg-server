@@ -81,6 +81,11 @@ const TRAINING_CHANNELS = [
   },
 ];
 
+// ─── API: Keep-alive ping ─────────────────────────────────────────────────────
+app.get('/api/ping', (req, res) => {
+  res.json({ ok: true });
+});
+
 // ─── HELPER: Get faction API key ──────────────────────────────────────────────
 async function getFactionApiKey() {
   try {

@@ -820,3 +820,8 @@ function formatNum(n) {
   if (n >= 1_000)         return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 }
+
+// ── Keep-alive ping ───────────────────────────────────────────────────────────
+setInterval(() => {
+  fetch('/api/ping').catch(() => {});
+}, 14 * 60 * 1000 + 30 * 1000); // 14m 30s
