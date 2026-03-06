@@ -20,6 +20,7 @@
         <span class="welcome-text">Welcome, <strong>
             <%= user.ssgNick || user.username %>
           </strong></span>
+        <button class="btn btn-outline" onclick="openHelp('profile')">❓ Help</button>
         <a href="/" class="btn">Home</a>
         <a href="/logout" class="btn btn-danger">Logout</a>
       </div>
@@ -52,6 +53,7 @@
           <section id="profile" class="section active">
             <div class="section-header">
               <h3>Your Profile</h3>
+              <button class="btn btn-small btn-outline" onclick="openHelp('profile')">❓ Help</button>
             </div>
             <div class="profile-card">
               <div class="profile-avatar">
@@ -117,8 +119,12 @@
                             placeholder="Enter your Torn API key..." />
                           <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
                         </div>
-                        <p class="hint">Get your key at <a href="https://www.torn.com/preferences.php#tab=api"
-                            target="_blank" rel="noopener">torn.com → Preferences → API</a></p>
+                        <p class="hint">
+                          Get your key at
+                          <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">
+                            torn.com → Preferences → API
+                          </a>— set access level to <strong style="color:#c0bcbc;">Full Access</strong>.
+                        </p>
                       </div>
                       <div id="key-status" class="mt-1"></div>
               </div>
@@ -155,6 +161,7 @@
           <section id="channels" class="section">
             <div class="section-header">
               <h3>Discord Channels</h3>
+              <button class="btn btn-small btn-outline" onclick="openHelp('channels')">❓ Help</button>
             </div>
             <% if (accessibleChannels && accessibleChannels.length> 0) { %>
               <div class="channel-toolbar">
@@ -188,6 +195,7 @@
           <section id="torn" class="section">
             <div class="section-header">
               <h3>Your Torn Stats</h3>
+              <button class="btn btn-small btn-outline" onclick="openHelp('torn')">❓ Help</button>
               <button class="btn btn-primary btn-small" onclick="fetchTornUser()">↻ Refresh</button>
             </div>
             <div id="torn-user-data">
@@ -241,6 +249,7 @@
             <div class="section-header">
               <h3>Faction Stats</h3>
               <button class="btn btn-primary btn-small" onclick="fetchFaction()">↻ Refresh</button>
+              <button class="btn btn-small btn-outline" onclick="openHelp('faction')">❓ Help</button>
             </div>
             <div id="faction-data">
               <div class="empty-state">
@@ -255,6 +264,7 @@
             <div class="section-header">
               <h3>Travel Status</h3>
               <button class="btn btn-primary btn-small" onclick="fetchTravel()">↻ Refresh</button>
+              <button class="btn btn-small btn-outline" onclick="openHelp('travel')">❓ Help</button>
             </div>
             <div id="travel-status">
               <div class="empty-state">
@@ -301,6 +311,7 @@
           <section id="training" class="section">
             <div class="section-header">
               <h3>Training Resources</h3>
+              <button class="btn btn-small btn-outline" onclick="openHelp('training')">❓ Help</button>
             </div>
             <% if (accessibleTraining && accessibleTraining.length> 0) { %>
               <div class="training-grid">
@@ -334,6 +345,7 @@
             <section id="admin" class="section">
               <div class="section-header">
                 <h3>Admin Panel</h3>
+                <button class="btn btn-small btn-outline" onclick="openHelp('admin')">❓ Help</button>
               </div>
 
               <!-- Dashboard Activity -->
@@ -368,7 +380,17 @@
       </div>
     </div>
   </div>
-
+  <!-- ── HELP MODAL ── -->
+  <div id="help-modal" class="help-modal-overlay" onclick="closeHelpOnBackdrop(event)">
+    <div class="help-modal">
+      <div class="help-modal-header">
+        <span id="help-modal-title">Help</span>
+        <button class="help-close-btn" onclick="closeHelp()">✕</button>
+      </div>
+      <div class="help-modal-tabs" id="help-tabs"></div>
+      <div class="help-modal-body" id="help-modal-body"></div>
+    </div>
+  </div>
   <script src="/js/dashboard.js"></script>
 </body>
 

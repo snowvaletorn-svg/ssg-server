@@ -5,10 +5,10 @@ function showSection(sectionId, el) {
   document.getElementById(sectionId).classList.add('active');
   if (el) el.classList.add('active');
 
-  if (sectionId === 'torn')    { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
+  if (sectionId === 'torn') { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
   if (sectionId === 'faction') { fetchFaction(); }
-  if (sectionId === 'travel')  { fetchTravel(); fetchYataStock(); }
-  if (sectionId === 'admin')   { fetchAdminMembers(); }
+  if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
+  if (sectionId === 'admin') { fetchAdminMembers(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
 }
 
@@ -18,15 +18,15 @@ function showKeyForm() {
 }
 
 async function saveTornKey() {
-  const input    = document.getElementById('torn-key-input');
+  const input = document.getElementById('torn-key-input');
   const statusEl = document.getElementById('key-status');
-  const key      = input.value.trim();
+  const key = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res  = await fetch('/api/torn/key', {
+    const res = await fetch('/api/torn/key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -47,15 +47,15 @@ function showFactionKeyForm() {
 }
 
 async function saveFactionKey() {
-  const input    = document.getElementById('faction-key-input');
+  const input = document.getElementById('faction-key-input');
   const statusEl = document.getElementById('faction-key-status');
-  const key      = input.value.trim();
+  const key = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res  = await fetch('/api/torn/faction-key', {
+    const res = await fetch('/api/torn/faction-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -87,7 +87,7 @@ function refreshMessages() {
 async function fetchSSGMembers() {
   if (Object.keys(memberCache).length > 0) return;
   try {
-    const res  = await fetch('/api/discord/members');
+    const res = await fetch('/api/discord/members');
     const data = await res.json();
     if (res.ok) {
       data.forEach(m => {
@@ -104,7 +104,7 @@ async function fetchMessages(channelId) {
   feed.innerHTML = '<div class="channel-loading">LOADING MESSAGES...</div>';
   await fetchSSGMembers();
   try {
-    const res  = await fetch(`/api/discord/channel/${channelId}`);
+    const res = await fetch(`/api/discord/channel/${channelId}`);
     const data = await res.json();
     if (!res.ok) { feed.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load messages'}</div>`; return; }
     if (!data.length) { feed.innerHTML = '<div class="channel-placeholder"><span class="placeholder-icon">💬</span><p>No messages found</p></div>'; return; }
@@ -115,13 +115,13 @@ async function fetchMessages(channelId) {
 }
 
 function renderMessage(msg) {
-  const author      = msg.author;
-  const avatarUrl   = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
-  const avatarHtml  = avatarUrl
+  const author = msg.author;
+  const avatarUrl = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
+  const avatarHtml = avatarUrl
     ? `<img src="${avatarUrl}" alt="${escapeHtml(author.username)}">`
     : `<span>${escapeHtml(author.username.charAt(0).toUpperCase())}</span>`;
-  const timestamp   = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const content     = formatContent(msg.content, msg.mentions);
+  const timestamp = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const content = formatContent(msg.content, msg.mentions);
   const displayName = memberCache[author.id] || author.global_name || author.username;
 
   return `
@@ -163,7 +163,7 @@ function formatContent(text, mentions) {
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 // ── Torn User Stats ───────────────────────────────────────────────────────────
@@ -171,7 +171,7 @@ async function fetchTornUser() {
   const container = document.getElementById('torn-user-data');
   container.innerHTML = '<div class="channel-loading">LOADING TORN DATA...</div>';
   try {
-    const res  = await fetch('/api/torn/user');
+    const res = await fetch('/api/torn/user');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTornUser(data);
@@ -181,12 +181,12 @@ async function fetchTornUser() {
 }
 
 function renderTornUser(d) {
-  const lifeBar   = d.life   ? `${d.life.current}/${d.life.maximum}`     : 'N/A';
+  const lifeBar = d.life ? `${d.life.current}/${d.life.maximum}` : 'N/A';
   const energyBar = d.energy ? `${d.energy.current}/${d.energy.maximum}` : 'N/A';
-  const nerveBar  = d.nerve  ? `${d.nerve.current}/${d.nerve.maximum}`   : 'N/A';
-  const happyBar  = d.happy  ? `${d.happy.current}/${d.happy.maximum}`   : 'N/A';
-  const married   = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
-  const job       = d.job?.position && d.job?.company_name !== 'None'
+  const nerveBar = d.nerve ? `${d.nerve.current}/${d.nerve.maximum}` : 'N/A';
+  const happyBar = d.happy ? `${d.happy.current}/${d.happy.maximum}` : 'N/A';
+  const married = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
+  const job = d.job?.position && d.job?.company_name !== 'None'
     ? `${d.job.position} at ${d.job.company_name}` : d.job?.job || 'Unemployed';
 
   return `
@@ -256,7 +256,7 @@ async function fetchHonors() {
   const container = document.getElementById('honors-data');
   container.innerHTML = '<div class="channel-loading">LOADING HONORS & MERITS...</div>';
   try {
-    const res  = await fetch('/api/torn/honors');
+    const res = await fetch('/api/torn/honors');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderHonors(data);
@@ -270,9 +270,9 @@ let honorsCache = null;
 function renderHonors(data) {
   honorsCache = data;
   const filterEl = document.getElementById('honors-filter');
-  const sortEl   = document.getElementById('honors-sort');
-  const filter   = filterEl ? filterEl.value : 'all';
-  const sort     = sortEl   ? sortEl.value   : 'earned-first';
+  const sortEl = document.getElementById('honors-sort');
+  const filter = filterEl ? filterEl.value : 'all';
+  const sort = sortEl ? sortEl.value : 'earned-first';
   renderHonorsTable(data, filter, sort);
 }
 
@@ -282,9 +282,9 @@ function filterHonors() {
 
 function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
   const container = document.getElementById('honors-table-container');
-  const awarded   = new Set(data.honors_awarded || []);
+  const awarded = new Set(data.honors_awarded || []);
   const allHonors = data.all_honors || {};
-  const merits    = data.merits || {};
+  const merits = data.merits || {};
 
   const rarityOrder = {
     'Extremely Rare': 0, 'Very Rare': 1, 'Rare': 2,
@@ -297,33 +297,33 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
   };
 
   let honorEntries = Object.entries(allHonors).filter(([, h]) => h.type !== 1);
-  const earned     = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
-  const totalPct   = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
+  const earned = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
+  const totalPct = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
 
   // Apply filter
-  if (filter === 'earned')    honorEntries = honorEntries.filter(([id]) =>  awarded.has(parseInt(id)));
-  if (filter === 'unearned')  honorEntries = honorEntries.filter(([id]) => !awarded.has(parseInt(id)));
+  if (filter === 'earned') honorEntries = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
+  if (filter === 'unearned') honorEntries = honorEntries.filter(([id]) => !awarded.has(parseInt(id)));
 
   // Apply sort
   honorEntries.sort((a, b) => {
-    const aE  = awarded.has(parseInt(a[0]));
-    const bE  = awarded.has(parseInt(b[0]));
+    const aE = awarded.has(parseInt(a[0]));
+    const bE = awarded.has(parseInt(b[0]));
     const aRO = rarityOrder[a[1].rarity] ?? 99;
     const bRO = rarityOrder[b[1].rarity] ?? 99;
 
     switch (sort) {
-      case 'earned-first':   return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
+      case 'earned-first': return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
       case 'unearned-first': return aE !== bE ? (aE ? 1 : -1) : aRO - bRO;
-      case 'rarity-asc':     return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
-      case 'rarity-desc':    return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
-      case 'name':           return (a[1].name || '').localeCompare(b[1].name || '');
-      default:               return 0;
+      case 'rarity-asc': return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'rarity-desc': return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'name': return (a[1].name || '').localeCompare(b[1].name || '');
+      default: return 0;
     }
   });
 
   const honorRows = honorEntries.map(([id, honor]) => {
     const isEarned = awarded.has(parseInt(id));
-    const color    = rarityColor[honor.rarity] || '#888';
+    const color = rarityColor[honor.rarity] || '#888';
     return `<tr style="opacity:${isEarned ? '1' : '0.35'};">
       <td style="width:24px;">${isEarned ? '✅' : '⬜'}</td>
       <td>${escapeHtml(honor.name || 'Unknown')}</td>
@@ -334,8 +334,8 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
 
   const meritRows = Object.entries(merits).map(([key, val]) => {
     const maxVal = 10;
-    const pct    = Math.min(Math.round((val / maxVal) * 100), 100);
-    const color  = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
+    const pct = Math.min(Math.round((val / maxVal) * 100), 100);
+    const color = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
     return `<tr>
       <td>${formatMeritName(key)}</td>
       <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${val}/${maxVal}</td>
@@ -351,7 +351,7 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
     <div class="card" style="margin-bottom:1rem;">
       <div class="card-header">
         Honors & Awards
-        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([,h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
+        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([, h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
       </div>
       <div style="background:#2a2828;border-radius:4px;height:8px;margin:0 1rem 1rem;overflow:hidden;">
         <div style="width:${totalPct}%;height:100%;background:#4caf50;border-radius:4px;"></div>
@@ -380,7 +380,7 @@ async function fetchCrimeExp() {
   const container = document.getElementById('crime-exp-data');
   container.innerHTML = '<div class="channel-loading">LOADING CRIME XP...</div>';
   try {
-    const res  = await fetch('/api/torn/crimeexp');
+    const res = await fetch('/api/torn/crimeexp');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderCrimeExp(data.merits || data);
@@ -435,7 +435,7 @@ async function fetchFaction() {
   const container = document.getElementById('faction-data');
   container.innerHTML = '<div class="channel-loading">LOADING FACTION DATA...</div>';
   try {
-    const res  = await fetch('/api/torn/faction');
+    const res = await fetch('/api/torn/faction');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
 
@@ -447,7 +447,7 @@ async function fetchFaction() {
         const statsData = await statsRes.json();
         (statsData.stats || []).forEach(s => { statsMap[s.player_id] = s; });
       }
-    } catch {}
+    } catch { }
 
     container.innerHTML = renderFaction(data, statsMap);
   } catch (err) {
@@ -456,7 +456,7 @@ async function fetchFaction() {
 }
 
 function renderFaction(d, statsMap = {}) {
-  const basic   = d.basic;
+  const basic = d.basic;
   const members = d.members || [];
   const hasStats = Object.keys(statsMap).length > 0;
 
@@ -473,10 +473,10 @@ function renderFaction(d, statsMap = {}) {
       return (b.level || 0) - (a.level || 0);
     })
     .map(m => {
-      const status      = m.last_action?.status || 'Offline';
+      const status = m.last_action?.status || 'Offline';
       const statusClass = `status-${status.toLowerCase()}`;
       const memberStats = statsMap[m.id];
-      const totalStats  = memberStats ? formatNum(memberStats.totalstats) : '—';
+      const totalStats = memberStats ? formatNum(memberStats.totalstats) : '—';
       return `<tr>
         <td>${escapeHtml(m.name)}</td>
         <td>${m.level || '—'}</td>
@@ -514,7 +514,7 @@ async function fetchTravel() {
   const container = document.getElementById('travel-status');
   container.innerHTML = '<div class="channel-loading">LOADING TRAVEL STATUS...</div>';
   try {
-    const res  = await fetch('/api/torn/travel');
+    const res = await fetch('/api/torn/travel');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTravelStatus(data.travel || data);
@@ -536,8 +536,8 @@ function renderTravelStatus(t) {
       </div>`;
   }
 
-  const arrivalTime  = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
-  const isReturning  = t.destination === 'Torn';
+  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
+  const isReturning = t.destination === 'Torn';
 
   return `
     <div class="card">
@@ -560,7 +560,7 @@ let itemCatalogCache = null;
 async function fetchItemCatalog() {
   if (itemCatalogCache) return itemCatalogCache;
   try {
-    const res  = await fetch('/api/torn/items');
+    const res = await fetch('/api/torn/items');
     const data = await res.json();
     if (res.ok && data.items) {
       itemCatalogCache = {};
@@ -586,7 +586,7 @@ async function fetchYataStock() {
     if (!stockRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     yataStockCache = { data, catalog };
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort    = document.getElementById('stock-sort').value;
+    const selectedSort = document.getElementById('stock-sort').value;
     renderYataStock(data, catalog, selectedCountry, selectedSort);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -605,7 +605,7 @@ function filterStockByCountry(countryCode) {
 function sortStock() {
   if (yataStockCache) {
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort    = document.getElementById('stock-sort').value;
+    const selectedSort = document.getElementById('stock-sort').value;
     renderYataStock(yataStockCache.data, yataStockCache.catalog, selectedCountry, selectedSort);
   }
 }
@@ -630,8 +630,8 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   }
 
   const html = entries.map(([code, country]) => {
-    const name       = countryNames[code] || code;
-    const items      = (country.stocks || []).filter(item => item.quantity > 0);
+    const name = countryNames[code] || code;
+    const items = (country.stocks || []).filter(item => item.quantity > 0);
     const lastUpdate = country.update ? new Date(country.update * 1000).toLocaleTimeString() : 'Unknown';
 
     if (!items.length) return `
@@ -642,9 +642,9 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
     const sorted = [...items].sort((a, b) => {
       switch (sortBy) {
-        case 'name':     return a.name.localeCompare(b.name);
+        case 'name': return a.name.localeCompare(b.name);
         case 'quantity': return b.quantity - a.quantity;
-        case 'cost':     return b.cost - a.cost;
+        case 'cost': return b.cost - a.cost;
         case 'type':
         default: {
           const typeA = catalog?.[a.id] || 'ZZZ';
@@ -685,7 +685,7 @@ async function fetchAdminMembers() {
   const container = document.getElementById('admin-members-data');
   container.innerHTML = '<div class="channel-loading">LOADING MEMBER ACTIVITY...</div>';
   try {
-    const res  = await fetch('/api/admin/members');
+    const res = await fetch('/api/admin/members');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderAdminMembers(data);
@@ -696,7 +696,7 @@ async function fetchAdminMembers() {
 
 function renderAdminMembers(data) {
   const factionMembers = data.factionMembers || [];
-  const dbUsers        = data.dbUsers || [];
+  const dbUsers = data.dbUsers || [];
 
   // Build lookup by Torn player ID
   const dbByTornId = {};
@@ -716,8 +716,8 @@ function renderAdminMembers(data) {
       return aO !== bO ? aO - bO : a.name.localeCompare(b.name);
     })
     .map(m => {
-      const dbUser   = dbByTornId[m.id];
-      const hasKey   = dbUser?.hasApiKey ? '✅ Yes' : '❌ No';
+      const dbUser = dbByTornId[m.id];
+      const hasKey = dbUser?.hasApiKey ? '✅ Yes' : '❌ No';
       const lastSeen = dbUser?.lastSeen
         ? new Date(dbUser.lastSeen).toLocaleString()
         : '—';
@@ -755,7 +755,7 @@ async function fetchMemberStats() {
   const container = document.getElementById('admin-stats-data');
   container.innerHTML = '<div class="channel-loading">LOADING MEMBER STATS... (this may take a moment)</div>';
   try {
-    const res  = await fetch('/api/admin/member-stats');
+    const res = await fetch('/api/admin/member-stats');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderMemberStats(data.stats || []);
@@ -802,6 +802,257 @@ function renderMemberStats(stats) {
     </div>`;
 }
 
+// ── Help Modal ────────────────────────────────────────────────────────────────
+const HELP_CONTENT = {
+  profile: {
+    title: '👤 Profile',
+    sections: [
+      {
+        heading: 'Your Profile',
+        content: `
+          <p class="help-text">The Profile page shows your Discord identity and SSG role assignments. This is also where you manage your Torn API key.</p>
+          <img src="/images/profileimage.png" alt="Profile page" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Setting Up Your Torn API Key',
+        content: `
+          <div class="help-callout warning">⚠️ You must save a Torn API key to access Torn Stats, Faction, and Travel features.</div>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Go to <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#a78df5;">torn.com → Preferences → API</a></div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Create a new key and set the access level to <strong style="color:#c0bcbc;">Full Access</strong></div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Copy the key and paste it into the Torn API Key field on your Profile page</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Save Key</strong> — you'll see a confirmation with your Torn name</div></div>
+          <img src="/images/apikeyimage.png" alt="API Key" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+          <div class="help-callout success">✅ Once saved, your key is stored securely and you won't need to enter it again.</div>
+        `
+      }
+    ]
+  },
+  channels: {
+    title: '💬 Channels',
+    sections: [
+      {
+        heading: 'Viewing Discord Channels',
+        content: `
+          <p class="help-text">The Channels page lets you read recent messages from your accessible SSG Discord channels directly in the dashboard — no need to open Discord.</p>
+          <img src="/images/channelsimage.png" alt="Channels feed" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'How To Use',
+        content: `
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select a channel from the dropdown at the top</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">The last 10 messages will load automatically</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to load the latest messages</div></div>
+          <div class="help-callout">💡 You can only see channels that your SSG role gives you access to. Contact leadership if you think you're missing access.</div>
+        `
+      }
+    ]
+  },
+  torn: {
+    title: '🎮 Torn Stats',
+    sections: [
+      {
+        heading: 'Your Torn Stats',
+        content: `
+          <p class="help-text">Displays your live Torn City player stats including level, bars, battle stats, and general info.</p>
+          <div class="help-callout warning">⚠️ Requires a Full Access Torn API key saved in your Profile.</div>
+          <img src="/images/tornstatsimage.png" alt="Torn stats" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+
+        `
+      },
+      {
+        heading: 'Battle Stats',
+        content: `
+          <p class="help-text">Shows your Strength, Defense, Speed, Dexterity, and Total stats. These update in real time from the Torn API each time you click Refresh.</p>
+        `
+      },
+      {
+        heading: 'Honors & Awards',
+        content: `
+          <p class="help-text">Shows all Torn honors and your completion progress. Use the filter and sort dropdowns to find specific honors.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Filter</strong> dropdown to show All, Earned only, or Not Earned</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Sort</strong> dropdown to sort by rarity, name, or earned status</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">The progress bar at the top shows your overall completion percentage</div></div>
+          <img src="/images/honorstableimage.png" alt="Honor table" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Merits',
+        content: `
+          <p class="help-text">Shows your merit progress with a progress bar for each merit. Green = maxed, orange = in progress, dark = not started.</p>
+          <img src="/images/meritstableimage.png" alt="Merit table" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">        `
+      },
+      {
+        heading: 'Crime XP',
+        content: `
+          <p class="help-text">Shows your crime-related merit levels broken down by crime type.</p>
+        `
+      }
+    ]
+  },
+  faction: {
+    title: '⚔️ Faction',
+    sections: [
+      {
+        heading: 'Faction Overview',
+        content: `
+          <p class="help-text">Displays live SSG faction stats and the full member roster pulled directly from Torn.</p>
+          <img src="/images/factionimage.png" alt="Faction roster" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Member Roster',
+        content: `
+          <p class="help-text">The roster shows each member's name, level, position, online status, days in faction, and revive setting. Members are sorted by position rank then level.</p>
+          <div class="help-callout">💡 Status colors: <span style="color:#2ecc71;">Green = Online</span>, <span style="color:#444;">Grey = Offline</span>, <span style="color:#e67e22;">Orange = Hospital</span>, <span style="color:#ff4444;">Red = Jail</span>, <span style="color:#004cff;">Blue = Traveling</span></div>
+        `
+      }
+    ]
+  },
+  travel: {
+    title: '✈️ Travel',
+    sections: [
+      {
+        heading: 'Travel Status',
+        content: `
+          <p class="help-text">Shows your current travel status — whether you're in Torn, departing, or returning from abroad.</p>
+          <img src="/images/travelimage.png" alt="Travel and foreign stock" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Foreign Stock',
+        content: `
+          <p class="help-text">Shows available items at foreign destinations using live YATA data. Use this to plan profitable buying trips.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select a country from the dropdown to filter to one destination, or leave as All Countries</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the Sort dropdown to sort by Type, Name, Quantity, or Cost</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh Stock</strong> to get the latest data</div></div>
+          <div class="help-callout">💡 Only items currently in stock (quantity > 0) are shown. The update time on each card shows how recently YATA refreshed that country's data.</div>
+          <img src="/images/travelimage.png" alt="Travel and foreign stock" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      }
+    ]
+  },
+  training: {
+    title: '📚 Training',
+    sections: [
+      {
+        heading: 'Training Resources',
+        content: `
+          <p class="help-text">The Training page gives you quick links to SSG's training channels in Discord. Click <strong style="color:#c0bcbc;">Open in Discord ↗</strong> on any card to jump directly to that channel.</p>
+          <div class="help-callout warning">⚠️ You can only see training channels that your SSG role gives you access to. Growth members do not have access to Stats Training or Money Making Training.</div>
+          <img src="/images/trainingimage.png" alt="Training resources" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Available Channels',
+        content: `
+          <div class="help-step"><div class="help-step-num">📊</div><div class="help-step-text"><strong style="color:#c0bcbc;">Stats Training</strong> — Advanced stat building guides. Available to Strategy and above.</div></div>
+          <div class="help-step"><div class="help-step-num">💰</div><div class="help-step-text"><strong style="color:#c0bcbc;">Money Making Training</strong> — Guides on funding your stats growth. Available to Strategy and above.</div></div>
+          <div class="help-step"><div class="help-step-num">⬆️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Level Training</strong> — How to level up fast through attacks, crimes, and gym. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">🔗</div><div class="help-step-text"><strong style="color:#c0bcbc;">Chains</strong> — Step-by-step guides how to do Chains. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">🫆</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crimes Training</strong> — Helpful guide for effective Crimes Training. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">🗝️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Organized Crimes Training</strong> — Guide for how to do Organized Crimes. Available to all members.</div></div>
+        `
+      } 
+       
+    ]
+  },
+  admin: {
+    title: '🛡️ Admin',
+    sections: [
+      {
+        heading: 'Member Dashboard Activity',
+        content: `
+          <p class="help-text">Shows all faction members from Torn alongside their dashboard usage. This helps leadership see who has set up their API key and when they last visited.</p>
+          <div class="help-callout">💡 Last Seen is color coded: <span style="color:#4caf50;">Green = active in last 7 days</span>, <span style="color:#f0a500;">Orange = over 7 days ago</span>, <span style="color:#555;">Grey = never logged in</span></div>
+          <img src="/images/adminimage.png" alt="Admin activity" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Member Total Stats',
+        content: `
+          <p class="help-text">Shows battle stats for all members who have saved their Torn API key. Members are ranked by total stats descending.</p>
+          <div class="help-callout warning">⚠️ This fetches data from the Torn API for each member individually and may take a few seconds to load.</div>
+          <div class="help-callout">💡 Only members who have saved their API key in the dashboard will appear here. Encourage all members to set up their key.</div>
+          <img src="/images/adminmemberstableimage.png" alt="Admin members" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      }
+    ]
+  }
+};
+
+let currentHelpSection = 'profile';
+
+function openHelp(section) {
+  currentHelpSection = section || 'profile';
+  const modal = document.getElementById('help-modal');
+  const tabsEl = document.getElementById('help-tabs');
+  const bodyEl = document.getElementById('help-modal-body');
+  const titleEl = document.getElementById('help-modal-title');
+
+  const content = HELP_CONTENT[currentHelpSection];
+  if (!content) return;
+
+  titleEl.textContent = content.title + ' — Help';
+
+  // Build tabs
+  tabsEl.innerHTML = Object.entries(HELP_CONTENT).map(([key, val]) =>
+    `<button class="help-tab ${key === currentHelpSection ? 'active' : ''}"
+      onclick="switchHelpTab('${key}')">${val.title}</button>`
+  ).join('');
+
+  // Build body
+  renderHelpBody(currentHelpSection);
+
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function switchHelpTab(section) {
+  currentHelpSection = section;
+  const content = HELP_CONTENT[section];
+  if (!content) return;
+
+  document.getElementById('help-modal-title').textContent = content.title + ' — Help';
+  document.querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.help-tab').forEach(t => {
+    if (t.textContent === content.title) t.classList.add('active');
+  });
+
+  // Re-highlight active tab
+  const tabs = document.querySelectorAll('.help-tab');
+  tabs.forEach((t, i) => {
+    const key = Object.keys(HELP_CONTENT)[i];
+    t.classList.toggle('active', key === section);
+  });
+
+  renderHelpBody(section);
+}
+
+function renderHelpBody(section) {
+  const content = HELP_CONTENT[section];
+  const bodyEl = document.getElementById('help-modal-body');
+  bodyEl.innerHTML = content.sections.map(s => `
+    <div class="help-heading">${s.heading}</div>
+    ${s.content}
+  `).join('');
+}
+
+function closeHelp() {
+  document.getElementById('help-modal').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function closeHelpOnBackdrop(e) {
+  if (e.target === document.getElementById('help-modal')) closeHelp();
+}
+
+// Close on Escape key
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeHelp();
+});
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function statTile(value, label) {
   return `<div class="stat-tile"><div class="stat-value">${value ?? '—'}</div><div class="stat-label">${label}</div></div>`;
@@ -817,12 +1068,12 @@ function infoBadge(label, value) {
 function formatNum(n) {
   if (n == null) return '—';
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000)         return (n / 1_000).toFixed(1) + 'K';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 }
 
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 setInterval(() => {
-  fetch('/api/ping').catch(() => {});
+  fetch('/api/ping').catch(() => { });
 }, 14 * 60 * 1000 + 30 * 1000); // 14m 30s
