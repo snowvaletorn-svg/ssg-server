@@ -70,13 +70,13 @@ const TRAINING_CHANNELS = [
   {
     id: '1435416378709508138',
     name: '🫆 Crimes Training',
-    description: 'Guide for all members on Crimes in Torn',
+    description: 'Guide for all members on Crimes in Torn. All member can request applicable resources for Crimes in the "Enhancer Item Requests" page in discord.',
     roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
   },
   {
     id: '1435416812706857225',
     name: '🗝️ Organized Crimes Training',
-    description: 'Guide for all members on Organized Crimes in Torn',
+    description: 'Guide for all members on Organized Crimes in Torn. All members can request applicable resources in the "Resource Request" page in discord.',
     roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
   },
 ];
