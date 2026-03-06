@@ -705,8 +705,8 @@ function renderAdminMembers(data) {
   });
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Leadership': 2,
-    'Team Strategy': 3, 'Team Strength': 4, 'Team Growth': 5, 'Recruit': 6
+    'Leader': 0, 'Co-leader': 1, 'Minerva': 2, 'Leadership': 3,
+    'Team Strategy': 4, 'Team Strength': 5, 'Team Growth': 6, 'Recruit': 7
   };
 
   const rows = factionMembers
