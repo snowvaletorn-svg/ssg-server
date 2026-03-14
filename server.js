@@ -81,11 +81,6 @@ const TRAINING_CHANNELS = [
   },
 ];
 
-// ─── API: Keep-alive ping ─────────────────────────────────────────────────────
-app.get('/api/ping', (req, res) => {
-  res.json({ ok: true });
-});
-
 // ─── HELPER: Get faction API key ──────────────────────────────────────────────
 async function getFactionApiKey() {
   try {
@@ -233,7 +228,7 @@ app.get('/', async (req, res) => {
 
       const positionMap = {
         'Leader': 'Ownership',
-        'Minerva': 'Ownership',
+        'Matriarch': 'Ownership',
         'Co-leader': 'Ownership',
         'Leadership': 'Leadership',
         'Team Strategy': 'Strategy',
@@ -523,6 +518,7 @@ app.get('/api/admin/members', isAuthenticated, isLeadershipOrOwnership, async (r
     res.json({
       factionMembers,
       dbUsers: dbUsers.map(u => ({
+        discordId: u.discordId,
         username: u.username,
         tornPlayerId: u.tornPlayerId,
         tornName: u.tornName,
@@ -594,6 +590,26 @@ app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: Remove user from dashboard (Ownership only) ─────────────────────────
+app.delete('/api/admin/user/:discordId', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const { discordId } = req.params;
+
+    if (discordId === req.user.id) {
+      return res.status(400).json({ error: 'You cannot remove yourself.' });
+    }
+
+    const result = await User.findOneAndDelete({ discordId });
+    if (!result) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    res.json({ success: true, removed: result.username });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Torn item catalog (for categories) ──────────────────────────────────
 app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   try {
@@ -625,6 +641,11 @@ app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
     console.error('YATA API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch YATA travel data' });
   }
+});
+
+// ─── API: Keep-alive ping ─────────────────────────────────────────────────────
+app.get('/api/ping', (req, res) => {
+  res.json({ ok: true });
 });
 
 // ─── START SERVER ─────────────────────────────────────────────────────────────

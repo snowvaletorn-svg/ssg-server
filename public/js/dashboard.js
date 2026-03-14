@@ -461,7 +461,7 @@ function renderFaction(d, statsMap = {}) {
   const hasStats = Object.keys(statsMap).length > 0;
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Minerva': 2, 'Leadership': 3,
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3,
     'Team Strategy': 4, 'Team Strength': 5, 'Team Growth': 6, 'Recruit': 7
   };
 
@@ -705,7 +705,7 @@ function renderAdminMembers(data) {
   });
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Minerva': 2, 'Leadership': 3,
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3,
     'Team Strategy': 4, 'Team Strength': 5, 'Team Growth': 6, 'Recruit': 7
   };
 
@@ -725,11 +725,12 @@ function renderAdminMembers(data) {
         (Date.now() - new Date(dbUser.lastSeen) < 7 * 24 * 60 * 60 * 1000) ? 'color:#4caf50;' : 'color:#f0a500;';
 
       return `<tr>
-        <td>${escapeHtml(m.name)}</td>
-        <td>${m.position || '—'}</td>
-        <td>${hasKey}</td>
-        <td style="${seenClass}font-size:0.85rem;">${lastSeen}</td>
-      </tr>`;
+    <td>${escapeHtml(m.name)}</td>
+    <td>${m.position || '—'}</td>
+    <td>${hasKey}</td>
+    <td style="${seenClass}font-size:0.85rem;">${lastSeen}</td>
+    <td>${dbUser ? `<button class="btn btn-small btn-danger" onclick="removeUser('${dbUser.discordId}', '${escapeHtml(m.name)}')">Remove</button>` : '—'}</td>
+  </tr>`;
     }).join('');
 
   const registeredCount = dbUsers.filter(u => u.hasApiKey).length;
@@ -744,8 +745,8 @@ function renderAdminMembers(data) {
       <div class="card-header">Member Activity</div>
       <div style="overflow-x:auto;">
         <table class="members-table">
-          <thead><tr><th>Name</th><th>Position</th><th>API Key</th><th>Last Seen</th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="4" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
+          <thead><tr><th>Name</th><th>Position</th><th>API Key</th><th>Last Seen</th><th></th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="5" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -800,6 +801,24 @@ function renderMemberStats(stats) {
         </table>
       </div>
     </div>`;
+}
+async function removeUser(discordId, name) {
+  if (!confirm(`Are you sure you want to remove ${name} from the dashboard?\n\nThis will delete their record and API key. They will need to log in again to re-register.`)) {
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/admin/user/${discordId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`❌ Error: ${data.error}`);
+      return;
+    }
+    alert(`✅ ${data.removed} has been removed from the dashboard.`);
+    fetchAdminMembers(); // Refresh the table
+  } catch (err) {
+    alert(`❌ Error: ${err.message}`);
+  }
 }
 
 // ── Help Modal ────────────────────────────────────────────────────────────────
@@ -954,8 +973,8 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">🫆</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crimes Training</strong> — Helpful guide for effective Crimes Training. Available to all members.</div></div>
           <div class="help-step"><div class="help-step-num">🗝️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Organized Crimes Training</strong> — Guide for how to do Organized Crimes. Available to all members.</div></div>
         `
-      } 
-       
+      }
+
     ]
   },
   admin: {
