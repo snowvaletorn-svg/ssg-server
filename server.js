@@ -643,6 +643,80 @@ app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   }
 });
 
+//---Tracking War Hits -------------------------//
+app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    const SSG_FACTION_ID = 53272;
+
+    // Fetch war info first to get start time
+    const warsRes = await axios.get(
+      `https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`
+    );
+    const warData  = warsRes.data;
+    const warStart = warData.wars?.ranked?.start || 0;
+
+    if (!warStart) {
+      return res.json({ war: null, memberHits: [], totalWarAttacks: 0 });
+    }
+
+    // Page through all attacks since war started
+    let allAttacks = [];
+    let nextUrl    = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
+    let reachedWarStart = false;
+
+    while (nextUrl && !reachedWarStart) {
+      const attacksRes = await axios.get(nextUrl);
+      const attacks    = attacksRes.data.attacks || [];
+      const prevLink   = attacksRes.data._metadata?.links?.prev;
+
+      for (const attack of attacks) {
+        if (attack.started < warStart) {
+          reachedWarStart = true;
+          break;
+        }
+        // Only count ranked war hits by SSG members
+        if (
+          attack.is_ranked_war &&
+          attack.attacker?.faction?.id === SSG_FACTION_ID
+        ) {
+          allAttacks.push(attack);
+        }
+      }
+
+      // If no prev link or we've gone past war start, stop
+      nextUrl = !reachedWarStart && prevLink ? prevLink + `&key=${factionKey}` : null;
+    }
+
+    // Count hits per member
+    const hitCounts = {};
+    allAttacks.forEach(a => {
+      const id   = a.attacker.id;
+      const name = a.attacker.name;
+      if (!hitCounts[id]) hitCounts[id] = { id, name, hits: 0, respect: 0 };
+      hitCounts[id].hits++;
+      hitCounts[id].respect += a.respect_gain || 0;
+    });
+
+    const memberHits = Object.values(hitCounts)
+      .sort((a, b) => b.hits - a.hits);
+    
+      console.log('Unique results:', [...new Set(allAttacks.map(a => a.result))]);
+    
+      console.log('Sample attack:', JSON.stringify(allAttacks[0], null, 2));
+    
+      res.json({
+      war: warData.wars?.ranked || null,
+      memberHits,
+      totalWarAttacks: allAttacks.length
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Keep-alive ping ─────────────────────────────────────────────────────
 app.get('/api/ping', (req, res) => {
   res.json({ ok: true });

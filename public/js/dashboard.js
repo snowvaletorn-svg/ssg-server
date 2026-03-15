@@ -6,7 +6,7 @@ function showSection(sectionId, el) {
   if (el) el.classList.add('active');
 
   if (sectionId === 'torn') { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
-  if (sectionId === 'faction') { fetchFaction(); }
+  if (sectionId === 'faction') { fetchFaction(); fetchWarStats(); }
   if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
   if (sectionId === 'admin') { fetchAdminMembers(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
@@ -819,6 +819,65 @@ async function removeUser(discordId, name) {
   } catch (err) {
     alert(`❌ Error: ${err.message}`);
   }
+}
+
+// ── War Stats ─────────────────────────────────────────────────────────────────
+async function fetchWarStats() {
+  const container = document.getElementById('war-stats-data');
+  container.innerHTML = '<div class="channel-loading">LOADING WAR STATS...</div>';
+  try {
+    const res  = await fetch('/api/torn/wars');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderWarStats(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderWarStats(data) {
+  const war        = data.war;
+  const memberHits = data.memberHits || [];
+
+  if (!war) {
+    return `<div class="card"><div class="card-body"><p class="muted">No active ranked war found.</p></div></div>`;
+  }
+
+  const ssgFaction  = war.factions?.find(f => f.id === 53272);
+  const enemyFaction = war.factions?.find(f => f.id !== 53272);
+  const warStart    = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
+  const target      = war.target || '—';
+
+  const hitRows = memberHits.map((m, i) => `
+    <tr>
+      <td style="color:#555;font-size:0.8rem;">${i + 1}</td>
+      <td>${escapeHtml(m.name)}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${m.respect.toFixed(2)}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1.5rem;">
+      ${statTile(ssgFaction?.score ?? '—', 'SSG Score')}
+      ${statTile(enemyFaction?.score ?? '—', `${enemyFaction?.name ?? 'Enemy'} Score`)}
+      ${statTile(target, 'Target Score')}
+      ${statTile(data.totalWarAttacks, 'Hits (last 100)')}
+    </div>
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        ⚔️ vs ${escapeHtml(enemyFaction?.name || 'Unknown')}
+        <span style="float:right;font-size:0.8rem;color:#888;">Started: ${warStart}</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Member Hits <span style="float:right;font-size:0.75rem;color:#555;">Last 100 attacks</span></div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr><th>#</th><th>Member</th><th style="text-align:center;">Hits</th><th style="text-align:right;">Respect Earned</th></tr></thead>
+          <tbody>${hitRows || '<tr><td colspan="4" class="muted" style="padding:1rem;">No war hits found in last 100 attacks.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ── Help Modal ────────────────────────────────────────────────────────────────
