@@ -717,6 +717,76 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: Faction application ─────────────────────────────────────────────────
+app.post('/api/apply', async (req, res) => {
+  const { answers, tornName, tornId, allYes } = req.body;
+
+  if (!tornName || !tornId) {
+    return res.status(400).json({ error: 'Torn name and ID are required.' });
+  }
+
+  const questions = [
+    'Have you read our expectations, and are you comfortable agreeing to them?',
+    'Do you agree to setup and apply to the faction in Torn Stats within 24 hours of acceptance?',
+    'Do you agree to join and actively participate, daily, in discord?',
+    'Do you agree that if you\'re under level 15, you will get to level 15 within 3 weeks of acceptance?',
+    'Do you agree that once you\'re over level 15, you will do a stat jump (candy, happy, console, etc.) weekly?'
+  ];
+
+  const answerLines = questions.map((q, i) => {
+    const answer = answers[`q${i + 1}`];
+    const icon   = answer === 'yes' ? '✅' : '❌';
+    return `${i + 1}. ${q}\n   ${icon} ${answer === 'yes' ? 'Agreed' : 'Did not agree'}`;
+  });
+
+  const flag    = allYes ? '✅ All conditions agreed' : '⚠️ One or more conditions NOT agreed';
+  const message = [
+    '📋 **New Faction Application**',
+    '',
+    `**Torn Name:** ${tornName}`,
+    `**Torn ID:** ${tornId}`,
+    `**Profile:** https://www.torn.com/profiles.php?XID=${tornId}`,
+    '',
+    `**Status:** ${flag}`,
+    '',
+    '**Answers:**',
+    ...answerLines,
+    '',
+    `**Faction Page:** https://www.torn.com/factions.php?step=profile&ID=53272`
+  ].join('\n');
+
+  try {
+    const membersRes = await axios.get(
+      `https://discord.com/api/v10/guilds/${SSG_GUILD_ID}/members?limit=1000`,
+      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+    );
+
+    const ownershipMembers = membersRes.data.filter(m =>
+      m.roles.includes(ROLES.ownership)
+    );
+
+    await Promise.allSettled(
+      ownershipMembers.map(async member => {
+        const dmChannel = await axios.post(
+          'https://discord.com/api/v10/users/@me/channels',
+          { recipient_id: member.user.id },
+          { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+        );
+        await axios.post(
+          `https://discord.com/api/v10/channels/${dmChannel.data.id}/messages`,
+          { content: message },
+          { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+        );
+      })
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Application error:', err.message);
+    res.status(500).json({ error: 'Failed to send notifications.' });
+  }
+});
+
 // ─── API: Keep-alive ping ─────────────────────────────────────────────────────
 app.get('/api/ping', (req, res) => {
   res.json({ ok: true });
