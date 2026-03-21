@@ -461,8 +461,8 @@ function renderFaction(d, statsMap = {}) {
   const hasStats = Object.keys(statsMap).length > 0;
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3,
-    'Team Strategy': 4, 'Team Strength': 5, 'Team Growth': 6, 'Recruit': 7
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
   };
 
   const memberRows = members
@@ -553,6 +553,194 @@ function renderTravelStatus(t) {
     </div>`;
 }
 
+async function fetchFaction() {
+  const container = document.getElementById('faction-data');
+  container.innerHTML = '<div class="channel-loading">LOADING FACTION DATA...</div>';
+  try {
+    const requests = [
+      fetch('/api/torn/faction'),
+      fetch('/api/torn/faction-travel')
+    ];
+
+    // Only fetch stats for Leadership/Ownership
+    if (IS_LEADERSHIP) requests.push(fetch('/api/admin/member-stats'));
+
+    const [factionRes, travelRes, statsRes] = await Promise.allSettled(requests);
+
+    const data = factionRes.status === 'fulfilled' ? await factionRes.value.json() : {};
+    const travelData = travelRes.status === 'fulfilled' ? await travelRes.value.json() : {};
+    const statsData = statsRes?.status === 'fulfilled' ? await statsRes.value.json() : {};
+
+    if (!data.basic) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+
+    const statsMap = {};
+    if (IS_LEADERSHIP) {
+      (statsData.stats || []).forEach(s => { statsMap[s.player_id] = s; });
+    }
+
+    const travelMap = {};
+    (travelData.traveling || []).forEach(t => { travelMap[t.id] = t; });
+
+    container.innerHTML = renderFaction(data, statsMap, travelMap);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderFaction(d, statsMap = {}, travelMap = {}) {
+  const basic = d.basic;
+  const members = d.members || [];
+  const hasStats = Object.keys(statsMap).length > 0;
+
+  const positionOrder = {
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+  };
+
+  const memberRows = members
+    .sort((a, b) => {
+      const aO = positionOrder[a.position] ?? 99;
+      const bO = positionOrder[b.position] ?? 99;
+      if (aO !== bO) return aO - bO;
+      return (b.level || 0) - (a.level || 0);
+    })
+    .map(m => {
+      const status = m.last_action?.status || 'Offline';
+      const statusClass = `status-${status.toLowerCase()}`;
+      const memberStats = statsMap[m.id];
+      const totalStats = memberStats ? formatNum(memberStats.totalstats) : '—';
+
+      const travelInfo = travelMap[m.id];
+      let travelCell = '🏠 Torn';
+
+      if (m.status?.state === 'Traveling') {
+        const isReturning = m.status?.description?.toLowerCase().includes('returning');
+        if (travelInfo?.travel?.time_left > 0) {
+          travelCell = isReturning
+            ? `🔄 ${formatTimeLeft(travelInfo.travel.time_left)}`
+            : `✈️ ${formatTimeLeft(travelInfo.travel.time_left)}`;
+        } else if (travelInfo?.travel) {
+          travelCell = isReturning ? '🔄 Landing soon' : '🛬 Landing soon';
+        } else {
+          travelCell = isReturning ? '🔄 Returning' : '✈️ Traveling';
+        }
+      } else if (m.status?.state === 'Abroad') {
+        travelCell = '🌍 Abroad';
+      }
+
+
+      return `<tr>
+        <td>${escapeHtml(m.name)}</td>
+        <td>${m.level || '—'}</td>
+        <td>${m.position || '—'}</td>
+        <td class="${statusClass}">${status}</td>
+        <td>${m.days_in_faction ?? '—'}d</td>
+        <td>${m.revive_setting || '—'}</td>
+        ${hasStats ? `<td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${totalStats}</td>` : ''}
+        <td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${travelCell}</td>
+      </tr>`;
+    }).join('');
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1.5rem;">
+      ${statTile(basic.name, 'Faction')}
+      ${statTile(basic.members, 'Members')}
+      ${statTile(formatNum(basic.respect), 'Respect')}
+      ${statTile(`${basic.rank.name} D${basic.rank.division}`, 'Rank')}
+    </div>
+    <div class="card">
+      <div class="card-header">Member Roster</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Name</th><th>Level</th><th>Position</th><th>Status</th><th>Days</th><th>Revive</th>
+            ${hasStats ? '<th>Total Stats</th>' : ''}
+            <th>Travel</th>
+          </tr></thead>
+          <tbody>${memberRows || '<tr><td colspan="8" class="muted" style="padding:1rem;">No member data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── Faction Travel ────────────────────────────────────────────────────────────
+async function fetchFactionTravel() {
+  const container = document.getElementById('faction-travel-data');
+  container.innerHTML = '<div class="channel-loading">LOADING FACTION TRAVEL...</div>';
+  try {
+    const res = await fetch('/api/torn/faction-travel');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderFactionTravel(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderFactionTravel(data) {
+  const traveling = data.traveling || [];
+
+  if (!traveling.length) {
+    return `<div class="card"><div class="card-body"><p class="muted">No faction members currently traveling.</p></div></div>`;
+  }
+
+  const rows = traveling.map(m => {
+    let destination = '—';
+    let timeLeft = '—';
+    let arriving = '—';
+
+    if (m.travel) {
+      const t = m.travel;
+      const isHome = t.destination === 'Torn';
+      destination = isHome ? `↩️ Returning from abroad` : `✈️ ${t.destination}`;
+      arriving = t.timestamp ? new Date(t.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
+      timeLeft = t.time_left > 0 ? formatTimeLeft(t.time_left) : '🛬 Landing soon';
+    } else {
+      destination = m.description || '—';
+    }
+
+    return `<tr>
+      <td>${escapeHtml(m.name)}</td>
+      <td style="color:#888;font-size:0.85rem;">${m.position || '—'}</td>
+      <td>${destination}</td>
+      <td style="text-align:center;">${arriving}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${timeLeft}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-header">
+        Currently Traveling
+        <span style="float:right;font-size:0.8rem;color:#888;">${data.total} members in the air</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Name</th>
+            <th>Position</th>
+            <th>Destination</th>
+            <th style="text-align:center;">Arriving</th>
+            <th style="text-align:center;">Time Left</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div style="padding:0.5rem 1rem;font-size:0.75rem;color:#444;">
+        ⚠️ Time left only shown for members who have saved their API key.
+      </div>
+    </div>`;
+}
+
+function formatTimeLeft(seconds) {
+  if (seconds <= 0) return '🛬 Landing soon';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 // ── YATA Foreign Stock ────────────────────────────────────────────────────────
 let yataStockCache = null;
 let itemCatalogCache = null;
@@ -705,8 +893,8 @@ function renderAdminMembers(data) {
   });
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3,
-    'Team Strategy': 4, 'Team Strength': 5, 'Team Growth': 6, 'Recruit': 7
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
   };
 
   const rows = factionMembers
@@ -826,7 +1014,7 @@ async function fetchWarStats() {
   const container = document.getElementById('war-stats-data');
   container.innerHTML = '<div class="channel-loading">LOADING WAR STATS...</div>';
   try {
-    const res  = await fetch('/api/torn/wars');
+    const res = await fetch('/api/torn/wars');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderWarStats(data);
@@ -836,17 +1024,17 @@ async function fetchWarStats() {
 }
 
 function renderWarStats(data) {
-  const war        = data.war;
+  const war = data.war;
   const memberHits = data.memberHits || [];
 
   if (!war) {
     return `<div class="card"><div class="card-body"><p class="muted">No active ranked war found.</p></div></div>`;
   }
 
-  const ssgFaction  = war.factions?.find(f => f.id === 53272);
+  const ssgFaction = war.factions?.find(f => f.id === 53272);
   const enemyFaction = war.factions?.find(f => f.id !== 53272);
-  const warStart    = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
-  const target      = war.target || '—';
+  const warStart = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
+  const target = war.target || '—';
 
   const hitRows = memberHits.map((m, i) => `
     <tr>
@@ -985,7 +1173,21 @@ const HELP_CONTENT = {
           <p class="help-text">The roster shows each member's name, level, position, online status, days in faction, and revive setting. Members are sorted by position rank then level.</p>
           <div class="help-callout">💡 Status colors: <span style="color:#2ecc71;">Green = Online</span>, <span style="color:#444;">Grey = Offline</span>, <span style="color:#e67e22;">Orange = Hospital</span>, <span style="color:#ff4444;">Red = Jail</span>, <span style="color:#004cff;">Blue = Traveling</span></div>
         `
-      }
+      },
+      {
+  heading: 'Travel Column',
+  content: `
+    <p class="help-text">The travel column indicates faction members location and, if traveling, time left until return.</p>
+    <ul style="color:#a0a0a0;font-size:0.9rem;line-height:2;padding-left:1.25rem;">
+      <li>✈️ — traveling out</li>
+      <li>🔄 — returning home</li>
+      <li>🛬 — landing soon (outbound)</li>
+      <li>🏠 — in Torn</li>
+      <li>🌍 — abroad</li>
+    </ul>
+    <div class="help-callout">💡 Time remaining only shown for members who have saved their API key.</div>
+  `
+}
     ]
   },
   travel: {

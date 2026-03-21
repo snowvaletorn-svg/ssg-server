@@ -228,8 +228,9 @@ app.get('/', async (req, res) => {
 
       const positionMap = {
         'Leader': 'Ownership',
-        'Matriarch': 'Ownership',
         'Co-leader': 'Ownership',
+        'Matriarch': 'Ownership',
+        'War Lord' : 'Leadership',
         'Leadership': 'Leadership',
         'Team Strategy': 'Strategy',
         'Team Strength': 'Strength',
@@ -585,6 +586,71 @@ app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: tornRes.data.error.error });
     }
     res.json(tornRes.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Faction travel status ───────────────────────────────────────────────
+app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Get faction members to find who is traveling
+    const factionRes = await axios.get(
+      `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
+    );
+    const members = factionRes.data.members || [];
+    const travelingMembers = members.filter(m => m.status?.state === 'Traveling');
+
+    // Get all users with saved API keys
+    const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey tornPlayerId tornName');
+
+    // Fetch personal travel data for traveling members who have saved keys
+    const travelResults = await Promise.allSettled(
+      dbUsers.map(async u => {
+        // Check if this user is in the traveling list
+        const factionMember = travelingMembers.find(m => m.id === u.tornPlayerId);
+        if (!factionMember) return null;
+
+        try {
+          const tornRes = await axios.get(
+            `https://api.torn.com/user/?selections=travel&key=${u.tornApiKey}`
+          );
+          if (tornRes.data.error) return null;
+          return {
+            id: u.tornPlayerId,
+            name: factionMember.name,
+            position: factionMember.position,
+            travel: tornRes.data.travel
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const enriched = travelResults
+      .filter(r => r.status === 'fulfilled' && r.value !== null)
+      .map(r => r.value);
+
+    // For traveling members without saved keys, show basic info only
+    const enrichedIds = new Set(enriched.map(e => e.id));
+    const basicOnly = travelingMembers
+      .filter(m => !enrichedIds.has(m.id))
+      .map(m => ({
+        id: m.id,
+        name: m.name,
+        position: m.position,
+        description: m.status.description,
+        travel: null
+      }));
+
+    res.json({
+      traveling: [...enriched, ...basicOnly].sort((a, b) => a.name.localeCompare(b.name)),
+      total: travelingMembers.length
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

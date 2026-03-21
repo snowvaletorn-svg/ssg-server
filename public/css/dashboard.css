@@ -650,8 +650,8 @@
   border: 1px solid #2a2828;
   border-radius: 10px;
   width: 100%;
-  max-width: 680px;
-  max-height: 85vh;
+  max-width: 900px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -661,7 +661,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.25rem;
+  padding: 1rem 1.5rem;
   background: #1a1919;
   border-bottom: 1px solid #2a2828;
   font-family: 'Rajdhani', sans-serif;
@@ -693,19 +693,23 @@
   background: #1a1919;
   border-bottom: 1px solid #2a2828;
   overflow-x: auto;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .help-tab {
-  padding: 0.6rem 1rem;
+  padding: 0.85rem 0.85rem;
   font-family: 'Rajdhani', sans-serif;
-  font-size: 0.85rem;
+  font-size: 1rem;
   font-weight: 600;
   color: #666;
   cursor: pointer;
-  border-bottom: 2px solid transparent;
+  border-bottom: 0.5px solid transparent;
   white-space: nowrap;
   transition: all 0.2s;
-  background: none;
+  background: none; 
   border-top: none;
   border-left: none;
   border-right: none;
