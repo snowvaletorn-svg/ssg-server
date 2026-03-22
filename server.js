@@ -772,6 +772,14 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
 
+    // ── Check cache first ──
+    const CACHE_DURATION = 24 * 60 * 60 * 1000;
+    if (dbUser.levelProgressCache && dbUser.levelProgressCachedAt &&
+        Date.now() - new Date(dbUser.levelProgressCachedAt).getTime() < CACHE_DURATION) {
+      return res.json(dbUser.levelProgressCache);
+    }
+
+    // ── Cache miss — fetch from Torn API ──
     const hofRes = await axios.get(
       `https://api.torn.com/v2/user/hof?key=${dbUser.tornApiKey}`
     );
@@ -783,17 +791,20 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     const rank  = hofRes.data.hof.level.rank;
 
     if (level >= 100) {
-      return res.json({ level, rank, progress: 100, display: '100.00' });
+      const result = { level, rank, progress: 100, display: '100.00' };
+      await User.findOneAndUpdate(
+        { discordId: req.user.id },
+        { levelProgressCache: result, levelProgressCachedAt: new Date() }
+      );
+      return res.json(result);
     }
 
-    const currentTime = Math.floor(Date.now() / 1000);
+    const currentTime       = Math.floor(Date.now() / 1000);
     const INACTIVE_THRESHOLD = 365 * 24 * 60 * 60;
 
-    // Start searching near the user's rank and work outward
     async function findInactiveAtLevel(targetLevel, startRank) {
-      // Start offset near where this level's players should be
       let offset = Math.max(0, startRank - 200);
-      offset = Math.floor(offset / 100) * 100; // round to nearest 100
+      offset = Math.floor(offset / 100) * 100;
 
       for (let attempt = 0; attempt < 100; attempt++) {
         const hofPage = await axios.get(
@@ -802,11 +813,10 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
         const players = hofPage.data.hof || [];
         if (!players.length) break;
 
-        const levels = players.map(p => p.level);
+        const levels   = players.map(p => p.level);
         const minLevel = Math.min(...levels);
         const maxLevel = Math.max(...levels);
 
-        // Find inactive player at target level in this batch
         for (const player of players) {
           if (player.level === targetLevel &&
               (currentTime - player.last_action) > INACTIVE_THRESHOLD) {
@@ -814,23 +824,17 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
           }
         }
 
-        // Navigate based on where target level players would be
         if (maxLevel < targetLevel) {
-          // All players here are lower level, go backwards (lower offset = higher level)
           offset = Math.max(0, offset - 100);
         } else if (minLevel > targetLevel) {
-          // All players here are higher level, go forwards
           offset += 100;
         } else {
-          // Target level exists in this range but no inactive found, keep going forward
           offset += 100;
         }
       }
       return null;
     }
 
-    // For level N-1, those players are ranked higher (lower rank number) than level N
-    // So search slightly above the user's rank for level-1, and at/below for current level
     const [lowerPos, currentPos] = await Promise.all([
       findInactiveAtLevel(level - 1, Math.max(0, rank - 500)),
       findInactiveAtLevel(level,     rank)
@@ -840,11 +844,19 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return res.json({ level, rank, progress: null, display: String(level) });
     }
 
-    let relative = (lowerPos - rank) / (lowerPos - currentPos);
-    relative     = Math.min(Math.round(relative * 100) / 100, 0.99);
+    let relative  = (lowerPos - rank) / (lowerPos - currentPos);
+    relative      = Math.min(Math.round(relative * 100) / 100, 0.99);
     const display = (level + relative).toFixed(2);
 
-    res.json({ level, rank, progress: Math.round(relative * 100), display });
+    const result = { level, rank, progress: Math.round(relative * 100), display };
+
+    // ── Save to cache ──
+    await User.findOneAndUpdate(
+      { discordId: req.user.id },
+      { levelProgressCache: result, levelProgressCachedAt: new Date() }
+    );
+
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

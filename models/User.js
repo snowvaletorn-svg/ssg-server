@@ -9,7 +9,9 @@ const userSchema = new mongoose.Schema({
   tornKeyUpdatedAt: { type: Date,   default: null },
   lastSeen:         { type: Date,   default: null },
   createdAt:        { type: Date,   default: Date.now },
-  updatedAt:        { type: Date,   default: Date.now }
+  updatedAt:        { type: Date,   default: Date.now },
+  levelProgressCache: { type: Object, default: null },
+  levelProgressCachedAt: { type: Date, default: null }
 });
 
 userSchema.pre('save', function(next) {

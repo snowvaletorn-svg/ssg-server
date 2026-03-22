@@ -227,6 +227,7 @@ function renderTornUser(d) {
             ${infoBadge('Property',       d.property || 'None')}
             ${infoBadge('Rank',           d.rank || 'N/A')}
             ${infoBadge('Donator',        d.donator === 1 ? '✅ Yes' : '❌ No')}
+            ${infoBadge('True Level', '<span id="true-level-display">Loading...</span>')}
           </div>
         </div>
         ${d.competition?.name ? `
@@ -258,10 +259,30 @@ async function fetchLevelProgress(currentLevel) {
     const res  = await fetch('/api/torn/levelprogress');
     const data = await res.json();
     if (!res.ok || !data.display) return;
-    const el = document.getElementById('level-display');
-    if (el) {
-      el.textContent = data.display;
-      el.title = `${data.progress ?? '?'}% to level ${currentLevel + 1}`;
+
+    // Update level tile
+    const levelEl = document.getElementById('level-display');
+    if (levelEl) {
+      levelEl.textContent = data.display;
+      levelEl.title = `${data.progress ?? '?'}% to level ${currentLevel + 1}`;
+    }
+
+    // Update true level badge
+    const trueEl = document.getElementById('true-level-display');
+    if (trueEl) {
+      const trueLevel  = parseFloat(data.display);
+      const isHolding  = trueLevel >= currentLevel + 1;
+      const levelsHeld = Math.floor(trueLevel) - currentLevel;
+
+      if (isHolding) {
+        trueEl.innerHTML = `
+          <span style="color:#f0a500;font-weight:600;">${data.display}</span>
+          <span style="color:#e74c3c;font-size:0.75rem;margin-left:0.3rem;">
+            ⚠️ Holding ${levelsHeld} level${levelsHeld !== 1 ? 's' : ''}
+          </span>`;
+      } else {
+        trueEl.innerHTML = `<span style="color:#2ecc71;">${data.display}</span>`;
+      }
     }
   } catch { /* silent fail */ }
 }
