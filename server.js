@@ -838,10 +838,8 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return null;
     }
 
-    const [lowerPos, currentPos] = await Promise.all([
-      findInactiveAtLevel(level - 1, Math.max(0, rank - 500)),
-      findInactiveAtLevel(level, rank)
-    ]);
+    const lowerPos  = await findInactiveAtLevel(level - 1, Math.max(0, rank - 500));
+    const currentPos = await findInactiveAtLevel(level, rank);
 
     if (!lowerPos || !currentPos) {
       return res.json({ level, rank, progress: null, display: String(level) });
