@@ -17,31 +17,31 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const SSG_GUILD_ID   = '1432576178383753309';
+const SSG_GUILD_ID = '1432576178383753309';
 const SSG_FACTION_ID = 53272;
 
 const CHANNELS = {
   announcements: { id: '1466403384038002844', name: '📢 Announcements' },
-  growth:        { id: '1435061563118850199', name: '🌱 Growth Training' },
-  strength:      { id: '1454519260960391494', name: '💪 Strength Training' },
-  strategy:      { id: '1454519584445960234', name: '♟️ Strategy' },
-  war:           { id: '1435065561494196254', name: '⚔️ War Chat' },
+  growth: { id: '1435061563118850199', name: '🌱 Growth Training' },
+  strength: { id: '1454519260960391494', name: '💪 Strength Training' },
+  strategy: { id: '1454519584445960234', name: '♟️ Strategy' },
+  war: { id: '1435065561494196254', name: '⚔️ War Chat' },
 };
 
 const ROLES = {
-  ownership:  '1433161746365026334',
+  ownership: '1433161746365026334',
   leadership: '1462906795860295802',
-  strategy:   '1435059774722015232',
-  strength:   '1435060058063896698',
-  growth:     '1435060175525384303',
+  strategy: '1435059774722015232',
+  strength: '1435060058063896698',
+  growth: '1435060175525384303',
 };
 
 const ROLE_CHANNEL_ACCESS = {
-  [ROLES.ownership]:  ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.ownership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
   [ROLES.leadership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.strategy]:   ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.strength]:   ['announcements', 'strength', 'war'],
-  [ROLES.growth]:     ['announcements', 'growth', 'war'],
+  [ROLES.strategy]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.strength]: ['announcements', 'strength', 'war'],
+  [ROLES.growth]: ['announcements', 'growth', 'war'],
 };
 
 const TRAINING_CHANNELS = [
@@ -142,38 +142,38 @@ app.use(session({
 
 // ─── PASSPORT ────────────────────────────────────────────────────────────────
 passport.use(new DiscordStrategy({
-  clientID:    process.env.DISCORD_CLIENT_ID,
+  clientID: process.env.DISCORD_CLIENT_ID,
   clientSecret: process.env.DISCORD_CLIENT_SECRET,
   callbackURL: process.env.DISCORD_CALLBACK_URL,
   scope: ['identify', 'email', 'guilds', 'guilds.members.read']
 },
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    profile.accessToken = accessToken;
-    const memberRes = await axios.get(
-      `https://discord.com/api/v10/users/@me/guilds/${SSG_GUILD_ID}/member`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
-    profile.ssgRoles = memberRes.data.roles || [];
-    profile.ssgNick  = memberRes.data.nick || profile.username;
-  } catch (err) {
-    console.error('Could not fetch SSG member data:', err.response?.data || err.message);
-    profile.ssgRoles = [];
-    profile.ssgNick  = profile.username;
-  }
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      profile.accessToken = accessToken;
+      const memberRes = await axios.get(
+        `https://discord.com/api/v10/users/@me/guilds/${SSG_GUILD_ID}/member`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      profile.ssgRoles = memberRes.data.roles || [];
+      profile.ssgNick = memberRes.data.nick || profile.username;
+    } catch (err) {
+      console.error('Could not fetch SSG member data:', err.response?.data || err.message);
+      profile.ssgRoles = [];
+      profile.ssgNick = profile.username;
+    }
 
-  try {
-    await User.findOneAndUpdate(
-      { discordId: profile.id },
-      { discordId: profile.id, username: profile.username, lastSeen: new Date() },
-      { upsert: true, returnDocument: 'after' }
-    );
-  } catch (err) {
-    console.error('MongoDB upsert error:', err.message);
-  }
+    try {
+      await User.findOneAndUpdate(
+        { discordId: profile.id },
+        { discordId: profile.id, username: profile.username, lastSeen: new Date() },
+        { upsert: true, returnDocument: 'after' }
+      );
+    } catch (err) {
+      console.error('MongoDB upsert error:', err.message);
+    }
 
-  return done(null, profile);
-}));
+    return done(null, profile);
+  }));
 
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
@@ -215,7 +215,7 @@ function getAccessibleChannels(ssgRoles) {
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 app.get('/', async (req, res) => {
-  let liveGroups   = factionData.groups;
+  let liveGroups = factionData.groups;
   let totalMembers = factionData.faction.memberCount;
 
   try {
@@ -227,15 +227,15 @@ app.get('/', async (req, res) => {
       const factionMembers = tornRes.data.members || [];
 
       const positionMap = {
-        'Leader':        'Ownership',
-        'Co-leader':     'Ownership',
-        'Matriarch':     'Ownership',
-        'War Lord':      'Leadership',
-        'Leadership':    'Leadership',
+        'Leader': 'Ownership',
+        'Co-leader': 'Ownership',
+        'Matriarch': 'Ownership',
+        'War Lord': 'Leadership',
+        'Leadership': 'Leadership',
         'Team Strategy': 'Strategy',
         'Team Strength': 'Strength',
-        'Team Growth':   'Growth',
-        'Recruit':       'Growth'
+        'Team Growth': 'Growth',
+        'Recruit': 'Growth'
       };
 
       const counts = {};
@@ -244,7 +244,7 @@ app.get('/', async (req, res) => {
         if (groupName) counts[groupName] = (counts[groupName] || 0) + 1;
       });
 
-      liveGroups   = factionData.groups.map(g => ({ ...g, members: counts[g.name] ?? g.members }));
+      liveGroups = factionData.groups.map(g => ({ ...g, members: counts[g.name] ?? g.members }));
       totalMembers = factionMembers.length;
     }
   } catch (err) {
@@ -252,9 +252,9 @@ app.get('/', async (req, res) => {
   }
 
   res.render('index', {
-    user:    req.user,
+    user: req.user,
     faction: { ...factionData.faction, memberCount: totalMembers },
-    groups:  liveGroups
+    groups: liveGroups
   });
 });
 
@@ -271,19 +271,19 @@ app.get('/auth/discord/callback',
 );
 
 app.get('/dashboard', isAuthenticated, async (req, res) => {
-  const ssgRoles    = req.user.ssgRoles || [];
+  const ssgRoles = req.user.ssgRoles || [];
   const allowedRoles = Object.values(ROLES);
-  const hasRole     = ssgRoles.some(r => allowedRoles.includes(r));
+  const hasRole = ssgRoles.some(r => allowedRoles.includes(r));
 
   if (!hasRole) return res.redirect('/?error=no_access');
 
   await User.findOneAndUpdate({ discordId: req.user.id }, { lastSeen: new Date() });
 
-  const dbUser             = await User.findOne({ discordId: req.user.id });
+  const dbUser = await User.findOne({ discordId: req.user.id });
   const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
-  const isOwner            = req.user.ssgRoles?.includes(ROLES.ownership)  || false;
-  const isLeadership       = req.user.ssgRoles?.includes(ROLES.leadership) || false;
-  const factionKey         = await getFactionApiKey();
+  const isOwner = req.user.ssgRoles?.includes(ROLES.ownership) || false;
+  const isLeadership = req.user.ssgRoles?.includes(ROLES.leadership) || false;
+  const factionKey = await getFactionApiKey();
 
   const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
     ch.roles.some(r => (req.user.ssgRoles || []).includes(r))
@@ -293,7 +293,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     user: req.user,
     accessibleChannels,
     accessibleTraining,
-    tornApiKey:    dbUser?.tornApiKey || null,
+    tornApiKey: dbUser?.tornApiKey || null,
     isOwner,
     isLeadership,
     hasFactionKey: !!factionKey
@@ -366,9 +366,9 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
     await User.findOneAndUpdate(
       { discordId: req.user.id },
       {
-        tornApiKey:       apiKey.trim(),
-        tornPlayerId:     tornRes.data.player_id,
-        tornName:         tornRes.data.name,
+        tornApiKey: apiKey.trim(),
+        tornPlayerId: tornRes.data.player_id,
+        tornName: tornRes.data.name,
         tornKeyUpdatedAt: new Date()
       },
       { upsert: true }
@@ -451,9 +451,9 @@ app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
     }
     res.json({
       honors_awarded: userRes.data.honors_awarded || [],
-      honors_time:    userRes.data.honors_time    || {},
-      merits:         userRes.data.merits         || {},
-      all_honors:     tornRes.data.honors         || {}
+      honors_time: userRes.data.honors_time || {},
+      merits: userRes.data.merits || {},
+      all_honors: tornRes.data.honors || {}
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -501,10 +501,10 @@ app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
 
-    const factionRes      = await axios.get(
+    const factionRes = await axios.get(
       `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
     );
-    const members         = factionRes.data.members || [];
+    const members = factionRes.data.members || [];
     const travelingMembers = members.filter(m => m.status?.state === 'Traveling');
 
     const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey tornPlayerId tornName');
@@ -519,24 +519,24 @@ app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
           );
           if (tornRes.data.error) return null;
           return {
-            id:       u.tornPlayerId,
-            name:     factionMember.name,
+            id: u.tornPlayerId,
+            name: factionMember.name,
             position: factionMember.position,
-            travel:   tornRes.data.travel
+            travel: tornRes.data.travel
           };
         } catch { return null; }
       })
     );
 
-    const enriched    = travelResults.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => r.value);
+    const enriched = travelResults.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => r.value);
     const enrichedIds = new Set(enriched.map(e => e.id));
-    const basicOnly   = travelingMembers
+    const basicOnly = travelingMembers
       .filter(m => !enrichedIds.has(m.id))
       .map(m => ({ id: m.id, name: m.name, position: m.position, description: m.status.description, travel: null }));
 
     res.json({
       traveling: [...enriched, ...basicOnly].sort((a, b) => a.name.localeCompare(b.name)),
-      total:     travelingMembers.length
+      total: travelingMembers.length
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -601,22 +601,22 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
 
-    const warsRes  = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`);
-    const warData  = warsRes.data;
+    const warsRes = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`);
+    const warData = warsRes.data;
     const warStart = warData.wars?.ranked?.start || 0;
 
     if (!warStart) {
       return res.json({ war: null, memberHits: [], totalWarAttacks: 0 });
     }
 
-    let allAttacks      = [];
-    let nextUrl         = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
+    let allAttacks = [];
+    let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
 
     while (nextUrl && !reachedWarStart) {
       const attacksRes = await axios.get(nextUrl);
-      const attacks    = attacksRes.data.attacks || [];
-      const prevLink   = attacksRes.data._metadata?.links?.prev;
+      const attacks = attacksRes.data.attacks || [];
+      const prevLink = attacksRes.data._metadata?.links?.prev;
 
       for (const attack of attacks) {
         if (attack.started < warStart) { reachedWarStart = true; break; }
@@ -630,7 +630,7 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
 
     const hitCounts = {};
     allAttacks.forEach(a => {
-      const id   = a.attacker.id;
+      const id = a.attacker.id;
       const name = a.attacker.name;
       if (!hitCounts[id]) hitCounts[id] = { id, name, hits: 0, respect: 0 };
       hitCounts[id].hits++;
@@ -638,9 +638,9 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
     });
 
     res.json({
-      war:              warData.wars?.ranked || null,
-      memberHits:       Object.values(hitCounts).sort((a, b) => b.hits - a.hits),
-      totalWarAttacks:  allAttacks.length
+      war: warData.wars?.ranked || null,
+      memberHits: Object.values(hitCounts).sort((a, b) => b.hits - a.hits),
+      totalWarAttacks: allAttacks.length
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -660,14 +660,14 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
           );
           if (tornRes.data.error) return null;
           return {
-            name:       tornRes.data.name,
-            player_id:  tornRes.data.player_id,
-            level:      tornRes.data.level,
+            name: tornRes.data.name,
+            player_id: tornRes.data.player_id,
+            level: tornRes.data.level,
             totalstats: tornRes.data.personalstats?.totalstats || 0,
-            strength:   tornRes.data.personalstats?.strength   || 0,
-            defense:    tornRes.data.personalstats?.defense    || 0,
-            speed:      tornRes.data.personalstats?.speed      || 0,
-            dexterity:  tornRes.data.personalstats?.dexterity  || 0,
+            strength: tornRes.data.personalstats?.strength || 0,
+            defense: tornRes.data.personalstats?.defense || 0,
+            speed: tornRes.data.personalstats?.speed || 0,
+            dexterity: tornRes.data.personalstats?.dexterity || 0,
           };
         } catch { return null; }
       })
@@ -687,34 +687,34 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
 
-    const factionRes     = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
+    const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
     const factionMembers = factionRes.data.members || [];
 
-    const dbUsers    = await User.find({}, 'discordId username tornApiKey tornPlayerId tornName lastSeen tornKeyUpdatedAt');
+    const dbUsers = await User.find({}, 'discordId username tornApiKey tornPlayerId tornName lastSeen tornKeyUpdatedAt');
     const dbByTornId = {};
     dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
     const enrichResults = await Promise.allSettled(
       factionMembers.map(async m => {
         const dbUser = dbByTornId[m.id];
-        const base   = {
-          id:               m.id,
-          name:             m.name,
-          level:            m.level,
-          position:         m.position,
-          days_in_faction:  m.days_in_faction,
-          last_action:      m.last_action,
-          revive_setting:   m.revive_setting,
-          status:           m.status,
-          hasApiKey:        !!dbUser?.tornApiKey,
-          discordId:        dbUser?.discordId        || null,
-          lastSeen:         dbUser?.lastSeen         || null,
+        const base = {
+          id: m.id,
+          name: m.name,
+          level: m.level,
+          position: m.position,
+          days_in_faction: m.days_in_faction,
+          last_action: m.last_action,
+          revive_setting: m.revive_setting,
+          status: m.status,
+          hasApiKey: !!dbUser?.tornApiKey,
+          discordId: dbUser?.discordId || null,
+          lastSeen: dbUser?.lastSeen || null,
           tornKeyUpdatedAt: dbUser?.tornKeyUpdatedAt || null,
-          property:         null,
-          job:              null,
-          energy:           null,
-          cooldowns:        null,
-          tornLastAction:   null
+          property: null,
+          job: null,
+          energy: null,
+          cooldowns: null,
+          tornLastAction: null
         };
 
         if (!dbUser?.tornApiKey) return base;
@@ -725,10 +725,10 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
             axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${dbUser.tornApiKey}`)
           ]);
           if (!v1Res.data.error) {
-            base.property       = v1Res.data.property     || null;
-            base.job            = v1Res.data.job           || null;
-            base.energy         = v1Res.data.energy        || null;
-            base.tornLastAction = v1Res.data.last_action   || null;
+            base.property = v1Res.data.property || null;
+            base.job = v1Res.data.job || null;
+            base.energy = v1Res.data.energy || null;
+            base.tornLastAction = v1Res.data.last_action || null;
           }
           if (!v2Res.data.error) {
             base.cooldowns = v2Res.data.cooldowns || null;
@@ -775,7 +775,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     // ── Check cache first ──
     const CACHE_DURATION = 24 * 60 * 60 * 1000;
     if (dbUser.levelProgressCache && dbUser.levelProgressCachedAt &&
-        Date.now() - new Date(dbUser.levelProgressCachedAt).getTime() < CACHE_DURATION) {
+      Date.now() - new Date(dbUser.levelProgressCachedAt).getTime() < CACHE_DURATION) {
       return res.json(dbUser.levelProgressCache);
     }
 
@@ -788,7 +788,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     }
 
     const level = hofRes.data.hof.level.value;
-    const rank  = hofRes.data.hof.level.rank;
+    const rank = hofRes.data.hof.level.rank;
 
     if (level >= 100) {
       const result = { level, rank, progress: 100, display: '100.00' };
@@ -799,7 +799,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return res.json(result);
     }
 
-    const currentTime       = Math.floor(Date.now() / 1000);
+    const currentTime = Math.floor(Date.now() / 1000);
     const INACTIVE_THRESHOLD = 365 * 24 * 60 * 60;
 
     async function findInactiveAtLevel(targetLevel, startRank) {
@@ -813,13 +813,13 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
         const players = hofPage.data.hof || [];
         if (!players.length) break;
 
-        const levels   = players.map(p => p.level);
+        const levels = players.map(p => p.level);
         const minLevel = Math.min(...levels);
         const maxLevel = Math.max(...levels);
 
         for (const player of players) {
           if (player.level === targetLevel &&
-              (currentTime - player.last_action) > INACTIVE_THRESHOLD) {
+            (currentTime - player.last_action) > INACTIVE_THRESHOLD) {
             return player.position;
           }
         }
@@ -831,21 +831,24 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
         } else {
           offset += 100;
         }
+
+        // ── Rate limit protection ──
+        await new Promise(resolve => setTimeout(resolve, 650));
       }
       return null;
     }
 
     const [lowerPos, currentPos] = await Promise.all([
       findInactiveAtLevel(level - 1, Math.max(0, rank - 500)),
-      findInactiveAtLevel(level,     rank)
+      findInactiveAtLevel(level, rank)
     ]);
 
     if (!lowerPos || !currentPos) {
       return res.json({ level, rank, progress: null, display: String(level) });
     }
 
-    let relative  = (lowerPos - rank) / (lowerPos - currentPos);
-    relative      = Math.min(Math.round(relative * 100) / 100, 0.99);
+    let relative = (lowerPos - rank) / (lowerPos - currentPos);
+    relative = Math.min(Math.round(relative * 100) / 100, 0.99);
     const display = (level + relative).toFixed(2);
 
     const result = { level, rank, progress: Math.round(relative * 100), display };
@@ -880,11 +883,11 @@ app.post('/api/apply', async (req, res) => {
 
   const answerLines = questions.map((q, i) => {
     const answer = answers[`q${i + 1}`];
-    const icon   = answer === 'yes' ? '✅' : '❌';
+    const icon = answer === 'yes' ? '✅' : '❌';
     return `${i + 1}. ${q}\n   ${icon} ${answer === 'yes' ? 'Agreed' : 'Did not agree'}`;
   });
 
-  const flag    = allYes ? '✅ All conditions agreed' : '⚠️ One or more conditions NOT agreed';
+  const flag = allYes ? '✅ All conditions agreed' : '⚠️ One or more conditions NOT agreed';
   const message = [
     '📋 **New Faction Application**', '',
     `**Torn Name:** ${tornName}`,
