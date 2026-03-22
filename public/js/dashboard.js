@@ -5,10 +5,10 @@ function showSection(sectionId, el) {
   document.getElementById(sectionId).classList.add('active');
   if (el) el.classList.add('active');
 
-  if (sectionId === 'torn') { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
+  if (sectionId === 'torn')    { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
   if (sectionId === 'faction') { fetchFaction(); fetchWarStats(); }
-  if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
-  if (sectionId === 'admin') { fetchAdminMembers(); }
+  if (sectionId === 'travel')  { fetchTravel(); fetchYataStock(); }
+  if (sectionId === 'admin')   { fetchMemberOverview(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
 }
 
@@ -18,15 +18,15 @@ function showKeyForm() {
 }
 
 async function saveTornKey() {
-  const input = document.getElementById('torn-key-input');
+  const input    = document.getElementById('torn-key-input');
   const statusEl = document.getElementById('key-status');
-  const key = input.value.trim();
+  const key      = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res = await fetch('/api/torn/key', {
+    const res  = await fetch('/api/torn/key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -47,15 +47,15 @@ function showFactionKeyForm() {
 }
 
 async function saveFactionKey() {
-  const input = document.getElementById('faction-key-input');
+  const input    = document.getElementById('faction-key-input');
   const statusEl = document.getElementById('faction-key-status');
-  const key = input.value.trim();
+  const key      = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res = await fetch('/api/torn/faction-key', {
+    const res  = await fetch('/api/torn/faction-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -72,7 +72,7 @@ async function saveFactionKey() {
 
 // ── Channel Feed ──────────────────────────────────────────────────────────────
 let currentChannelId = null;
-let memberCache = {};
+let memberCache      = {};
 
 function loadChannel(channelId) {
   if (!channelId) return;
@@ -87,7 +87,7 @@ function refreshMessages() {
 async function fetchSSGMembers() {
   if (Object.keys(memberCache).length > 0) return;
   try {
-    const res = await fetch('/api/discord/members');
+    const res  = await fetch('/api/discord/members');
     const data = await res.json();
     if (res.ok) {
       data.forEach(m => {
@@ -104,7 +104,7 @@ async function fetchMessages(channelId) {
   feed.innerHTML = '<div class="channel-loading">LOADING MESSAGES...</div>';
   await fetchSSGMembers();
   try {
-    const res = await fetch(`/api/discord/channel/${channelId}`);
+    const res  = await fetch(`/api/discord/channel/${channelId}`);
     const data = await res.json();
     if (!res.ok) { feed.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load messages'}</div>`; return; }
     if (!data.length) { feed.innerHTML = '<div class="channel-placeholder"><span class="placeholder-icon">💬</span><p>No messages found</p></div>'; return; }
@@ -115,13 +115,13 @@ async function fetchMessages(channelId) {
 }
 
 function renderMessage(msg) {
-  const author = msg.author;
-  const avatarUrl = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
-  const avatarHtml = avatarUrl
+  const author      = msg.author;
+  const avatarUrl   = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
+  const avatarHtml  = avatarUrl
     ? `<img src="${avatarUrl}" alt="${escapeHtml(author.username)}">`
     : `<span>${escapeHtml(author.username.charAt(0).toUpperCase())}</span>`;
-  const timestamp = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const content = formatContent(msg.content, msg.mentions);
+  const timestamp   = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const content     = formatContent(msg.content, msg.mentions);
   const displayName = memberCache[author.id] || author.global_name || author.username;
 
   return `
@@ -155,15 +155,15 @@ function formatContent(text, mentions) {
     return `<span style="background:rgba(54,17,176,0.2);color:#a78df5;border-radius:3px;padding:0.1em 0.3em;font-weight:600;">@${name}</span>`;
   });
   out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  out = out.replace(/`(.+?)`/g, '<code style="background:#1a1919;padding:0.1em 0.3em;border-radius:3px;font-family:\'Share Tech Mono\',monospace;font-size:0.85em;">$1</code>');
+  out = out.replace(/\*(.+?)\*/g,     '<em>$1</em>');
+  out = out.replace(/`(.+?)`/g,       '<code style="background:#1a1919;padding:0.1em 0.3em;border-radius:3px;font-family:\'Share Tech Mono\',monospace;font-size:0.85em;">$1</code>');
   out = out.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   return out;
 }
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
 // ── Torn User Stats ───────────────────────────────────────────────────────────
@@ -171,22 +171,24 @@ async function fetchTornUser() {
   const container = document.getElementById('torn-user-data');
   container.innerHTML = '<div class="channel-loading">LOADING TORN DATA...</div>';
   try {
-    const res = await fetch('/api/torn/user');
+    const res  = await fetch('/api/torn/user');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTornUser(data);
+    // Kick off level progress in background after render
+    fetchLevelProgress(data.level);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
 function renderTornUser(d) {
-  const lifeBar = d.life ? `${d.life.current}/${d.life.maximum}` : 'N/A';
+  const lifeBar   = d.life   ? `${d.life.current}/${d.life.maximum}`     : 'N/A';
   const energyBar = d.energy ? `${d.energy.current}/${d.energy.maximum}` : 'N/A';
-  const nerveBar = d.nerve ? `${d.nerve.current}/${d.nerve.maximum}` : 'N/A';
-  const happyBar = d.happy ? `${d.happy.current}/${d.happy.maximum}` : 'N/A';
-  const married = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
-  const job = d.job?.position && d.job?.company_name !== 'None'
+  const nerveBar  = d.nerve  ? `${d.nerve.current}/${d.nerve.maximum}`   : 'N/A';
+  const happyBar  = d.happy  ? `${d.happy.current}/${d.happy.maximum}`   : 'N/A';
+  const married   = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
+  const job       = d.job?.position && d.job?.company_name !== 'None'
     ? `${d.job.position} at ${d.job.company_name}` : d.job?.job || 'Unemployed';
 
   return `
@@ -197,58 +199,71 @@ function renderTornUser(d) {
       </div>
       <div class="card-body">
         <div class="stats-grid">
-          ${statTile(d.level, 'Level')}
-          ${statTile(d.age + 'd', 'Days Old')}
-          ${statTile(d.awards, 'Awards')}
-          ${statTile(d.honor, 'Honor')}
-          ${statTile(d.karma, 'Karma')}
-          ${statTile(d.friends, 'Friends')}
+          ${statTile(`<span id="level-display">${d.level}</span>`, 'Level')}
+          ${statTile(d.age + 'd',   'Days Old')}
+          ${statTile(d.awards,      'Awards')}
+          ${statTile(d.honor,       'Honor')}
+          ${statTile(d.karma,       'Karma')}
+          ${statTile(d.friends,     'Friends')}
         </div>
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Bars</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Life', lifeBar)}
+            ${infoBadge('Life',   lifeBar)}
             ${infoBadge('Energy', energyBar)}
-            ${infoBadge('Nerve', nerveBar)}
-            ${infoBadge('Happy', happyBar)}
+            ${infoBadge('Nerve',  nerveBar)}
+            ${infoBadge('Happy',  happyBar)}
           </div>
         </div>
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Info</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Status', d.status?.description || 'Unknown')}
-            ${infoBadge('Last Action', d.last_action?.relative || 'Unknown')}
-            ${infoBadge('Revivable', d.revivable === 1 ? '✅ Yes' : '❌ No')}
+            ${infoBadge('Status',         d.status?.description || 'Unknown')}
+            ${infoBadge('Last Action',    d.last_action?.relative || 'Unknown')}
+            ${infoBadge('Revivable',      d.revivable === 1 ? '✅ Yes' : '❌ No')}
             ${infoBadge('Revive Setting', d.revive_setting || 'Unknown')}
-            ${infoBadge('Job', job)}
-            ${infoBadge('Married', married)}
-            ${infoBadge('Property', d.property || 'None')}
-            ${infoBadge('Rank', d.rank || 'N/A')}
-            ${infoBadge('Donator', d.donator === 1 ? '✅ Yes' : '❌ No')}
+            ${infoBadge('Job',            job)}
+            ${infoBadge('Married',        married)}
+            ${infoBadge('Property',       d.property || 'None')}
+            ${infoBadge('Rank',           d.rank || 'N/A')}
+            ${infoBadge('Donator',        d.donator === 1 ? '✅ Yes' : '❌ No')}
           </div>
         </div>
         ${d.competition?.name ? `
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Competition</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Event', d.competition.name)}
+            ${infoBadge('Event',  d.competition.name)}
             ${infoBadge('Status', d.competition.status)}
-            ${infoBadge('HP', `${d.competition.current_hp}/${d.competition.max_hp}`)}
+            ${infoBadge('HP',     `${d.competition.current_hp}/${d.competition.max_hp}`)}
           </div>
         </div>` : ''}
         ${d.personalstats ? `
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Battle Stats</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Strength', formatNum(d.personalstats.strength))}
-            ${infoBadge('Defense', formatNum(d.personalstats.defense))}
-            ${infoBadge('Speed', formatNum(d.personalstats.speed))}
+            ${infoBadge('Strength',  formatNum(d.personalstats.strength))}
+            ${infoBadge('Defense',   formatNum(d.personalstats.defense))}
+            ${infoBadge('Speed',     formatNum(d.personalstats.speed))}
             ${infoBadge('Dexterity', formatNum(d.personalstats.dexterity))}
-            ${infoBadge('Total', formatNum(d.personalstats.totalstats))}
+            ${infoBadge('Total',     formatNum(d.personalstats.totalstats))}
           </div>
         </div>` : ''}
       </div>
     </div>`;
+}
+
+async function fetchLevelProgress(currentLevel) {
+  try {
+    const res  = await fetch('/api/torn/levelprogress');
+    const data = await res.json();
+    if (!res.ok || !data.display) return;
+    const el = document.getElementById('level-display');
+    if (el) {
+      el.textContent = data.display;
+      el.title = `${data.progress ?? '?'}% to level ${currentLevel + 1}`;
+    }
+  } catch { /* silent fail */ }
 }
 
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
@@ -256,7 +271,7 @@ async function fetchHonors() {
   const container = document.getElementById('honors-data');
   container.innerHTML = '<div class="channel-loading">LOADING HONORS & MERITS...</div>';
   try {
-    const res = await fetch('/api/torn/honors');
+    const res  = await fetch('/api/torn/honors');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderHonors(data);
@@ -270,9 +285,9 @@ let honorsCache = null;
 function renderHonors(data) {
   honorsCache = data;
   const filterEl = document.getElementById('honors-filter');
-  const sortEl = document.getElementById('honors-sort');
-  const filter = filterEl ? filterEl.value : 'all';
-  const sort = sortEl ? sortEl.value : 'earned-first';
+  const sortEl   = document.getElementById('honors-sort');
+  const filter   = filterEl ? filterEl.value : 'all';
+  const sort     = sortEl   ? sortEl.value   : 'earned-first';
   renderHonorsTable(data, filter, sort);
 }
 
@@ -282,9 +297,9 @@ function filterHonors() {
 
 function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
   const container = document.getElementById('honors-table-container');
-  const awarded = new Set(data.honors_awarded || []);
+  const awarded   = new Set(data.honors_awarded || []);
   const allHonors = data.all_honors || {};
-  const merits = data.merits || {};
+  const merits    = data.merits     || {};
 
   const rarityOrder = {
     'Extremely Rare': 0, 'Very Rare': 1, 'Rare': 2,
@@ -297,33 +312,30 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
   };
 
   let honorEntries = Object.entries(allHonors).filter(([, h]) => h.type !== 1);
-  const earned = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
-  const totalPct = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
+  const earned     = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
+  const totalPct   = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
 
-  // Apply filter
-  if (filter === 'earned') honorEntries = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
+  if (filter === 'earned')   honorEntries = honorEntries.filter(([id]) =>  awarded.has(parseInt(id)));
   if (filter === 'unearned') honorEntries = honorEntries.filter(([id]) => !awarded.has(parseInt(id)));
 
-  // Apply sort
   honorEntries.sort((a, b) => {
-    const aE = awarded.has(parseInt(a[0]));
-    const bE = awarded.has(parseInt(b[0]));
+    const aE  = awarded.has(parseInt(a[0]));
+    const bE  = awarded.has(parseInt(b[0]));
     const aRO = rarityOrder[a[1].rarity] ?? 99;
     const bRO = rarityOrder[b[1].rarity] ?? 99;
-
     switch (sort) {
-      case 'earned-first': return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
+      case 'earned-first':   return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
       case 'unearned-first': return aE !== bE ? (aE ? 1 : -1) : aRO - bRO;
-      case 'rarity-asc': return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
-      case 'rarity-desc': return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
-      case 'name': return (a[1].name || '').localeCompare(b[1].name || '');
-      default: return 0;
+      case 'rarity-asc':     return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'rarity-desc':    return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'name':           return (a[1].name || '').localeCompare(b[1].name || '');
+      default:               return 0;
     }
   });
 
   const honorRows = honorEntries.map(([id, honor]) => {
     const isEarned = awarded.has(parseInt(id));
-    const color = rarityColor[honor.rarity] || '#888';
+    const color    = rarityColor[honor.rarity] || '#888';
     return `<tr style="opacity:${isEarned ? '1' : '0.35'};">
       <td style="width:24px;">${isEarned ? '✅' : '⬜'}</td>
       <td>${escapeHtml(honor.name || 'Unknown')}</td>
@@ -334,8 +346,8 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
 
   const meritRows = Object.entries(merits).map(([key, val]) => {
     const maxVal = 10;
-    const pct = Math.min(Math.round((val / maxVal) * 100), 100);
-    const color = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
+    const pct    = Math.min(Math.round((val / maxVal) * 100), 100);
+    const color  = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
     return `<tr>
       <td>${formatMeritName(key)}</td>
       <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${val}/${maxVal}</td>
@@ -351,7 +363,7 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
     <div class="card" style="margin-bottom:1rem;">
       <div class="card-header">
         Honors & Awards
-        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([, h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
+        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([,h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
       </div>
       <div style="background:#2a2828;border-radius:4px;height:8px;margin:0 1rem 1rem;overflow:hidden;">
         <div style="width:${totalPct}%;height:100%;background:#4caf50;border-radius:4px;"></div>
@@ -363,7 +375,6 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
         </table>
       </div>
     </div>
-
     <div class="card">
       <div class="card-header">Merits</div>
       <div style="overflow-x:auto;">
@@ -380,7 +391,7 @@ async function fetchCrimeExp() {
   const container = document.getElementById('crime-exp-data');
   container.innerHTML = '<div class="channel-loading">LOADING CRIME XP...</div>';
   try {
-    const res = await fetch('/api/torn/crimeexp');
+    const res  = await fetch('/api/torn/crimeexp');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderCrimeExp(data.merits || data);
@@ -391,20 +402,20 @@ async function fetchCrimeExp() {
 
 function renderCrimeExp(merits) {
   const crimeKeys = Object.entries(merits).filter(([key]) =>
-    key.toLowerCase().includes('crime') ||
-    key.toLowerCase().includes('theft') ||
-    key.toLowerCase().includes('fraud') ||
-    key.toLowerCase().includes('scam') ||
-    key.toLowerCase().includes('bootlegging') ||
-    key.toLowerCase().includes('graffiti') ||
-    key.toLowerCase().includes('shoplift') ||
-    key.toLowerCase().includes('pickpocket') ||
-    key.toLowerCase().includes('card') ||
-    key.toLowerCase().includes('counterfeiting') ||
-    key.toLowerCase().includes('disposal') ||
-    key.toLowerCase().includes('cracking') ||
-    key.toLowerCase().includes('traffic') ||
-    key.toLowerCase().includes('murder') ||
+    key.toLowerCase().includes('crime')         ||
+    key.toLowerCase().includes('theft')         ||
+    key.toLowerCase().includes('fraud')         ||
+    key.toLowerCase().includes('scam')          ||
+    key.toLowerCase().includes('bootlegging')   ||
+    key.toLowerCase().includes('graffiti')      ||
+    key.toLowerCase().includes('shoplift')      ||
+    key.toLowerCase().includes('pickpocket')    ||
+    key.toLowerCase().includes('card')          ||
+    key.toLowerCase().includes('counterfeiting')||
+    key.toLowerCase().includes('disposal')      ||
+    key.toLowerCase().includes('cracking')      ||
+    key.toLowerCase().includes('traffic')       ||
+    key.toLowerCase().includes('murder')        ||
     key.toLowerCase().includes('assassination')
   );
 
@@ -435,145 +446,21 @@ async function fetchFaction() {
   const container = document.getElementById('faction-data');
   container.innerHTML = '<div class="channel-loading">LOADING FACTION DATA...</div>';
   try {
-    const res = await fetch('/api/torn/faction');
-    const data = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-
-    // Also fetch member stats if admin
-    let statsMap = {};
-    try {
-      const statsRes = await fetch('/api/admin/member-stats');
-      if (statsRes.ok) {
-        const statsData = await statsRes.json();
-        (statsData.stats || []).forEach(s => { statsMap[s.player_id] = s; });
-      }
-    } catch { }
-
-    container.innerHTML = renderFaction(data, statsMap);
-  } catch (err) {
-    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
-  }
-}
-
-function renderFaction(d, statsMap = {}) {
-  const basic = d.basic;
-  const members = d.members || [];
-  const hasStats = Object.keys(statsMap).length > 0;
-
-  const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
-    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
-  };
-
-  const memberRows = members
-    .sort((a, b) => {
-      const aO = positionOrder[a.position] ?? 99;
-      const bO = positionOrder[b.position] ?? 99;
-      if (aO !== bO) return aO - bO;
-      return (b.level || 0) - (a.level || 0);
-    })
-    .map(m => {
-      const status = m.last_action?.status || 'Offline';
-      const statusClass = `status-${status.toLowerCase()}`;
-      const memberStats = statsMap[m.id];
-      const totalStats = memberStats ? formatNum(memberStats.totalstats) : '—';
-      return `<tr>
-        <td>${escapeHtml(m.name)}</td>
-        <td>${m.level || '—'}</td>
-        <td>${m.position || '—'}</td>
-        <td class="${statusClass}">${status}</td>
-        <td>${m.days_in_faction ?? '—'}d</td>
-        <td>${m.revive_setting || '—'}</td>
-        ${hasStats ? `<td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${totalStats}</td>` : ''}
-      </tr>`;
-    }).join('');
-
-  return `
-    <div class="stats-grid" style="margin-bottom:1.5rem;">
-      ${statTile(basic.name, 'Faction')}
-      ${statTile(basic.members, 'Members')}
-      ${statTile(formatNum(basic.respect), 'Respect')}
-      ${statTile(`${basic.rank.name} D${basic.rank.division}`, 'Rank')}
-    </div>
-    <div class="card">
-      <div class="card-header">Member Roster</div>
-      <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr>
-            <th>Name</th><th>Level</th><th>Position</th><th>Status</th><th>Days</th><th>Revive</th>
-            ${hasStats ? '<th>Total Stats</th>' : ''}
-          </tr></thead>
-          <tbody>${memberRows || '<tr><td colspan="7" class="muted" style="padding:1rem;">No member data</td></tr>'}</tbody>
-        </table>
-      </div>
-    </div>`;
-}
-
-// ── Travel ────────────────────────────────────────────────────────────────────
-async function fetchTravel() {
-  const container = document.getElementById('travel-status');
-  container.innerHTML = '<div class="channel-loading">LOADING TRAVEL STATUS...</div>';
-  try {
-    const res = await fetch('/api/torn/travel');
-    const data = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderTravelStatus(data.travel || data);
-  } catch (err) {
-    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
-  }
-}
-
-function renderTravelStatus(t) {
-  if (!t || t.destination === 'Torn') {
-    return `
-      <div class="card">
-        <div class="card-body">
-          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Status', '🏠 In Torn')}
-            ${infoBadge('Destination', 'Home')}
-          </div>
-        </div>
-      </div>`;
-  }
-
-  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
-  const isReturning = t.destination === 'Torn';
-
-  return `
-    <div class="card">
-      <div class="card-header">✈️ Currently Traveling</div>
-      <div class="card-body">
-        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-          ${infoBadge('Destination', t.destination || 'Unknown')}
-          ${infoBadge('Departure', t.departed || 'Unknown')}
-          ${infoBadge('Arriving', arrivalTime)}
-          ${infoBadge('Direction', isReturning ? '🏠 Returning' : '✈️ Departing')}
-        </div>
-      </div>
-    </div>`;
-}
-
-async function fetchFaction() {
-  const container = document.getElementById('faction-data');
-  container.innerHTML = '<div class="channel-loading">LOADING FACTION DATA...</div>';
-  try {
     const requests = [
       fetch('/api/torn/faction'),
       fetch('/api/torn/faction-travel')
     ];
-
-    // Only fetch stats for Leadership/Ownership
     if (IS_LEADERSHIP) requests.push(fetch('/api/admin/member-stats'));
 
     const [factionRes, travelRes, statsRes] = await Promise.allSettled(requests);
 
-    const data = factionRes.status === 'fulfilled' ? await factionRes.value.json() : {};
-    const travelData = travelRes.status === 'fulfilled' ? await travelRes.value.json() : {};
-    const statsData = statsRes?.status === 'fulfilled' ? await statsRes.value.json() : {};
+    const data       = factionRes.status === 'fulfilled' ? await factionRes.value.json() : {};
+    const travelData = travelRes.status  === 'fulfilled' ? await travelRes.value.json()  : {};
+    const statsData  = statsRes?.status  === 'fulfilled' ? await statsRes.value.json()   : {};
 
     if (!data.basic) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
 
-    const statsMap = {};
+    const statsMap  = {};
     if (IS_LEADERSHIP) {
       (statsData.stats || []).forEach(s => { statsMap[s.player_id] = s; });
     }
@@ -588,8 +475,8 @@ async function fetchFaction() {
 }
 
 function renderFaction(d, statsMap = {}, travelMap = {}) {
-  const basic = d.basic;
-  const members = d.members || [];
+  const basic    = d.basic;
+  const members  = d.members || [];
   const hasStats = Object.keys(statsMap).length > 0;
 
   const positionOrder = {
@@ -605,13 +492,13 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
       return (b.level || 0) - (a.level || 0);
     })
     .map(m => {
-      const status = m.last_action?.status || 'Offline';
+      const status      = m.last_action?.status || 'Offline';
       const statusClass = `status-${status.toLowerCase()}`;
       const memberStats = statsMap[m.id];
-      const totalStats = memberStats ? formatNum(memberStats.totalstats) : '—';
+      const totalStats  = memberStats ? formatNum(memberStats.totalstats) : '—';
 
       const travelInfo = travelMap[m.id];
-      let travelCell = '🏠 Torn';
+      let travelCell   = '🏠 Torn';
 
       if (m.status?.state === 'Traveling') {
         const isReturning = m.status?.description?.toLowerCase().includes('returning');
@@ -628,7 +515,6 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
         travelCell = '🌍 Abroad';
       }
 
-
       return `<tr>
         <td>${escapeHtml(m.name)}</td>
         <td>${m.level || '—'}</td>
@@ -637,7 +523,7 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
         <td>${m.days_in_faction ?? '—'}d</td>
         <td>${m.revive_setting || '—'}</td>
         ${hasStats ? `<td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${totalStats}</td>` : ''}
-        <td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${travelCell}</td>
+        <td style="font-size:0.85rem;">${travelCell}</td>
       </tr>`;
     }).join('');
 
@@ -663,71 +549,46 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
     </div>`;
 }
 
-// ── Faction Travel ────────────────────────────────────────────────────────────
-async function fetchFactionTravel() {
-  const container = document.getElementById('faction-travel-data');
-  container.innerHTML = '<div class="channel-loading">LOADING FACTION TRAVEL...</div>';
+// ── Travel ────────────────────────────────────────────────────────────────────
+async function fetchTravel() {
+  const container = document.getElementById('travel-status');
+  container.innerHTML = '<div class="channel-loading">LOADING TRAVEL STATUS...</div>';
   try {
-    const res = await fetch('/api/torn/faction-travel');
+    const res  = await fetch('/api/torn/travel');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderFactionTravel(data);
+    container.innerHTML = renderTravelStatus(data.travel || data);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
-function renderFactionTravel(data) {
-  const traveling = data.traveling || [];
-
-  if (!traveling.length) {
-    return `<div class="card"><div class="card-body"><p class="muted">No faction members currently traveling.</p></div></div>`;
+function renderTravelStatus(t) {
+  if (!t || t.destination === 'Torn') {
+    return `
+      <div class="card">
+        <div class="card-body">
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            ${infoBadge('Status',      '🏠 In Torn')}
+            ${infoBadge('Destination', 'Home')}
+          </div>
+        </div>
+      </div>`;
   }
 
-  const rows = traveling.map(m => {
-    let destination = '—';
-    let timeLeft = '—';
-    let arriving = '—';
-
-    if (m.travel) {
-      const t = m.travel;
-      const isHome = t.destination === 'Torn';
-      destination = isHome ? `↩️ Returning from abroad` : `✈️ ${t.destination}`;
-      arriving = t.timestamp ? new Date(t.timestamp * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—';
-      timeLeft = t.time_left > 0 ? formatTimeLeft(t.time_left) : '🛬 Landing soon';
-    } else {
-      destination = m.description || '—';
-    }
-
-    return `<tr>
-      <td>${escapeHtml(m.name)}</td>
-      <td style="color:#888;font-size:0.85rem;">${m.position || '—'}</td>
-      <td>${destination}</td>
-      <td style="text-align:center;">${arriving}</td>
-      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${timeLeft}</td>
-    </tr>`;
-  }).join('');
+  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
+  const isReturning = t.destination === 'Torn';
 
   return `
     <div class="card">
-      <div class="card-header">
-        Currently Traveling
-        <span style="float:right;font-size:0.8rem;color:#888;">${data.total} members in the air</span>
-      </div>
-      <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr>
-            <th>Name</th>
-            <th>Position</th>
-            <th>Destination</th>
-            <th style="text-align:center;">Arriving</th>
-            <th style="text-align:center;">Time Left</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      <div style="padding:0.5rem 1rem;font-size:0.75rem;color:#444;">
-        ⚠️ Time left only shown for members who have saved their API key.
+      <div class="card-header">✈️ Currently Traveling</div>
+      <div class="card-body">
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+          ${infoBadge('Destination', t.destination || 'Unknown')}
+          ${infoBadge('Departure',   t.departed    || 'Unknown')}
+          ${infoBadge('Arriving',    arrivalTime)}
+          ${infoBadge('Direction',   isReturning ? '🏠 Returning' : '✈️ Departing')}
+        </div>
       </div>
     </div>`;
 }
@@ -741,14 +602,15 @@ function formatTimeLeft(seconds) {
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
 }
+
 // ── YATA Foreign Stock ────────────────────────────────────────────────────────
-let yataStockCache = null;
+let yataStockCache   = null;
 let itemCatalogCache = null;
 
 async function fetchItemCatalog() {
   if (itemCatalogCache) return itemCatalogCache;
   try {
-    const res = await fetch('/api/torn/items');
+    const res  = await fetch('/api/torn/items');
     const data = await res.json();
     if (res.ok && data.items) {
       itemCatalogCache = {};
@@ -774,7 +636,7 @@ async function fetchYataStock() {
     if (!stockRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     yataStockCache = { data, catalog };
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort = document.getElementById('stock-sort').value;
+    const selectedSort    = document.getElementById('stock-sort').value;
     renderYataStock(data, catalog, selectedCountry, selectedSort);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -793,7 +655,7 @@ function filterStockByCountry(countryCode) {
 function sortStock() {
   if (yataStockCache) {
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort = document.getElementById('stock-sort').value;
+    const selectedSort    = document.getElementById('stock-sort').value;
     renderYataStock(yataStockCache.data, yataStockCache.catalog, selectedCountry, selectedSort);
   }
 }
@@ -803,9 +665,9 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
   const countryNames = {
     mex: 'Mexico', cay: 'Cayman Islands', can: 'Canada',
-    haw: 'Hawaii', uni: 'United Kingdom', arg: 'Argentina',
-    swi: 'Switzerland', jap: 'Japan', chi: 'China',
-    uae: 'UAE', sou: 'South Africa'
+    haw: 'Hawaii', uni: 'United Kingdom',  arg: 'Argentina',
+    swi: 'Switzerland', jap: 'Japan',       chi: 'China',
+    uae: 'UAE',    sou: 'South Africa'
   };
 
   const stockData = data.stocks || {};
@@ -818,8 +680,8 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   }
 
   const html = entries.map(([code, country]) => {
-    const name = countryNames[code] || code;
-    const items = (country.stocks || []).filter(item => item.quantity > 0);
+    const name       = countryNames[code] || code;
+    const items      = (country.stocks || []).filter(item => item.quantity > 0);
     const lastUpdate = country.update ? new Date(country.update * 1000).toLocaleTimeString() : 'Unknown';
 
     if (!items.length) return `
@@ -830,9 +692,9 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
     const sorted = [...items].sort((a, b) => {
       switch (sortBy) {
-        case 'name': return a.name.localeCompare(b.name);
+        case 'name':     return a.name.localeCompare(b.name);
         case 'quantity': return b.quantity - a.quantity;
-        case 'cost': return b.cost - a.cost;
+        case 'cost':     return b.cost - a.cost;
         case 'type':
         default: {
           const typeA = catalog?.[a.id] || 'ZZZ';
@@ -868,83 +730,336 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   container.innerHTML = html;
 }
 
-// ── Admin Panel ───────────────────────────────────────────────────────────────
-async function fetchAdminMembers() {
-  const container = document.getElementById('admin-members-data');
-  container.innerHTML = '<div class="channel-loading">LOADING MEMBER ACTIVITY...</div>';
+// ── War Stats ─────────────────────────────────────────────────────────────────
+async function fetchWarStats() {
+  const container = document.getElementById('war-stats-data');
+  container.innerHTML = '<div class="channel-loading">LOADING WAR STATS...</div>';
   try {
-    const res = await fetch('/api/admin/members');
+    const res  = await fetch('/api/torn/wars');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderAdminMembers(data);
+    container.innerHTML = renderWarStats(data);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
-function renderAdminMembers(data) {
-  const factionMembers = data.factionMembers || [];
-  const dbUsers = data.dbUsers || [];
+function renderWarStats(data) {
+  const war        = data.war;
+  const memberHits = data.memberHits || [];
 
-  // Build lookup by Torn player ID
-  const dbByTornId = {};
-  dbUsers.forEach(u => {
-    if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u;
-  });
+  if (!war) {
+    return `<div class="card"><div class="card-body"><p class="muted">No active ranked war found.</p></div></div>`;
+  }
+
+  const ssgFaction   = war.factions?.find(f => f.id === 53272);
+  const enemyFaction = war.factions?.find(f => f.id !== 53272);
+  const warStart     = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
+
+  const hitRows = memberHits.map((m, i) => `
+    <tr>
+      <td style="color:#555;font-size:0.8rem;">${i + 1}</td>
+      <td>${escapeHtml(m.name)}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${m.respect.toFixed(2)}</td>
+    </tr>`).join('');
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1.5rem;">
+      ${statTile(ssgFaction?.score  ?? '—', 'SSG Score')}
+      ${statTile(enemyFaction?.score ?? '—', `${enemyFaction?.name ?? 'Enemy'} Score`)}
+      ${statTile(war.target || '—',          'Target Score')}
+      ${statTile(data.totalWarAttacks,        'Total Hits')}
+    </div>
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        ⚔️ vs ${escapeHtml(enemyFaction?.name || 'Unknown')}
+        <span style="float:right;font-size:0.8rem;color:#888;">Started: ${warStart}</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Member Hits</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr><th>#</th><th>Member</th><th style="text-align:center;">Hits</th><th style="text-align:right;">Respect Earned</th></tr></thead>
+          <tbody>${hitRows || '<tr><td colspan="4" class="muted" style="padding:1rem;">No war hits found.</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// ── Admin Member Overview ─────────────────────────────────────────────────────
+let overviewData    = [];
+let overviewSortCol = 'position';
+let overviewSortAsc = true;
+
+async function fetchMemberOverview() {
+  const container = document.getElementById('admin-overview-data');
+  container.innerHTML = '<div class="channel-loading">LOADING MEMBER OVERVIEW... (this may take a moment)</div>';
+  try {
+    const res  = await fetch('/api/admin/member-overview');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    overviewData = data.members || [];
+    renderMemberOverview();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function sortOverview(col) {
+  if (overviewSortCol === col) {
+    overviewSortAsc = !overviewSortAsc;
+  } else {
+    overviewSortCol = col;
+    overviewSortAsc = true;
+  }
+  renderMemberOverview();
+}
+
+function renderMemberOverview() {
+  const container = document.getElementById('admin-overview-data');
+  if (!overviewData.length) {
+    container.innerHTML = '<div class="empty-state"><p class="muted">No member data found.</p></div>';
+    return;
+  }
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
     'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
   };
 
-  const rows = factionMembers
-    .sort((a, b) => {
-      const aO = positionOrder[a.position] ?? 99;
-      const bO = positionOrder[b.position] ?? 99;
-      return aO !== bO ? aO - bO : a.name.localeCompare(b.name);
-    })
-    .map(m => {
-      const dbUser = dbByTornId[m.id];
-      const hasKey = dbUser?.hasApiKey ? '✅ Yes' : '❌ No';
-      const lastSeen = dbUser?.lastSeen
-        ? new Date(dbUser.lastSeen).toLocaleString()
-        : '—';
-      const seenClass = !dbUser?.lastSeen ? 'color:#555;' :
-        (Date.now() - new Date(dbUser.lastSeen) < 7 * 24 * 60 * 60 * 1000) ? 'color:#4caf50;' : 'color:#f0a500;';
+  const sorted = [...overviewData].sort((a, b) => {
+    let aVal, bVal;
+    switch (overviewSortCol) {
+      case 'name':
+        aVal = a.name?.toLowerCase() || '';
+        bVal = b.name?.toLowerCase() || '';
+        break;
+      case 'position':
+        aVal = positionOrder[a.position] ?? 99;
+        bVal = positionOrder[b.position] ?? 99;
+        break;
+      case 'property':
+        aVal = a.property?.toLowerCase() || 'zzz';
+        bVal = b.property?.toLowerCase() || 'zzz';
+        break;
+      case 'job':
+        aVal = a.job?.company_name?.toLowerCase() || 'zzz';
+        bVal = b.job?.company_name?.toLowerCase() || 'zzz';
+        break;
+      case 'energy':
+        aVal = a.energy?.current ?? -1;
+        bVal = b.energy?.current ?? -1;
+        break;
+      case 'medical':
+        aVal = a.cooldowns?.medical ?? -1;
+        bVal = b.cooldowns?.medical ?? -1;
+        break;
+      case 'lastaction':
+        aVal = a.tornLastAction?.timestamp ?? a.last_action?.timestamp ?? 0;
+        bVal = b.tornLastAction?.timestamp ?? b.last_action?.timestamp ?? 0;
+        break;
+      case 'lastseen':
+        aVal = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
+        bVal = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
+        break;
+      default:
+        aVal = a.name?.toLowerCase() || '';
+        bVal = b.name?.toLowerCase() || '';
+    }
+    if (typeof aVal === 'string') {
+      return overviewSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    }
+    return overviewSortAsc ? aVal - bVal : bVal - aVal;
+  });
 
-      return `<tr>
-    <td>${escapeHtml(m.name)}</td>
-    <td>${m.position || '—'}</td>
-    <td>${hasKey}</td>
-    <td style="${seenClass}font-size:0.85rem;">${lastSeen}</td>
-    <td>${dbUser ? `<button class="btn btn-small btn-danger" onclick="removeUser('${dbUser.discordId}', '${escapeHtml(m.name)}')">Remove</button>` : '—'}</td>
-  </tr>`;
-    }).join('');
+  const arrow = col => overviewSortCol === col ? (overviewSortAsc ? ' ▲' : ' ▼') : '';
 
-  const registeredCount = dbUsers.filter(u => u.hasApiKey).length;
+  const rows = sorted.map((m, i) => {
+    const property = m.property || '—';
 
-  return `
-    <div class="stats-grid" style="margin-bottom:1.5rem;">
-      ${statTile(factionMembers.length, 'Faction Members')}
-      ${statTile(dbUsers.length, 'Dashboard Users')}
-      ${statTile(registeredCount, 'API Keys Saved')}
+    const job = m.job
+      ? `${escapeHtml(m.job.position)}<br><span style="color:#555;font-size:0.78rem;">${escapeHtml(m.job.company_name)}</span>`
+      : '—';
+
+    const energyDisplay = m.energy ? `${m.energy.current}/${m.energy.maximum}` : '—';
+    const isDonator     = m.energy?.maximum >= 150;
+    const donatorBadge  = m.energy
+      ? `<span style="font-size:0.7rem;color:${isDonator ? '#f0a500' : '#555'};margin-left:0.3rem;">${isDonator ? '★' : '○'}</span>`
+      : '';
+
+    const drugCD = m.cooldowns
+      ? (m.cooldowns.drug > 0
+        ? `<span title="Drug cooldown: ${formatCooldown(m.cooldowns.drug)}" style="cursor:help;color:#e74c3c;">💊 ${formatCooldown(m.cooldowns.drug)}</span>`
+        : `<span style="color:#2ecc71;">💊 Ready</span>`)
+      : '—';
+
+    const boosterCD = m.cooldowns
+      ? (m.cooldowns.booster > 0
+        ? `<span style="color:#e67e22;">⚡ ${formatCooldown(m.cooldowns.booster)}</span>`
+        : `<span style="color:#2ecc71;">⚡ Ready</span>`)
+      : '—';
+
+    const energyCell = m.energy || m.cooldowns ? `
+      <div>${energyDisplay}${donatorBadge}</div>
+      <div style="font-size:0.78rem;margin-top:0.2rem;">${drugCD}</div>
+      <div style="font-size:0.78rem;">${boosterCD}</div>
+    ` : '—';
+
+    const medicalCell = m.cooldowns
+      ? (m.cooldowns.medical > 0
+        ? `<span style="color:#e74c3c;">${formatCooldown(m.cooldowns.medical)}</span>`
+        : `<span style="color:#2ecc71;">Ready</span>`)
+      : '—';
+
+    const lastActionTs    = m.tornLastAction?.timestamp ?? m.last_action?.timestamp ?? null;
+    const lastActionCell  = lastActionTs ? formatLastAction(lastActionTs) : '—';
+    const isStale         = lastActionTs && (Date.now() / 1000 - lastActionTs) > 23 * 3600;
+    const lastActionStyle = isStale ? 'color:#ff4444;font-weight:600;' : 'color:#a0a0a0;';
+
+    const hasKey         = m.hasApiKey ? '✅' : '❌';
+    const keyUpdated     = m.tornKeyUpdatedAt
+      ? new Date(m.tornKeyUpdatedAt).toLocaleDateString()
+      : m.lastSeen ? new Date(m.lastSeen).toLocaleDateString() : '—';
+    const apiCell        = `${hasKey}<br><span style="font-size:0.75rem;color:#555;">${keyUpdated}</span>`;
+
+    const removeBtn = m.discordId
+      ? `<button class="btn btn-small btn-danger" onclick="removeUser('${m.discordId}', '${escapeHtml(m.name)}')">Remove</button>`
+      : '—';
+
+    return `<tr>
+      <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
+      <td>
+        <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" rel="noopener"
+          style="color:#a78df5;text-decoration:none;">${escapeHtml(m.name)}</a>
+        <span style="color:#555;font-size:0.75rem;"> [${m.id}]</span>
+      </td>
+      <td style="font-size:0.85rem;">${m.position || '—'}</td>
+      <td style="font-size:0.85rem;">${property}</td>
+      <td style="font-size:0.85rem;">${job}</td>
+      <td style="font-size:0.85rem;">${energyCell}</td>
+      <td style="font-size:0.85rem;text-align:center;">${medicalCell}</td>
+      <td style="font-size:0.85rem;${lastActionStyle}">${lastActionCell}</td>
+      <td style="font-size:0.85rem;text-align:center;">${apiCell}</td>
+      <td style="text-align:center;">${removeBtn}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="members-table overview-table">
+        <thead>
+          <tr>
+            <th style="text-align:center;width:40px;">#</th>
+            <th class="sortable" onclick="sortOverview('name')"       style="cursor:pointer;">Name${arrow('name')}</th>
+            <th class="sortable" onclick="sortOverview('position')"   style="cursor:pointer;">Position${arrow('position')}</th>
+            <th class="sortable" onclick="sortOverview('property')"   style="cursor:pointer;">Housing${arrow('property')}</th>
+            <th class="sortable" onclick="sortOverview('job')"        style="cursor:pointer;">Job${arrow('job')}</th>
+            <th class="sortable" onclick="sortOverview('energy')"     style="cursor:pointer;">Energy & Cooldowns${arrow('energy')}</th>
+            <th class="sortable" onclick="sortOverview('medical')"    style="cursor:pointer;">Medical CD${arrow('medical')}</th>
+            <th class="sortable" onclick="sortOverview('lastaction')" style="cursor:pointer;">Last Action${arrow('lastaction')}</th>
+            <th class="sortable" onclick="sortOverview('lastseen')"   style="cursor:pointer;">API Key${arrow('lastseen')}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
     </div>
-    <div class="card">
-      <div class="card-header">Member Activity</div>
-      <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr><th>Name</th><th>Position</th><th>API Key</th><th>Last Seen</th><th></th></tr></thead>
-          <tbody>${rows || '<tr><td colspan="5" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
-        </table>
-      </div>
-    </div>`;
+    <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
+      ★ = Donator &nbsp;|&nbsp; 💊 = Drug cooldown &nbsp;|&nbsp; ⚡ = Booster cooldown &nbsp;|&nbsp;
+      <span style="color:#ff4444;">Red last action</span> = offline 23+ hours
+    </p>`;
 }
 
+function formatCooldown(seconds) {
+  if (!seconds || seconds <= 0) return 'Ready';
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function formatLastAction(timestamp) {
+  const now     = Math.floor(Date.now() / 1000);
+  const diff    = now - timestamp;
+  const minutes = Math.floor(diff / 60);
+  const hours   = Math.floor(diff / 3600);
+  const days    = Math.floor(diff / 86400);
+
+  if (diff < 3600)  return `${minutes}m ago`;
+  if (diff < 86400) return `${Math.round(hours)}h ago`;
+  return `${days}d ago`;
+}
+
+function exportOverviewCSV() {
+  if (!overviewData.length) {
+    alert('No data to export. Please click Refresh first.');
+    return;
+  }
+
+  const headers = [
+    '#', 'Name', 'Torn ID', 'Position', 'Housing', 'Job Position',
+    'Company', 'Energy', 'Max Energy', 'Donator',
+    'Drug CD (seconds)', 'Booster CD (seconds)', 'Medical CD (seconds)',
+    'Last Action', 'API Key Saved', 'Key Last Updated'
+  ];
+
+  const positionOrder = {
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+  };
+
+  const sorted = [...overviewData].sort((a, b) => {
+    const aO = positionOrder[a.position] ?? 99;
+    const bO = positionOrder[b.position] ?? 99;
+    return aO !== bO ? aO - bO : a.name.localeCompare(b.name);
+  });
+
+  const rows = sorted.map((m, i) => {
+    const lastActionTs = m.tornLastAction?.timestamp ?? m.last_action?.timestamp ?? null;
+    const lastAction   = lastActionTs ? formatLastAction(lastActionTs) : '—';
+    const keyUpdated   = m.tornKeyUpdatedAt ? new Date(m.tornKeyUpdatedAt).toLocaleDateString() : '—';
+
+    return [
+      i + 1,
+      m.name,
+      m.id,
+      m.position         || '—',
+      m.property         || '—',
+      m.job?.position    || '—',
+      m.job?.company_name || '—',
+      m.energy?.current  ?? '—',
+      m.energy?.maximum  ?? '—',
+      m.energy?.maximum >= 150 ? 'Yes' : 'No',
+      m.cooldowns?.drug     ?? '—',
+      m.cooldowns?.booster  ?? '—',
+      m.cooldowns?.medical  ?? '—',
+      lastAction,
+      m.hasApiKey ? 'Yes' : 'No',
+      keyUpdated
+    ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
+  });
+
+  const csv  = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  link.href     = url;
+  link.download = `SSG_Members_${date}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── Member Total Stats ────────────────────────────────────────────────────────
 async function fetchMemberStats() {
   const container = document.getElementById('admin-stats-data');
   container.innerHTML = '<div class="channel-loading">LOADING MEMBER STATS... (this may take a moment)</div>';
   try {
-    const res = await fetch('/api/admin/member-stats');
+    const res  = await fetch('/api/admin/member-stats');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderMemberStats(data.stats || []);
@@ -990,82 +1105,21 @@ function renderMemberStats(stats) {
       </div>
     </div>`;
 }
+
+// ── Remove User ───────────────────────────────────────────────────────────────
 async function removeUser(discordId, name) {
   if (!confirm(`Are you sure you want to remove ${name} from the dashboard?\n\nThis will delete their record and API key. They will need to log in again to re-register.`)) {
     return;
   }
-
   try {
-    const res = await fetch(`/api/admin/user/${discordId}`, { method: 'DELETE' });
+    const res  = await fetch(`/api/admin/user/${discordId}`, { method: 'DELETE' });
     const data = await res.json();
-    if (!res.ok) {
-      alert(`❌ Error: ${data.error}`);
-      return;
-    }
+    if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
     alert(`✅ ${data.removed} has been removed from the dashboard.`);
-    fetchAdminMembers(); // Refresh the table
+    fetchMemberOverview();
   } catch (err) {
     alert(`❌ Error: ${err.message}`);
   }
-}
-
-// ── War Stats ─────────────────────────────────────────────────────────────────
-async function fetchWarStats() {
-  const container = document.getElementById('war-stats-data');
-  container.innerHTML = '<div class="channel-loading">LOADING WAR STATS...</div>';
-  try {
-    const res = await fetch('/api/torn/wars');
-    const data = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderWarStats(data);
-  } catch (err) {
-    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
-  }
-}
-
-function renderWarStats(data) {
-  const war = data.war;
-  const memberHits = data.memberHits || [];
-
-  if (!war) {
-    return `<div class="card"><div class="card-body"><p class="muted">No active ranked war found.</p></div></div>`;
-  }
-
-  const ssgFaction = war.factions?.find(f => f.id === 53272);
-  const enemyFaction = war.factions?.find(f => f.id !== 53272);
-  const warStart = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
-  const target = war.target || '—';
-
-  const hitRows = memberHits.map((m, i) => `
-    <tr>
-      <td style="color:#555;font-size:0.8rem;">${i + 1}</td>
-      <td>${escapeHtml(m.name)}</td>
-      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${m.respect.toFixed(2)}</td>
-    </tr>`).join('');
-
-  return `
-    <div class="stats-grid" style="margin-bottom:1.5rem;">
-      ${statTile(ssgFaction?.score ?? '—', 'SSG Score')}
-      ${statTile(enemyFaction?.score ?? '—', `${enemyFaction?.name ?? 'Enemy'} Score`)}
-      ${statTile(target, 'Target Score')}
-      ${statTile(data.totalWarAttacks, 'Hits (last 100)')}
-    </div>
-    <div class="card" style="margin-bottom:1rem;">
-      <div class="card-header">
-        ⚔️ vs ${escapeHtml(enemyFaction?.name || 'Unknown')}
-        <span style="float:right;font-size:0.8rem;color:#888;">Started: ${warStart}</span>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header">Member Hits <span style="float:right;font-size:0.75rem;color:#555;">Last 100 attacks</span></div>
-      <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr><th>#</th><th>Member</th><th style="text-align:center;">Hits</th><th style="text-align:right;">Respect Earned</th></tr></thead>
-          <tbody>${hitRows || '<tr><td colspan="4" class="muted" style="padding:1rem;">No war hits found in last 100 attacks.</td></tr>'}</tbody>
-        </table>
-      </div>
-    </div>`;
 }
 
 // ── Help Modal ────────────────────────────────────────────────────────────────
@@ -1088,7 +1142,6 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Create a new key and set the access level to <strong style="color:#c0bcbc;">Full Access</strong></div></div>
           <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Copy the key and paste it into the Torn API Key field on your Profile page</div></div>
           <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Save Key</strong> — you'll see a confirmation with your Torn name</div></div>
-          <img src="/images/apikeyimage.png" alt="API Key" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
           <div class="help-callout success">✅ Once saved, your key is stored securely and you won't need to enter it again.</div>
         `
       }
@@ -1124,7 +1177,6 @@ const HELP_CONTENT = {
           <p class="help-text">Displays your live Torn City player stats including level, bars, battle stats, and general info.</p>
           <div class="help-callout warning">⚠️ Requires a Full Access Torn API key saved in your Profile.</div>
           <img src="/images/tornstatsimage.png" alt="Torn stats" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
-
         `
       },
       {
@@ -1140,14 +1192,13 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Filter</strong> dropdown to show All, Earned only, or Not Earned</div></div>
           <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Sort</strong> dropdown to sort by rarity, name, or earned status</div></div>
           <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">The progress bar at the top shows your overall completion percentage</div></div>
-          <img src="/images/honorstableimage.png" alt="Honor table" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
         `
       },
       {
         heading: 'Merits',
         content: `
           <p class="help-text">Shows your merit progress with a progress bar for each merit. Green = maxed, orange = in progress, dark = not started.</p>
-          <img src="/images/meritstableimage.png" alt="Merit table" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">        `
+        `
       },
       {
         heading: 'Crime XP',
@@ -1175,19 +1226,19 @@ const HELP_CONTENT = {
         `
       },
       {
-  heading: 'Travel Column',
-  content: `
-    <p class="help-text">The travel column indicates faction members location and, if traveling, time left until return.</p>
-    <ul style="color:#a0a0a0;font-size:0.9rem;line-height:2;padding-left:1.25rem;">
-      <li>✈️ — traveling out</li>
-      <li>🔄 — returning home</li>
-      <li>🛬 — landing soon (outbound)</li>
-      <li>🏠 — in Torn</li>
-      <li>🌍 — abroad</li>
-    </ul>
-    <div class="help-callout">💡 Time remaining only shown for members who have saved their API key.</div>
-  `
-}
+        heading: 'Travel Column',
+        content: `
+          <p class="help-text">The travel column indicates each member's current location and, if traveling, time left until arrival.</p>
+          <ul style="color:#a0a0a0;font-size:0.9rem;line-height:2;padding-left:1.25rem;">
+            <li>✈️ — traveling out</li>
+            <li>🔄 — returning home</li>
+            <li>🛬 — landing soon</li>
+            <li>🏠 — in Torn</li>
+            <li>🌍 — abroad</li>
+          </ul>
+          <div class="help-callout">💡 Time remaining only shown for members who have saved their API key.</div>
+        `
+      }
     ]
   },
   travel: {
@@ -1197,7 +1248,7 @@ const HELP_CONTENT = {
         heading: 'Travel Status',
         content: `
           <p class="help-text">Shows your current travel status — whether you're in Torn, departing, or returning from abroad.</p>
-          <img src="/images/travelimage.png" alt="Travel and foreign stock" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+          <img src="/images/travelimage.png" alt="Travel status" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
         `
       },
       {
@@ -1207,8 +1258,7 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select a country from the dropdown to filter to one destination, or leave as All Countries</div></div>
           <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the Sort dropdown to sort by Type, Name, Quantity, or Cost</div></div>
           <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh Stock</strong> to get the latest data</div></div>
-          <div class="help-callout">💡 Only items currently in stock (quantity > 0) are shown. The update time on each card shows how recently YATA refreshed that country's data.</div>
-          <img src="/images/travelimage.png" alt="Travel and foreign stock" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+          <div class="help-callout">💡 Only items currently in stock (quantity > 0) are shown.</div>
         `
       }
     ]
@@ -1220,7 +1270,7 @@ const HELP_CONTENT = {
         heading: 'Training Resources',
         content: `
           <p class="help-text">The Training page gives you quick links to SSG's training channels in Discord. Click <strong style="color:#c0bcbc;">Open in Discord ↗</strong> on any card to jump directly to that channel.</p>
-          <div class="help-callout warning">⚠️ You can only see training channels that your SSG role gives you access to. Growth members do not have access to Stats Training or Money Making Training.</div>
+          <div class="help-callout warning">⚠️ You can only see training channels that your SSG role gives you access to.</div>
           <img src="/images/trainingimage.png" alt="Training resources" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
         `
       },
@@ -1229,33 +1279,31 @@ const HELP_CONTENT = {
         content: `
           <div class="help-step"><div class="help-step-num">📊</div><div class="help-step-text"><strong style="color:#c0bcbc;">Stats Training</strong> — Advanced stat building guides. Available to Strategy and above.</div></div>
           <div class="help-step"><div class="help-step-num">💰</div><div class="help-step-text"><strong style="color:#c0bcbc;">Money Making Training</strong> — Guides on funding your stats growth. Available to Strategy and above.</div></div>
-          <div class="help-step"><div class="help-step-num">⬆️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Level Training</strong> — How to level up fast through attacks, crimes, and gym. Available to all members.</div></div>
-          <div class="help-step"><div class="help-step-num">🔗</div><div class="help-step-text"><strong style="color:#c0bcbc;">Chains</strong> — Step-by-step guides how to do Chains. Available to all members.</div></div>
-          <div class="help-step"><div class="help-step-num">🫆</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crimes Training</strong> — Helpful guide for effective Crimes Training. Available to all members.</div></div>
-          <div class="help-step"><div class="help-step-num">🗝️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Organized Crimes Training</strong> — Guide for how to do Organized Crimes. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">⬆️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Level Training</strong> — How to level up fast. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">🔗</div><div class="help-step-text"><strong style="color:#c0bcbc;">Chains</strong> — How to do Chains. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">🫆</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crimes Training</strong> — Guide for Crimes. Available to all members.</div></div>
+          <div class="help-step"><div class="help-step-num">🗝️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Organized Crimes Training</strong> — Guide for OCs. Available to all members.</div></div>
         `
       }
-
     ]
   },
   admin: {
     title: '🛡️ Admin',
     sections: [
       {
-        heading: 'Member Dashboard Activity',
+        heading: 'Member Overview',
         content: `
-          <p class="help-text">Shows all faction members from Torn alongside their dashboard usage. This helps leadership see who has set up their API key and when they last visited.</p>
-          <div class="help-callout">💡 Last Seen is color coded: <span style="color:#4caf50;">Green = active in last 7 days</span>, <span style="color:#f0a500;">Orange = over 7 days ago</span>, <span style="color:#555;">Grey = never logged in</span></div>
-          <img src="/images/adminimage.png" alt="Admin activity" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+          <p class="help-text">Shows all faction members with enriched data for those who have saved their API key — including housing, job, energy, cooldowns, and last action.</p>
+          <div class="help-callout">💡 Click any column header to sort. Use Export CSV to download to Google Sheets.</div>
+          <div class="help-callout warning">⚠️ This page makes API calls for every member with a saved key and may take several seconds to load.</div>
+          <img src="/images/adminimage.png" alt="Admin overview" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
         `
       },
       {
         heading: 'Member Total Stats',
         content: `
           <p class="help-text">Shows battle stats for all members who have saved their Torn API key. Members are ranked by total stats descending.</p>
-          <div class="help-callout warning">⚠️ This fetches data from the Torn API for each member individually and may take a few seconds to load.</div>
-          <div class="help-callout">💡 Only members who have saved their API key in the dashboard will appear here. Encourage all members to set up their key.</div>
-          <img src="/images/adminmemberstableimage.png" alt="Admin members" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+          <div class="help-callout">💡 Only members who have saved their API key in the dashboard will appear here.</div>
         `
       }
     ]
@@ -1266,9 +1314,8 @@ let currentHelpSection = 'profile';
 
 function openHelp(section) {
   currentHelpSection = section || 'profile';
-  const modal = document.getElementById('help-modal');
-  const tabsEl = document.getElementById('help-tabs');
-  const bodyEl = document.getElementById('help-modal-body');
+  const modal   = document.getElementById('help-modal');
+  const tabsEl  = document.getElementById('help-tabs');
   const titleEl = document.getElementById('help-modal-title');
 
   const content = HELP_CONTENT[currentHelpSection];
@@ -1276,15 +1323,12 @@ function openHelp(section) {
 
   titleEl.textContent = content.title + ' — Help';
 
-  // Build tabs
   tabsEl.innerHTML = Object.entries(HELP_CONTENT).map(([key, val]) =>
     `<button class="help-tab ${key === currentHelpSection ? 'active' : ''}"
       onclick="switchHelpTab('${key}')">${val.title}</button>`
   ).join('');
 
-  // Build body
   renderHelpBody(currentHelpSection);
-
   modal.classList.add('active');
   document.body.style.overflow = 'hidden';
 }
@@ -1293,26 +1337,18 @@ function switchHelpTab(section) {
   currentHelpSection = section;
   const content = HELP_CONTENT[section];
   if (!content) return;
-
   document.getElementById('help-modal-title').textContent = content.title + ' — Help';
-  document.querySelectorAll('.help-tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('.help-tab').forEach(t => {
-    if (t.textContent === content.title) t.classList.add('active');
-  });
-
-  // Re-highlight active tab
   const tabs = document.querySelectorAll('.help-tab');
   tabs.forEach((t, i) => {
     const key = Object.keys(HELP_CONTENT)[i];
     t.classList.toggle('active', key === section);
   });
-
   renderHelpBody(section);
 }
 
 function renderHelpBody(section) {
   const content = HELP_CONTENT[section];
-  const bodyEl = document.getElementById('help-modal-body');
+  const bodyEl  = document.getElementById('help-modal-body');
   bodyEl.innerHTML = content.sections.map(s => `
     <div class="help-heading">${s.heading}</div>
     ${s.content}
@@ -1328,7 +1364,6 @@ function closeHelpOnBackdrop(e) {
   if (e.target === document.getElementById('help-modal')) closeHelp();
 }
 
-// Close on Escape key
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeHelp();
 });
@@ -1348,12 +1383,12 @@ function infoBadge(label, value) {
 function formatNum(n) {
   if (n == null) return '—';
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
-  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1)     + 'M';
+  if (n >= 1_000)         return (n / 1_000).toFixed(1)         + 'K';
   return n.toLocaleString();
 }
 
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 setInterval(() => {
-  fetch('/api/ping').catch(() => { });
-}, 14 * 60 * 1000 + 30 * 1000); // 14m 30s
+  fetch('/api/ping').catch(() => {});
+}, 14 * 60 * 1000 + 30 * 1000);

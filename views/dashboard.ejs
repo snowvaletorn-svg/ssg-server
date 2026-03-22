@@ -359,15 +359,21 @@
                 <button class="btn btn-small btn-outline" onclick="openHelp('admin')">❓ Help</button>
               </div>
 
-              <!-- Dashboard Activity -->
+              <!-- Member Overview -->
               <div class="section-header" style="margin-top:0;">
-                <h3>Member Dashboard Activity</h3>
-                <button class="btn btn-primary btn-small" onclick="fetchAdminMembers()">↻ Refresh</button>
+                <h3>Member Overview</h3>
+                <div style="display:flex;gap:0.75rem;">
+                  <button class="btn btn-primary btn-small" onclick="fetchMemberOverview()">↻ Refresh</button>
+                  <button class="btn btn-small btn-outline" onclick="exportOverviewCSV()">⬇️ Export CSV</button>
+                </div>
               </div>
-              <div id="admin-members-data">
+              <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                Enriched data shown for members with a saved API key. Click any column header to sort.
+              </p>
+              <div id="admin-overview-data">
                 <div class="empty-state">
                   <span class="empty-icon">🛡️</span>
-                  <p>Click Refresh to load member activity.</p>
+                  <p>Click Refresh to load member overview.</p>
                 </div>
               </div>
 
@@ -403,9 +409,9 @@
     </div>
   </div>
   <script>
-  const IS_LEADERSHIP = <% if (isOwner || isLeadership) { %>true<% } else { %>false<% } %>;
-</script>
-<script src="/js/dashboard.js"></script>
+    const IS_LEADERSHIP = <% if (isOwner || isLeadership) { %> true <% } else { %> false <% } %>;
+  </script>
+  <script src="/js/dashboard.js"></script>
 </body>
 
 </html>

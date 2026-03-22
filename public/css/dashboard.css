@@ -583,6 +583,18 @@
   color: #c0bcbc;
 }
 
+/* ── Overview Table ────────────────────────────────────────────────────────── */
+.overview-table th.sortable:hover {
+  color: #c0bcbc;
+  background: #222;
+  cursor: pointer;
+}
+
+.overview-table td {
+  vertical-align: top;
+  padding: 0.65rem 0.9rem;
+}
+
 /* ── Training ──────────────────────────────────────────────────────────── */
 .training-grid {
   display: grid;
