@@ -779,6 +779,12 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return res.json(dbUser.levelProgressCache);
     }
 
+    console.log('Cache check:', {
+      hasCache: !!dbUser.levelProgressCache,
+      cachedAt: dbUser.levelProgressCachedAt,
+      cacheAge: dbUser.levelProgressCachedAt ? Date.now() - new Date(dbUser.levelProgressCachedAt).getTime() : null
+    });
+
     // ── Cache miss — fetch from Torn API ──
     const hofRes = await axios.get(
       `https://api.torn.com/v2/user/hof?key=${dbUser.tornApiKey}`
@@ -796,6 +802,12 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
         { discordId: req.user.id },
         { levelProgressCache: result, levelProgressCachedAt: new Date() }
       );
+      console.log('Calculated result:', result);
+      console.log('Save result:', await User.findOneAndUpdate(
+        { discordId: req.user.id },
+        { levelProgressCache: result, levelProgressCachedAt: new Date() },
+        { new: true }
+      ).then(u => ({ saved: !!u.levelProgressCache, data: u.levelProgressCache })));
       return res.json(result);
     }
 
