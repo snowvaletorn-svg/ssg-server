@@ -810,6 +810,12 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
         const hofPage = await axios.get(
           `https://api.torn.com/v2/torn/hof?limit=100&offset=${offset}&cat=level&key=${dbUser.tornApiKey}`
         );
+
+        // If rate limited, wait and retry once
+        if (hofPage.data?.error?.code === 5) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          continue;
+        }
         const players = hofPage.data.hof || [];
         if (!players.length) break;
 
@@ -838,7 +844,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return null;
     }
 
-    const lowerPos  = await findInactiveAtLevel(level - 1, Math.max(0, rank - 500));
+    const lowerPos = await findInactiveAtLevel(level - 1, Math.max(0, rank - 500));
     const currentPos = await findInactiveAtLevel(level, rank);
 
     if (!lowerPos || !currentPos) {

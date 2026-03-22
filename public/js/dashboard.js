@@ -175,8 +175,9 @@ async function fetchTornUser() {
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTornUser(data);
-    // Kick off level progress in background after render
-    fetchLevelProgress(data.level);
+    // Random delay 0-5 seconds before level progress to avoid simultaneous HOF calls
+    const delay = Math.floor(Math.random() * 5000);
+    setTimeout(() => fetchLevelProgress(data.level), delay);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
