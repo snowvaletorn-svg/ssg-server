@@ -805,44 +805,119 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     async function findInactiveAtLevel(targetLevel, startRank) {
       let offset = Math.max(0, startRank - 200);
       offset = Math.floor(offset / 100) * 100;
-      console.log(`Searching for level ${targetLevel} starting at offset ${offset}`);
 
-      for (let attempt = 0; attempt < 100; attempt++) {
-        const hofPage = await axios.get(
-          `https://api.torn.com/v2/torn/hof?limit=100&offset=${offset}&cat=level&key=${dbUser.tornApiKey}`
-        );
+      // Try multiple thresholds if needed — start strict, loosen if not found
+      const THRESHOLDS = [
+        365 * 24 * 60 * 60,  // 1 year
+        180 * 24 * 60 * 60,  // 6 months
+        90 * 24 * 60 * 60   // 3 months
+      ];
 
-        if (hofPage.data?.error?.code === 5) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          continue;
-        }
+      for (const threshold of THRESHOLDS) {
+        let searchOffset = offset;
+        let foundTargetLevel = false;
 
-        const players = hofPage.data.hof || [];
-        if (!players.length) break;
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const hofPage = await axios.get(
+            `https://api.torn.com/v2/torn/hof?limit=100&offset=${searchOffset}&cat=level&key=${dbUser.tornApiKey}`
+          );
 
-        const levels = players.map(p => p.level);
-        const minLevel = Math.min(...levels);
-        const maxLevel = Math.max(...levels);
-        console.log(`Attempt ${attempt}: offset ${offset}, levels ${minLevel}-${maxLevel}`);
-
-        for (const player of players) {
-          if (player.level === targetLevel &&
-            (currentTime - player.last_action) > INACTIVE_THRESHOLD) {
-            console.log(`Found inactive at level ${targetLevel}, position ${player.position}`);
-            return player.position;
+          if (hofPage.data?.error?.code === 5) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
           }
+
+          const players = hofPage.data.hof || [];
+          if (!players.length) break;
+
+          const levels = players.map(p => p.level);
+          const minLevel = Math.min(...levels);
+          const maxLevel = Math.max(...levels);
+
+          // Check for inactive player at target level
+          for (const player of players) {
+            if (player.level === targetLevel &&
+              (currentTime - player.last_action) > threshold) {
+              console.log(`Found inactive at level ${targetLevel} with threshold ${threshold}, position ${player.position}`);
+              return player.position;
+            }
+            if (player.level === targetLevel) foundTargetLevel = true;
+          }
+
+          if (maxLevel < targetLevel) {
+            searchOffset = Math.max(0, searchOffset - 100);
+          } else if (minLevel > targetLevel) {
+            searchOffset += 100;
+          } else {
+            // We're in the right level range but no inactive found yet
+            searchOffset += 100;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 650));
         }
 
-        if (maxLevel < targetLevel) {
-          offset = Math.max(0, offset - 100);
-        } else if (minLevel > targetLevel) {
-          offset += 100;
-        } else {
-          offset += 100;
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 650));
+        console.log(`No inactive found at level ${targetLevel} with threshold ${threshold}, trying looser threshold`);
       }
+
+      console.log(`Failed to find inactive player at level ${targetLevel}`);
+      return null;
+    } async function findInactiveAtLevel(targetLevel, startRank) {
+      let offset = Math.max(0, startRank - 200);
+      offset = Math.floor(offset / 100) * 100;
+
+      // Try multiple thresholds if needed — start strict, loosen if not found
+      const THRESHOLDS = [
+        365 * 24 * 60 * 60,  // 1 year
+        180 * 24 * 60 * 60,  // 6 months
+        90 * 24 * 60 * 60   // 3 months
+      ];
+
+      for (const threshold of THRESHOLDS) {
+        let searchOffset = offset;
+        let foundTargetLevel = false;
+
+        for (let attempt = 0; attempt < 50; attempt++) {
+          const hofPage = await axios.get(
+            `https://api.torn.com/v2/torn/hof?limit=100&offset=${searchOffset}&cat=level&key=${dbUser.tornApiKey}`
+          );
+
+          if (hofPage.data?.error?.code === 5) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+
+          const players = hofPage.data.hof || [];
+          if (!players.length) break;
+
+          const levels = players.map(p => p.level);
+          const minLevel = Math.min(...levels);
+          const maxLevel = Math.max(...levels);
+
+          // Check for inactive player at target level
+          for (const player of players) {
+            if (player.level === targetLevel &&
+              (currentTime - player.last_action) > threshold) {
+              console.log(`Found inactive at level ${targetLevel} with threshold ${threshold}, position ${player.position}`);
+              return player.position;
+            }
+            if (player.level === targetLevel) foundTargetLevel = true;
+          }
+
+          if (maxLevel < targetLevel) {
+            searchOffset = Math.max(0, searchOffset - 100);
+          } else if (minLevel > targetLevel) {
+            searchOffset += 100;
+          } else {
+            // We're in the right level range but no inactive found yet
+            searchOffset += 100;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 650));
+        }
+
+        console.log(`No inactive found at level ${targetLevel} with threshold ${threshold}, trying looser threshold`);
+      }
+
       console.log(`Failed to find inactive player at level ${targetLevel}`);
       return null;
     }
