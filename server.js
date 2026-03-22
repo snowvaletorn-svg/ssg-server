@@ -802,19 +802,23 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     const currentTime = Math.floor(Date.now() / 1000);
 
     async function findInactiveAtLevel(targetLevel, startRank) {
-      let offset = Math.max(0, startRank - 200);
+      // For lower levels cast a wider net
+      const searchBuffer = targetLevel < 20 ? 2000 : 500;
+      let offset = Math.max(0, startRank - searchBuffer);
       offset = Math.floor(offset / 100) * 100;
 
       const THRESHOLDS = [
-        365 * 24 * 60 * 60,
-        180 * 24 * 60 * 60,
-        90 * 24 * 60 * 60
+        365 * 24 * 60 * 60,  // 1 year
+        180 * 24 * 60 * 60,  // 6 months
+        90 * 24 * 60 * 60,  // 3 months
+        30 * 24 * 60 * 60   // 1 month — last resort
       ];
 
       for (const threshold of THRESHOLDS) {
         let searchOffset = offset;
+        let passedTarget = false;
 
-        for (let attempt = 0; attempt < 50; attempt++) {
+        for (let attempt = 0; attempt < 100; attempt++) {
           const hofPage = await axios.get(
             `https://api.torn.com/v2/torn/hof?limit=100&offset=${searchOffset}&cat=level&key=${dbUser.tornApiKey}`
           );
@@ -839,11 +843,20 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
           }
 
           if (maxLevel < targetLevel) {
+            // All players lower level — go backwards
             searchOffset = Math.max(0, searchOffset - 100);
           } else if (minLevel > targetLevel) {
+            // All players higher level — go forwards
             searchOffset += 100;
           } else {
-            searchOffset += 100;
+            // Target level in range but no inactive found — zigzag
+            if (passedTarget) {
+              searchOffset = Math.max(0, searchOffset - 200);
+              passedTarget = false;
+            } else {
+              passedTarget = true;
+              searchOffset += 100;
+            }
           }
 
           await new Promise(resolve => setTimeout(resolve, 650));
@@ -852,7 +865,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
       return null;
     }
 
-    const lowerPos = await findInactiveAtLevel(level - 1, Math.max(0, rank - 500));
+    const lowerPos = await findInactiveAtLevel(level - 1, Math.max(0, rank - 5000));
     const currentPos = await findInactiveAtLevel(level, rank);
 
     if (!lowerPos || !currentPos) {
@@ -888,7 +901,7 @@ app.post('/api/apply', async (req, res) => {
     'Do you agree to setup and apply to the faction in Torn Stats within 24 hours of acceptance?',
     'Do you agree to join and actively participate, daily, in discord?',
     'Do you agree that if you\'re under level 15, you will get to level 15 within 3 weeks of acceptance?',
-    'Do you agree that once you\'re over level 15, you will do a stat jump (candy, happy, console, etc.) weekly?'
+    'Do you agree that once you\'re over level 15, you will do atleast one stat jump (candy, happy, console, etc.) weekly?'
   ];
 
   const answerLines = questions.map((q, i) => {
