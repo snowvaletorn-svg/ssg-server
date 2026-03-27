@@ -80,26 +80,31 @@
                 <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono">
                     <%= user.id %>
                   </span></div>-->
-                <% if (user.ssgRoles && user.ssgRoles.length> 0) { %>
+                <% if (user.ssgRoles && user.ssgRoles.length > 0) { %>
                   <div class="profile-detail"><span class="label">SSG Roles</span>
                     <span class="value">
-                      <% const roleNames={ '1433161746365026334' : 'Ownership' , '1462906795860295802' : 'Leadership'
-                        , '1435059774722015232' : 'Strategy' , '1435060058063896698' : 'Strength'
-                        , '1435060175525384303' : 'Growth' }; const myRoles=user.ssgRoles.filter(r=>
-                        roleNames[r]).map(r=> roleNames[r]);
-                        %>
-                        <% if (myRoles.length> 0) { %>
-                          <% myRoles.forEach(function(role) { %>
-                            <span class="role-badge role-<%= role.toLowerCase() %>">
-                              <%= role %>
-                            </span>
-                            <% }); %>
-                              <% } else { %>
-                                <span class="muted">No SSG roles assigned</span>
-                                <% } %>
+                      <% 
+                        const roleNames = { 
+                          '1433161746365026334': 'Ownership',
+                          '1462906795860295802': 'Leadership',
+                          '1435059774722015232': 'Strategy',
+                          '1435060058063896698': 'Strength',
+                          '1435060175525384303': 'Growth'
+                        };
+                        const myRoles = user.ssgRoles.filter(r => roleNames[r]).map(r => roleNames[r]);
+                      %>
+                      <% if (myRoles.length > 0) { %>
+                        <% myRoles.forEach(function(role) { %>
+                          <span class="role-badge role-<%= role.toLowerCase() %>">
+                            <%= role %>
+                          </span>
+                        <% }); %>
+                      <% } else { %>
+                        <span class="muted">No SSG roles assigned</span>
+                      <% } %>
                     </span>
                   </div>
-                  <% } %>
+                <% } %>
               </div>
             </div>
 
@@ -163,7 +168,7 @@
               <h3>Discord Channels</h3>
               <button class="btn btn-small btn-outline" onclick="openHelp('channels')">❓ Help</button>
             </div>
-            <% if (accessibleChannels && accessibleChannels.length> 0) { %>
+            <% if (accessibleChannels && accessibleChannels.length > 0) { %>
               <div class="channel-toolbar">
                 <label for="channel-select" class="toolbar-label">Select Channel:</label>
                 <select id="channel-select" class="channel-dropdown" onchange="loadChannel(this.value)">
@@ -221,25 +226,43 @@
                   <option value="rarity-desc">Rarity (common first)</option>
                   <option value="name">Name A-Z</option>
                 </select>
-                <button class="btn btn-primary btn-small" onclick="fetchHonors()">↻ Refresh</button>
+                <button class="btn btn-primary btn-small" onclick="fetchHonors()">Load</button>
               </div>
             </div>
             <div id="honors-data">
               <div class="empty-state">
                 <span class="empty-icon">🏅</span>
-                <p>Click Refresh to load your honors, merits and awards.</p>
+                <p>Click Load to fetch your honors, merits and awards.</p>
               </div>
             </div>
             <div id="honors-table-container"></div>
 
             <div class="section-header" style="margin-top:2rem;">
               <h3>Crime XP</h3>
-              <button class="btn btn-primary btn-small" onclick="fetchCrimeExp()">↻ Refresh</button>
+              <button class="btn btn-primary btn-small" onclick="fetchCrimeExp()">Load</button>
             </div>
             <div id="crime-exp-data">
               <div class="empty-state">
                 <span class="empty-icon">🔪</span>
-                <p>Click Refresh to load your crime XP.</p>
+                <p>Click Load to fetch your crime XP.</p>
+              </div>
+            </div>
+
+            <!-- Racing Stats -->
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>Racing Stats</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <label style="font-size:0.75rem;color:#888;">Last</label>
+                <input id="racing-limit" type="number" value="100" min="1" max="1000"
+                  style="width:60px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:2px 6px;font-size:0.8rem;">
+                <label style="font-size:0.75rem;color:#888;">races</label>
+                <button class="btn btn-primary btn-small" onclick="fetchRacingStats()">Load</button>
+              </div>
+            </div>
+            <div id="racing-stats-data">
+              <div class="empty-state">
+                <span class="empty-icon">🏎️</span>
+                <p>Set a limit and click Load to fetch your racing stats.</p>
               </div>
             </div>
           </section>
@@ -324,9 +347,9 @@
               <h3>Training Resources</h3>
               <button class="btn btn-small btn-outline" onclick="openHelp('training')">❓ Help</button>
             </div>
-            <% if (accessibleTraining && accessibleTraining.length> 0) { %>
+            <% if (accessibleTraining && accessibleTraining.length > 0) { %>
               <div class="training-grid">
-                <% accessibleTraining.forEach(function(ch) { %>
+                  <% accessibleTraining.forEach(function(ch) { %>
                   <div class="training-card">
                     <div class="training-card-header">
                       <%= ch.name %>

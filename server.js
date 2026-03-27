@@ -16,6 +16,36 @@ const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Function to find an available port starting from the preferred port
+async function findAvailablePort(startPort) {
+  const net = require('net');
+  
+  return new Promise((resolve) => {
+    function checkPort(port) {
+      const server = net.createServer();
+      
+      server.listen(port, () => {
+        server.once('close', () => {
+          resolve(port);
+        });
+        server.close();
+      });
+      
+      server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          // Port is in use, try next port
+          checkPort(port + 1);
+        } else {
+          // Some other error, fallback to original port
+          resolve(startPort);
+        }
+      });
+    }
+    
+    checkPort(parseInt(startPort));
+  });
+}
+
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const SSG_GUILD_ID = '1432576178383753309';
 const SSG_FACTION_ID = 53272;
@@ -951,9 +981,91 @@ app.post('/api/apply', async (req, res) => {
   }
 });
 
-// ─── START SERVER ─────────────────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`SSG Server listening on http://localhost:${PORT}`);
+
+// ─── API: Racing stats ────────────────────────────────────────────────────────
+app.get('/api/torn/races', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+
+    const limit    = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
+    const allRaces = [];
+    let offset     = 0;
+    const pageSize = 100;
+
+    // Paginate through API pages until we have enough races
+    while (allRaces.length < limit) {
+      const tornRes = await axios.get(
+        `https://api.torn.com/v2/user/races?limit=${pageSize}&offset=${offset}&key=${dbUser.tornApiKey}`
+      );
+      if (tornRes.data.error) {
+        return res.status(400).json({ error: tornRes.data.error.error });
+      }
+      const page = tornRes.data.races || [];
+      if (!page.length) { break; }
+      allRaces.push(...page);
+      if (page.length < pageSize) { break; } // no more pages
+      offset += pageSize;
+    }
+
+    return res.json({
+      player_id: dbUser.tornPlayerId,
+      races: allRaces.slice(0, limit)
+    });
+
+  } catch (err) {
+    console.error('[/api/torn/races]', err.message);
+    return res.status(500).json({ error: 'Server error fetching races.' });
+  }
 });
+
+// ─── API: Addiction level ─────────────────────────────────────────────────────
+app.get('/api/torn/addiction', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+
+    const tornRes = await axios.get(
+      `https://api.torn.com/user/?selections=profile&key=${dbUser.tornApiKey}`
+    );
+    
+    if (tornRes.data.error) {
+      return res.status(400).json({ error: tornRes.data.error.error });
+    }
+
+    const addiction = tornRes.data.addiction || 0;
+    
+    res.json({
+      addiction: addiction,
+      display: addiction
+    });
+
+  } catch (err) {
+    console.error('[/api/torn/addiction]', err.message);
+    return res.status(500).json({ error: 'Server error fetching addiction level.' });
+  }
+});
+
+// ─── START SERVER ─────────────────────────────────────────────────────────────
+async function startServer() {
+  try {
+    const availablePort = await findAvailablePort(PORT);
+    app.listen(availablePort, () => {
+      console.log(`SSG Server listening on http://localhost:${availablePort}`);
+      if (availablePort !== PORT) {
+        console.log(`Note: Port ${PORT} was in use, using port ${availablePort} instead`);
+      }
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 module.exports = app;

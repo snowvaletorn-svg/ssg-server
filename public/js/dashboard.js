@@ -5,10 +5,10 @@ function showSection(sectionId, el) {
   document.getElementById(sectionId).classList.add('active');
   if (el) el.classList.add('active');
 
-  if (sectionId === 'torn')    { fetchTornUser(); fetchHonors(); fetchCrimeExp(); }
+  if (sectionId === 'torn') { fetchTornUser(); }
   if (sectionId === 'faction') { fetchFaction(); fetchWarStats(); }
-  if (sectionId === 'travel')  { fetchTravel(); fetchYataStock(); }
-  if (sectionId === 'admin')   { fetchMemberOverview(); }
+  if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
+  if (sectionId === 'admin') { fetchMemberOverview(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
 }
 
@@ -18,15 +18,15 @@ function showKeyForm() {
 }
 
 async function saveTornKey() {
-  const input    = document.getElementById('torn-key-input');
+  const input = document.getElementById('torn-key-input');
   const statusEl = document.getElementById('key-status');
-  const key      = input.value.trim();
+  const key = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res  = await fetch('/api/torn/key', {
+    const res = await fetch('/api/torn/key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -47,15 +47,15 @@ function showFactionKeyForm() {
 }
 
 async function saveFactionKey() {
-  const input    = document.getElementById('faction-key-input');
+  const input = document.getElementById('faction-key-input');
   const statusEl = document.getElementById('faction-key-status');
-  const key      = input.value.trim();
+  const key = input.value.trim();
 
   if (!key) { statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an API key.</p>'; return; }
   statusEl.innerHTML = '<p class="muted">Validating key...</p>';
 
   try {
-    const res  = await fetch('/api/torn/faction-key', {
+    const res = await fetch('/api/torn/faction-key', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey: key })
@@ -72,7 +72,7 @@ async function saveFactionKey() {
 
 // ── Channel Feed ──────────────────────────────────────────────────────────────
 let currentChannelId = null;
-let memberCache      = {};
+let memberCache = {};
 
 function loadChannel(channelId) {
   if (!channelId) return;
@@ -87,7 +87,7 @@ function refreshMessages() {
 async function fetchSSGMembers() {
   if (Object.keys(memberCache).length > 0) return;
   try {
-    const res  = await fetch('/api/discord/members');
+    const res = await fetch('/api/discord/members');
     const data = await res.json();
     if (res.ok) {
       data.forEach(m => {
@@ -104,7 +104,7 @@ async function fetchMessages(channelId) {
   feed.innerHTML = '<div class="channel-loading">LOADING MESSAGES...</div>';
   await fetchSSGMembers();
   try {
-    const res  = await fetch(`/api/discord/channel/${channelId}`);
+    const res = await fetch(`/api/discord/channel/${channelId}`);
     const data = await res.json();
     if (!res.ok) { feed.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load messages'}</div>`; return; }
     if (!data.length) { feed.innerHTML = '<div class="channel-placeholder"><span class="placeholder-icon">💬</span><p>No messages found</p></div>'; return; }
@@ -115,13 +115,13 @@ async function fetchMessages(channelId) {
 }
 
 function renderMessage(msg) {
-  const author      = msg.author;
-  const avatarUrl   = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
-  const avatarHtml  = avatarUrl
+  const author = msg.author;
+  const avatarUrl = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
+  const avatarHtml = avatarUrl
     ? `<img src="${avatarUrl}" alt="${escapeHtml(author.username)}">`
     : `<span>${escapeHtml(author.username.charAt(0).toUpperCase())}</span>`;
-  const timestamp   = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const content     = formatContent(msg.content, msg.mentions);
+  const timestamp = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const content = formatContent(msg.content, msg.mentions);
   const displayName = memberCache[author.id] || author.global_name || author.username;
 
   return `
@@ -155,15 +155,15 @@ function formatContent(text, mentions) {
     return `<span style="background:rgba(54,17,176,0.2);color:#a78df5;border-radius:3px;padding:0.1em 0.3em;font-weight:600;">@${name}</span>`;
   });
   out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/\*(.+?)\*/g,     '<em>$1</em>');
-  out = out.replace(/`(.+?)`/g,       '<code style="background:#1a1919;padding:0.1em 0.3em;border-radius:3px;font-family:\'Share Tech Mono\',monospace;font-size:0.85em;">$1</code>');
+  out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  out = out.replace(/`(.+?)`/g, '<code style="background:#1a1919;padding:0.1em 0.3em;border-radius:3px;font-family:\'Share Tech Mono\',monospace;font-size:0.85em;">$1</code>');
   out = out.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
   return out;
 }
 
 function escapeHtml(str) {
   if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 // ── Torn User Stats ───────────────────────────────────────────────────────────
@@ -171,25 +171,27 @@ async function fetchTornUser() {
   const container = document.getElementById('torn-user-data');
   container.innerHTML = '<div class="channel-loading">LOADING TORN DATA...</div>';
   try {
-    const res  = await fetch('/api/torn/user');
+    const res = await fetch('/api/torn/user');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTornUser(data);
     // Random delay 0-5 seconds before level progress to avoid simultaneous HOF calls
     const delay = Math.floor(Math.random() * 5000);
     setTimeout(() => fetchLevelProgress(data.level), delay);
+    // Fetch addiction level
+    fetchAddictionLevel();
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
 function renderTornUser(d) {
-  const lifeBar   = d.life   ? `${d.life.current}/${d.life.maximum}`     : 'N/A';
+  const lifeBar = d.life ? `${d.life.current}/${d.life.maximum}` : 'N/A';
   const energyBar = d.energy ? `${d.energy.current}/${d.energy.maximum}` : 'N/A';
-  const nerveBar  = d.nerve  ? `${d.nerve.current}/${d.nerve.maximum}`   : 'N/A';
-  const happyBar  = d.happy  ? `${d.happy.current}/${d.happy.maximum}`   : 'N/A';
-  const married   = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
-  const job       = d.job?.position && d.job?.company_name !== 'None'
+  const nerveBar = d.nerve ? `${d.nerve.current}/${d.nerve.maximum}` : 'N/A';
+  const happyBar = d.happy ? `${d.happy.current}/${d.happy.maximum}` : 'N/A';
+  const married = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
+  const job = d.job?.position && d.job?.company_name !== 'None'
     ? `${d.job.position} at ${d.job.company_name}` : d.job?.job || 'Unemployed';
 
   return `
@@ -201,54 +203,55 @@ function renderTornUser(d) {
       <div class="card-body">
         <div class="stats-grid">
           ${statTile(`<span id="level-display">${d.level}</span>`, 'Level')}
-          ${statTile(d.age + 'd',   'Days Old')}
-          ${statTile(d.awards,      'Awards')}
-          ${statTile(d.honor,       'Honor')}
-          ${statTile(d.karma,       'Karma')}
-          ${statTile(d.friends,     'Friends')}
+          ${statTile(d.age + 'd', 'Days Old')}
+          ${statTile(d.awards, 'Awards')}
+          ${statTile(d.honor, 'Honor')}
+          ${statTile(d.karma, 'Karma')}
+          ${statTile(d.friends, 'Friends')}
         </div>
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Bars</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Life',   lifeBar)}
+            ${infoBadge('Life', lifeBar)}
             ${infoBadge('Energy', energyBar)}
-            ${infoBadge('Nerve',  nerveBar)}
-            ${infoBadge('Happy',  happyBar)}
+            ${infoBadge('Nerve', nerveBar)}
+            ${infoBadge('Happy', happyBar)}
           </div>
         </div>
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Info</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Status',         d.status?.description || 'Unknown')}
-            ${infoBadge('Last Action',    d.last_action?.relative || 'Unknown')}
-            ${infoBadge('Revivable',      d.revivable === 1 ? '✅ Yes' : '❌ No')}
+            ${infoBadge('Status', d.status?.description || 'Unknown')}
+            ${infoBadge('Last Action', d.last_action?.relative || 'Unknown')}
+            ${infoBadge('Revivable', d.revivable === 1 ? '✅ Yes' : '❌ No')}
             ${infoBadge('Revive Setting', d.revive_setting || 'Unknown')}
-            ${infoBadge('Job',            job)}
-            ${infoBadge('Married',        married)}
-            ${infoBadge('Property',       d.property || 'None')}
-            ${infoBadge('Rank',           d.rank || 'N/A')}
-            ${infoBadge('Donator',        d.donator === 1 ? '✅ Yes' : '❌ No')}
+            ${infoBadge('Job', job)}
+            ${infoBadge('Married', married)}
+            ${infoBadge('Property', d.property || 'None')}
+            ${infoBadge('Rank', d.rank || 'N/A')}
+            ${infoBadge('Donator', d.donator === 1 ? '✅ Yes' : '❌ No')}
             ${infoBadge('True Level', '<span id="true-level-display">Loading...</span>')}
+            ${infoBadge('Addiction Level', '<span id="addiction-display">Loading...</span>')}
           </div>
         </div>
         ${d.competition?.name ? `
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Competition</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Event',  d.competition.name)}
+            ${infoBadge('Event', d.competition.name)}
             ${infoBadge('Status', d.competition.status)}
-            ${infoBadge('HP',     `${d.competition.current_hp}/${d.competition.max_hp}`)}
+            ${infoBadge('HP', `${d.competition.current_hp}/${d.competition.max_hp}`)}
           </div>
         </div>` : ''}
         ${d.personalstats ? `
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Battle Stats</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Strength',  formatNum(d.personalstats.strength))}
-            ${infoBadge('Defense',   formatNum(d.personalstats.defense))}
-            ${infoBadge('Speed',     formatNum(d.personalstats.speed))}
+            ${infoBadge('Strength', formatNum(d.personalstats.strength))}
+            ${infoBadge('Defense', formatNum(d.personalstats.defense))}
+            ${infoBadge('Speed', formatNum(d.personalstats.speed))}
             ${infoBadge('Dexterity', formatNum(d.personalstats.dexterity))}
-            ${infoBadge('Total',     formatNum(d.personalstats.totalstats))}
+            ${infoBadge('Total', formatNum(d.personalstats.totalstats))}
           </div>
         </div>` : ''}
       </div>
@@ -257,7 +260,7 @@ function renderTornUser(d) {
 
 async function fetchLevelProgress(currentLevel) {
   try {
-    const res  = await fetch('/api/torn/levelprogress');
+    const res = await fetch('/api/torn/levelprogress');
     const data = await res.json();
     if (!res.ok || !data.display) return;
 
@@ -271,8 +274,8 @@ async function fetchLevelProgress(currentLevel) {
     // Update true level badge
     const trueEl = document.getElementById('true-level-display');
     if (trueEl) {
-      const trueLevel  = parseFloat(data.display);
-      const isHolding  = trueLevel >= currentLevel + 1;
+      const trueLevel = parseFloat(data.display);
+      const isHolding = trueLevel >= currentLevel + 1;
       const levelsHeld = Math.floor(trueLevel) - currentLevel;
 
       if (isHolding) {
@@ -288,12 +291,68 @@ async function fetchLevelProgress(currentLevel) {
   } catch { /* silent fail */ }
 }
 
+// ── Addiction Level ──────────────────────────────────────────────────────────
+async function fetchAddictionLevel() {
+  // Check if we have cached data from today
+  const today = new Date().toDateString();
+  const cachedData = localStorage.getItem('addictionLevelCache');
+  const cachedDate = localStorage.getItem('addictionLevelCacheDate');
+  
+  if (cachedData && cachedDate === today) {
+    // Use cached data
+    const data = JSON.parse(cachedData);
+    updateAddictionDisplay(data);
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/torn/addiction', { credentials: 'include' });
+    const data = await res.json();
+    if (!res.ok || data.display === undefined || data.display === null) {
+      // Clear loading text on failure
+      const addictionEl = document.getElementById('addiction-display');
+      if (addictionEl) {
+        addictionEl.innerHTML = '—';
+        console.error ('Failed to fetch addiction level:', data.error || 'Unknown error');
+      }
+      return;
+    }
+
+    // Cache the data for today
+    localStorage.setItem('addictionLevelCache', JSON.stringify(data));
+    localStorage.setItem('addictionLevelCacheDate', today);
+
+    // Update addiction level badge
+    updateAddictionDisplay(data);
+  } catch {
+    // Clear loading text on error
+    const addictionEl = document.getElementById('addiction-display');
+    if (addictionEl) {
+      addictionEl.innerHTML = '—';
+      console.error('Failed to fetch addiction level: network or parse error');
+    }
+  }
+}
+
+function updateAddictionDisplay(data) {
+  const addictionEl = document.getElementById('addiction-display');
+  if (addictionEl) {
+    const addictionLevel = parseInt(data.display);
+    const color = addictionLevel > 0 ? '#ff4444' : '#2ecc71';
+    const status = addictionLevel > 0 ? '⚠️ Addicted' : '✅ Clean';
+    
+    addictionEl.innerHTML = `
+      <span style="color:${color};font-weight:600;">${data.display}</span>
+      <span style="color:#888;font-size:0.75rem;margin-left:0.3rem;">${status}</span>`;
+  }
+}
+
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
 async function fetchHonors() {
   const container = document.getElementById('honors-data');
   container.innerHTML = '<div class="channel-loading">LOADING HONORS & MERITS...</div>';
   try {
-    const res  = await fetch('/api/torn/honors');
+    const res = await fetch('/api/torn/honors');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderHonors(data);
@@ -307,9 +366,9 @@ let honorsCache = null;
 function renderHonors(data) {
   honorsCache = data;
   const filterEl = document.getElementById('honors-filter');
-  const sortEl   = document.getElementById('honors-sort');
-  const filter   = filterEl ? filterEl.value : 'all';
-  const sort     = sortEl   ? sortEl.value   : 'earned-first';
+  const sortEl = document.getElementById('honors-sort');
+  const filter = filterEl ? filterEl.value : 'all';
+  const sort = sortEl ? sortEl.value : 'earned-first';
   renderHonorsTable(data, filter, sort);
 }
 
@@ -319,9 +378,9 @@ function filterHonors() {
 
 function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
   const container = document.getElementById('honors-table-container');
-  const awarded   = new Set(data.honors_awarded || []);
+  const awarded = new Set(data.honors_awarded || []);
   const allHonors = data.all_honors || {};
-  const merits    = data.merits     || {};
+  const merits = data.merits || {};
 
   const rarityOrder = {
     'Extremely Rare': 0, 'Very Rare': 1, 'Rare': 2,
@@ -334,30 +393,30 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
   };
 
   let honorEntries = Object.entries(allHonors).filter(([, h]) => h.type !== 1);
-  const earned     = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
-  const totalPct   = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
+  const earned = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
+  const totalPct = honorEntries.length > 0 ? Math.round((earned.length / honorEntries.length) * 100) : 0;
 
-  if (filter === 'earned')   honorEntries = honorEntries.filter(([id]) =>  awarded.has(parseInt(id)));
+  if (filter === 'earned') honorEntries = honorEntries.filter(([id]) => awarded.has(parseInt(id)));
   if (filter === 'unearned') honorEntries = honorEntries.filter(([id]) => !awarded.has(parseInt(id)));
 
   honorEntries.sort((a, b) => {
-    const aE  = awarded.has(parseInt(a[0]));
-    const bE  = awarded.has(parseInt(b[0]));
+    const aE = awarded.has(parseInt(a[0]));
+    const bE = awarded.has(parseInt(b[0]));
     const aRO = rarityOrder[a[1].rarity] ?? 99;
     const bRO = rarityOrder[b[1].rarity] ?? 99;
     switch (sort) {
-      case 'earned-first':   return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
+      case 'earned-first': return aE !== bE ? (bE ? 1 : -1) : aRO - bRO;
       case 'unearned-first': return aE !== bE ? (aE ? 1 : -1) : aRO - bRO;
-      case 'rarity-asc':     return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
-      case 'rarity-desc':    return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
-      case 'name':           return (a[1].name || '').localeCompare(b[1].name || '');
-      default:               return 0;
+      case 'rarity-asc': return aRO !== bRO ? aRO - bRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'rarity-desc': return aRO !== bRO ? bRO - aRO : (a[1].name || '').localeCompare(b[1].name || '');
+      case 'name': return (a[1].name || '').localeCompare(b[1].name || '');
+      default: return 0;
     }
   });
 
   const honorRows = honorEntries.map(([id, honor]) => {
     const isEarned = awarded.has(parseInt(id));
-    const color    = rarityColor[honor.rarity] || '#888';
+    const color = rarityColor[honor.rarity] || '#888';
     return `<tr style="opacity:${isEarned ? '1' : '0.35'};">
       <td style="width:24px;">${isEarned ? '✅' : '⬜'}</td>
       <td>${escapeHtml(honor.name || 'Unknown')}</td>
@@ -368,8 +427,8 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
 
   const meritRows = Object.entries(merits).map(([key, val]) => {
     const maxVal = 10;
-    const pct    = Math.min(Math.round((val / maxVal) * 100), 100);
-    const color  = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
+    const pct = Math.min(Math.round((val / maxVal) * 100), 100);
+    const color = val >= maxVal ? '#4caf50' : val > 0 ? '#f0a500' : '#444';
     return `<tr>
       <td>${formatMeritName(key)}</td>
       <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${val}/${maxVal}</td>
@@ -385,7 +444,7 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
     <div class="card" style="margin-bottom:1rem;">
       <div class="card-header">
         Honors & Awards
-        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([,h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
+        <span style="float:right;font-size:0.8rem;color:#888;">${earned.length} / ${Object.entries(allHonors).filter(([, h]) => h.type !== 1).length} &nbsp;(${totalPct}%)</span>
       </div>
       <div style="background:#2a2828;border-radius:4px;height:8px;margin:0 1rem 1rem;overflow:hidden;">
         <div style="width:${totalPct}%;height:100%;background:#4caf50;border-radius:4px;"></div>
@@ -413,7 +472,7 @@ async function fetchCrimeExp() {
   const container = document.getElementById('crime-exp-data');
   container.innerHTML = '<div class="channel-loading">LOADING CRIME XP...</div>';
   try {
-    const res  = await fetch('/api/torn/crimeexp');
+    const res = await fetch('/api/torn/crimeexp');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderCrimeExp(data.merits || data);
@@ -424,20 +483,20 @@ async function fetchCrimeExp() {
 
 function renderCrimeExp(merits) {
   const crimeKeys = Object.entries(merits).filter(([key]) =>
-    key.toLowerCase().includes('crime')         ||
-    key.toLowerCase().includes('theft')         ||
-    key.toLowerCase().includes('fraud')         ||
-    key.toLowerCase().includes('scam')          ||
-    key.toLowerCase().includes('bootlegging')   ||
-    key.toLowerCase().includes('graffiti')      ||
-    key.toLowerCase().includes('shoplift')      ||
-    key.toLowerCase().includes('pickpocket')    ||
-    key.toLowerCase().includes('card')          ||
-    key.toLowerCase().includes('counterfeiting')||
-    key.toLowerCase().includes('disposal')      ||
-    key.toLowerCase().includes('cracking')      ||
-    key.toLowerCase().includes('traffic')       ||
-    key.toLowerCase().includes('murder')        ||
+    key.toLowerCase().includes('crime') ||
+    key.toLowerCase().includes('theft') ||
+    key.toLowerCase().includes('fraud') ||
+    key.toLowerCase().includes('scam') ||
+    key.toLowerCase().includes('bootlegging') ||
+    key.toLowerCase().includes('graffiti') ||
+    key.toLowerCase().includes('shoplift') ||
+    key.toLowerCase().includes('pickpocket') ||
+    key.toLowerCase().includes('card') ||
+    key.toLowerCase().includes('counterfeiting') ||
+    key.toLowerCase().includes('disposal') ||
+    key.toLowerCase().includes('cracking') ||
+    key.toLowerCase().includes('traffic') ||
+    key.toLowerCase().includes('murder') ||
     key.toLowerCase().includes('assassination')
   );
 
@@ -463,6 +522,301 @@ function formatMeritName(key) {
   return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// RACING STATS — dashboard.js additions
+// Add these functions to your existing dashboard.js
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Track ID to Name lookup table ─────────────────────────────────────────────
+// UPDATE THESE ONCE YOU HAVE CONFIRMED THE MAPPING FROM THE TRACK SELECT SCREEN
+const TRACK_NAMES = {
+  6: 'Uptown',
+  7: 'Withdrawal',
+  8: 'Underdog',
+  9: 'Parkland',
+  10: 'Docks',
+  11: 'Commerce',
+  12: 'Two Islands',
+  15: 'Industrial',
+  16: 'Vector',
+  17: 'Mudpit',
+  18: 'Hammerhead',
+  19: 'Sewage',
+  20: 'Meltdown',
+  21: 'Speedway',
+  23: 'Stone Park',
+  24: 'Convict',
+};
+
+function getTrackName(id) {
+  return TRACK_NAMES[id] || `Track ${id}`;
+}
+
+// ── Fetch Racing Stats ─────────────────────────────────────────────────────────
+async function fetchRacingStats() {
+  const container = document.getElementById('racing-stats-data');
+  const limitEl = document.getElementById('racing-limit');
+  const limit = Math.min(Math.max(parseInt(limitEl?.value) || 100, 1), 1000);
+
+  container.innerHTML = '<div class="channel-loading">LOADING RACING STATS...</div>';
+
+  try {
+    const res = await fetch(`/api/torn/races?limit=${limit}`);
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+
+    const result = renderRacingStats(data.races || [], data.player_id);
+    container.innerHTML = result.html;
+
+    // Correct the input box to show actual races participated in
+    if (limitEl) { limitEl.value = result.totalRaces; }
+
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+// ── Render Racing Stats ────────────────────────────────────────────────────────
+function renderRacingStats(races, playerId) {
+  if (!races.length) {
+    return { html: '<div class="empty-state"><p class="muted">No race data found.</p></div>', totalRaces: 0 };
+  }
+
+  // ── Extract my results from each race ───────────────────────────────────────
+  const myResults = races.map(race => {
+    const myResult = race.results?.find(r => r.driver_id === playerId);
+    if (!myResult) return null;
+    return {
+      race_id: race.id,
+      title: race.title,
+      track_id: race.track_id,
+      track_name: getTrackName(race.track_id),
+      laps: race.laps,
+      participants: race.participants?.current || 0,
+      date: race.schedule?.end ? new Date(race.schedule.end * 1000) : null,
+      position: myResult.position,
+      car_name: myResult.car_item_name,
+      car_class: myResult.car_class,
+      has_crashed: myResult.has_crashed,
+      best_lap_time: myResult.best_lap_time,
+      race_time: myResult.race_time,
+    };
+  }).filter(Boolean);
+
+  if (!myResults.length) {
+    return { html: '<div class="empty-state"><p class="muted">No personal results found in race data.</p></div>', totalRaces: 0 };
+  }
+
+  // ── Win/Loss Summary ─────────────────────────────────────────────────────────
+  const totalRaces = myResults.length;
+  const wins = myResults.filter(r => r.position === 1).length;
+  const podiums = myResults.filter(r => r.position <= 3).length;
+  const crashes = myResults.filter(r => r.has_crashed).length;
+  const avgPosition = (myResults.reduce((s, r) => s + r.position, 0) / totalRaces).toFixed(1);
+  const winRate = ((wins / totalRaces) * 100).toFixed(1);
+
+  // ── Track Breakdown ──────────────────────────────────────────────────────────
+  const trackMap = {};
+  myResults.forEach(r => {
+    if (!trackMap[r.track_id]) {
+      trackMap[r.track_id] = { name: r.track_name, races: 0, wins: 0, podiums: 0, crashes: 0, positions: [], bestLap: null };
+    }
+    const t = trackMap[r.track_id];
+    t.races++;
+    if (r.position === 1) { t.wins++; }
+    if (r.position <= 3) { t.podiums++; }
+    if (r.has_crashed) { t.crashes++; }
+    t.positions.push(r.position);
+    if (r.best_lap_time && (!t.bestLap || r.best_lap_time < t.bestLap)) {
+      t.bestLap = r.best_lap_time;
+    }
+  });
+
+  const trackRows = Object.entries(trackMap)
+    .sort((a, b) => b[1].races - a[1].races)
+    .map(([id, t]) => {
+      const avgPos = (t.positions.reduce((s, p) => s + p, 0) / t.positions.length).toFixed(1);
+      const winPct = ((t.wins / t.races) * 100).toFixed(0);
+      return `<tr>
+        <td>${escapeHtml(t.name)}</td>
+        <td style="text-align:center;">${t.races}</td>
+        <td style="text-align:center;color:#f0c040;">${t.wins}</td>
+        <td style="text-align:center;">${t.podiums}</td>
+        <td style="text-align:center;">${avgPos}</td>
+        <td style="text-align:center;">${winPct}%</td>
+        <td style="text-align:center;">${t.crashes > 0 ? `<span style="color:#ff4444;">${t.crashes}</span>` : '0'}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${t.bestLap ? formatLapTime(t.bestLap) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+  // Car Performance
+  const carMap = {};
+  myResults.forEach(r => {
+    const key = `${r.car_name}||${r.car_class}`;
+    if (!carMap[key]) {
+      carMap[key] = { name: r.car_name, cls: r.car_class, races: 0, wins: 0, podiums: 0, crashes: 0, positions: [], bestLap: null, winTracks: [] };
+    }
+    const c = carMap[key];
+    c.races++;
+    if (r.position === 1) {
+      c.wins++;
+      if (!c.winTracks.includes(r.track_name)) { c.winTracks.push(r.track_name); }
+    }
+    if (r.position <= 3) { c.podiums++; }
+    if (r.has_crashed) { c.crashes++; }
+    c.positions.push(r.position);
+    if (r.best_lap_time && (!c.bestLap || r.best_lap_time < c.bestLap)) { c.bestLap = r.best_lap_time; }
+  });
+
+  const carRows = Object.entries(carMap)
+    .sort((a, b) => b[1].races - a[1].races)
+    .map(([key, c]) => {
+      const avgPos = (c.positions.reduce((s, p) => s + p, 0) / c.positions.length).toFixed(1);
+      const winPct = ((c.wins / c.races) * 100).toFixed(0);
+      const winTracks = c.winTracks.length > 0 ? c.winTracks.join(', ') : '—';
+      return `<tr>
+        <td>${escapeHtml(c.name)}</td>
+        <td style="text-align:center;">${c.cls}</td>
+        <td style="text-align:center;">${c.races}</td>
+        <td style="text-align:center;color:#f0c040;">${c.wins}</td>
+        <td style="text-align:center;">${c.podiums}</td>
+        <td style="text-align:center;">${avgPos}</td>
+        <td style="text-align:center;">${winPct}%</td>
+        <td style="text-align:center;">${c.crashes > 0 ? `<span style="color:#ff4444;">${c.crashes}</span>` : '0'}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${c.bestLap ? formatLapTime(c.bestLap) : '—'}</td>
+        <td style="font-size:0.85rem;color:#888;">${escapeHtml(winTracks)}</td>
+      </tr>`;
+    }).join('');
+
+  // ── Best Lap Times ───────────────────────────────────────────────────────────
+  const bestLaps = myResults
+    .filter(r => r.best_lap_time)
+    .sort((a, b) => a.best_lap_time - b.best_lap_time)
+    .slice(0, 10)
+    .map(r => `<tr>
+      <td>${escapeHtml(r.track_name)}</td>
+      <td>${escapeHtml(r.car_name)}</td>
+      <td style="text-align:center;">${r.car_class}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#44ff99;">${formatLapTime(r.best_lap_time)}</td>
+      <td style="text-align:center;">${r.date ? r.date.toLocaleDateString() : '—'}</td>
+    </tr>`).join('');
+
+  // ── Crash History ────────────────────────────────────────────────────────────
+  const crashList = myResults
+    .filter(r => r.has_crashed)
+    .sort((a, b) => (b.date || 0) - (a.date || 0))
+    .slice(0, 20)
+    .map(r => `<tr>
+      <td>${escapeHtml(r.track_name)}</td>
+      <td>${escapeHtml(r.car_name)}</td>
+      <td style="text-align:center;">${r.car_class}</td>
+      <td style="text-align:center;">${r.position} / ${r.participants}</td>
+      <td style="text-align:center;">${r.date ? r.date.toLocaleDateString() : '—'}</td>
+    </tr>`).join('');
+
+  const html = `
+    <!-- Summary -->
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">🏎️ Racing Summary <span style="float:right;font-size:0.8rem;color:#555;">${totalRaces} races loaded</span></div>
+      <div class="card-body">
+        <div class="stats-grid">
+          ${statTile(totalRaces, 'Races')}
+          ${statTile(wins, 'Wins')}
+          ${statTile(podiums, 'Podiums')}
+          ${statTile(winRate + '%', 'Win Rate')}
+          ${statTile(avgPosition, 'Avg Position')}
+          ${statTile(crashes, 'Crashes')}
+        </div>
+      </div>
+    </div>
+
+    <!-- Track Breakdown -->
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">🗺️ Track Breakdown</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Track</th>
+            <th style="text-align:center;">Races</th>
+            <th style="text-align:center;">Wins</th>
+            <th style="text-align:center;">Podiums</th>
+            <th style="text-align:center;">Avg Pos</th>
+            <th style="text-align:center;">Win %</th>
+            <th style="text-align:center;">Crashes</th>
+            <th style="text-align:center;">Best Lap</th>
+          </tr></thead>
+          <tbody>${trackRows || '<tr><td colspan="8" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Car Performance -->
+      <div class="badge-label" style="margin-bottom:0.5rem;">🚗 Car Performance</div>
+      <div style="overflow-x:auto;margin-bottom:1.5rem;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Car</th>
+            <th style="text-align:center;">Class</th>
+            <th style="text-align:center;">Races</th>
+            <th style="text-align:center;">Wins</th>
+            <th style="text-align:center;">Podiums</th>
+            <th style="text-align:center;">Avg Pos</th>
+            <th style="text-align:center;">Win %</th>
+            <th style="text-align:center;">Crashes</th>
+            <th style="text-align:center;">Best Lap</th>
+            <th>Win Tracks</th>
+          </tr></thead>
+          <tbody>${carRows || '<tr><td colspan="9" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Best Lap Times -->
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">⏱️ Top 10 Best Lap Times</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Track</th>
+            <th>Car</th>
+            <th style="text-align:center;">Class</th>
+            <th style="text-align:center;">Best Lap</th>
+            <th style="text-align:center;">Date</th>
+          </tr></thead>
+          <tbody>${bestLaps || '<tr><td colspan="5" class="muted" style="padding:1rem;">No data</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Crash History -->
+    <div class="card">
+      <div class="card-header">💥 Crash History <span style="float:right;font-size:0.8rem;color:#555;">(last 20)</span></div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Track</th>
+            <th>Car</th>
+            <th style="text-align:center;">Class</th>
+            <th style="text-align:center;">Finished</th>
+            <th style="text-align:center;">Date</th>
+          </tr></thead>
+          <tbody>${crashList || '<tr><td colspan="5" class="muted" style="padding:1rem;">No crashes recorded 🎉</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  return { html, totalRaces };
+}
+
+// ── Format lap time from seconds to MM:SS.ms ──────────────────────────────────
+function formatLapTime(seconds) {
+  if (!seconds) return '—';
+  const mins = Math.floor(seconds / 60);
+  const secs = (seconds % 60).toFixed(2).padStart(5, '0');
+  return mins > 0 ? `${mins}:${secs}` : `${secs}s`;
+}
+
+
 // ── Faction Stats ─────────────────────────────────────────────────────────────
 async function fetchFaction() {
   const container = document.getElementById('faction-data');
@@ -476,13 +830,13 @@ async function fetchFaction() {
 
     const [factionRes, travelRes, statsRes] = await Promise.allSettled(requests);
 
-    const data       = factionRes.status === 'fulfilled' ? await factionRes.value.json() : {};
-    const travelData = travelRes.status  === 'fulfilled' ? await travelRes.value.json()  : {};
-    const statsData  = statsRes?.status  === 'fulfilled' ? await statsRes.value.json()   : {};
+    const data = factionRes.status === 'fulfilled' ? await factionRes.value.json() : {};
+    const travelData = travelRes.status === 'fulfilled' ? await travelRes.value.json() : {};
+    const statsData = statsRes?.status === 'fulfilled' ? await statsRes.value.json() : {};
 
     if (!data.basic) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
 
-    const statsMap  = {};
+    const statsMap = {};
     if (IS_LEADERSHIP) {
       (statsData.stats || []).forEach(s => { statsMap[s.player_id] = s; });
     }
@@ -497,8 +851,8 @@ async function fetchFaction() {
 }
 
 function renderFaction(d, statsMap = {}, travelMap = {}) {
-  const basic    = d.basic;
-  const members  = d.members || [];
+  const basic = d.basic;
+  const members = d.members || [];
   const hasStats = Object.keys(statsMap).length > 0;
 
   const positionOrder = {
@@ -514,13 +868,13 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
       return (b.level || 0) - (a.level || 0);
     })
     .map(m => {
-      const status      = m.last_action?.status || 'Offline';
+      const status = m.last_action?.status || 'Offline';
       const statusClass = `status-${status.toLowerCase()}`;
       const memberStats = statsMap[m.id];
-      const totalStats  = memberStats ? formatNum(memberStats.totalstats) : '—';
+      const totalStats = memberStats ? formatNum(memberStats.totalstats) : '—';
 
       const travelInfo = travelMap[m.id];
-      let travelCell   = '🏠 Torn';
+      let travelCell = '🏠 Torn';
 
       if (m.status?.state === 'Traveling') {
         const isReturning = m.status?.description?.toLowerCase().includes('returning');
@@ -576,7 +930,7 @@ async function fetchTravel() {
   const container = document.getElementById('travel-status');
   container.innerHTML = '<div class="channel-loading">LOADING TRAVEL STATUS...</div>';
   try {
-    const res  = await fetch('/api/torn/travel');
+    const res = await fetch('/api/torn/travel');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTravelStatus(data.travel || data);
@@ -591,7 +945,7 @@ function renderTravelStatus(t) {
       <div class="card">
         <div class="card-body">
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Status',      '🏠 In Torn')}
+            ${infoBadge('Status', '🏠 In Torn')}
             ${infoBadge('Destination', 'Home')}
           </div>
         </div>
@@ -607,9 +961,9 @@ function renderTravelStatus(t) {
       <div class="card-body">
         <div style="display:flex;gap:1rem;flex-wrap:wrap;">
           ${infoBadge('Destination', t.destination || 'Unknown')}
-          ${infoBadge('Departure',   t.departed    || 'Unknown')}
-          ${infoBadge('Arriving',    arrivalTime)}
-          ${infoBadge('Direction',   isReturning ? '🏠 Returning' : '✈️ Departing')}
+          ${infoBadge('Departure', t.departed || 'Unknown')}
+          ${infoBadge('Arriving', arrivalTime)}
+          ${infoBadge('Direction', isReturning ? '🏠 Returning' : '✈️ Departing')}
         </div>
       </div>
     </div>`;
@@ -626,13 +980,13 @@ function formatTimeLeft(seconds) {
 }
 
 // ── YATA Foreign Stock ────────────────────────────────────────────────────────
-let yataStockCache   = null;
+let yataStockCache = null;
 let itemCatalogCache = null;
 
 async function fetchItemCatalog() {
   if (itemCatalogCache) return itemCatalogCache;
   try {
-    const res  = await fetch('/api/torn/items');
+    const res = await fetch('/api/torn/items');
     const data = await res.json();
     if (res.ok && data.items) {
       itemCatalogCache = {};
@@ -658,7 +1012,7 @@ async function fetchYataStock() {
     if (!stockRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     yataStockCache = { data, catalog };
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort    = document.getElementById('stock-sort').value;
+    const selectedSort = document.getElementById('stock-sort').value;
     renderYataStock(data, catalog, selectedCountry, selectedSort);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -677,7 +1031,7 @@ function filterStockByCountry(countryCode) {
 function sortStock() {
   if (yataStockCache) {
     const selectedCountry = document.getElementById('travel-country-select').value;
-    const selectedSort    = document.getElementById('stock-sort').value;
+    const selectedSort = document.getElementById('stock-sort').value;
     renderYataStock(yataStockCache.data, yataStockCache.catalog, selectedCountry, selectedSort);
   }
 }
@@ -687,9 +1041,9 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
   const countryNames = {
     mex: 'Mexico', cay: 'Cayman Islands', can: 'Canada',
-    haw: 'Hawaii', uni: 'United Kingdom',  arg: 'Argentina',
-    swi: 'Switzerland', jap: 'Japan',       chi: 'China',
-    uae: 'UAE',    sou: 'South Africa'
+    haw: 'Hawaii', uni: 'United Kingdom', arg: 'Argentina',
+    swi: 'Switzerland', jap: 'Japan', chi: 'China',
+    uae: 'UAE', sou: 'South Africa'
   };
 
   const stockData = data.stocks || {};
@@ -702,8 +1056,8 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
   }
 
   const html = entries.map(([code, country]) => {
-    const name       = countryNames[code] || code;
-    const items      = (country.stocks || []).filter(item => item.quantity > 0);
+    const name = countryNames[code] || code;
+    const items = (country.stocks || []).filter(item => item.quantity > 0);
     const lastUpdate = country.update ? new Date(country.update * 1000).toLocaleTimeString() : 'Unknown';
 
     if (!items.length) return `
@@ -714,9 +1068,9 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
     const sorted = [...items].sort((a, b) => {
       switch (sortBy) {
-        case 'name':     return a.name.localeCompare(b.name);
+        case 'name': return a.name.localeCompare(b.name);
         case 'quantity': return b.quantity - a.quantity;
-        case 'cost':     return b.cost - a.cost;
+        case 'cost': return b.cost - a.cost;
         case 'type':
         default: {
           const typeA = catalog?.[a.id] || 'ZZZ';
@@ -757,7 +1111,7 @@ async function fetchWarStats() {
   const container = document.getElementById('war-stats-data');
   container.innerHTML = '<div class="channel-loading">LOADING WAR STATS...</div>';
   try {
-    const res  = await fetch('/api/torn/wars');
+    const res = await fetch('/api/torn/wars');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderWarStats(data);
@@ -767,16 +1121,16 @@ async function fetchWarStats() {
 }
 
 function renderWarStats(data) {
-  const war        = data.war;
+  const war = data.war;
   const memberHits = data.memberHits || [];
 
   if (!war) {
     return `<div class="card"><div class="card-body"><p class="muted">No active ranked war found.</p></div></div>`;
   }
 
-  const ssgFaction   = war.factions?.find(f => f.id === 53272);
+  const ssgFaction = war.factions?.find(f => f.id === 53272);
   const enemyFaction = war.factions?.find(f => f.id !== 53272);
-  const warStart     = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
+  const warStart = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
 
   const hitRows = memberHits.map((m, i) => `
     <tr>
@@ -788,10 +1142,10 @@ function renderWarStats(data) {
 
   return `
     <div class="stats-grid" style="margin-bottom:1.5rem;">
-      ${statTile(ssgFaction?.score  ?? '—', 'SSG Score')}
+      ${statTile(ssgFaction?.score ?? '—', 'SSG Score')}
       ${statTile(enemyFaction?.score ?? '—', `${enemyFaction?.name ?? 'Enemy'} Score`)}
-      ${statTile(war.target || '—',          'Target Score')}
-      ${statTile(data.totalWarAttacks,        'Total Hits')}
+      ${statTile(war.target || '—', 'Target Score')}
+      ${statTile(data.totalWarAttacks, 'Total Hits')}
     </div>
     <div class="card" style="margin-bottom:1rem;">
       <div class="card-header">
@@ -811,7 +1165,7 @@ function renderWarStats(data) {
 }
 
 // ── Admin Member Overview ─────────────────────────────────────────────────────
-let overviewData    = [];
+let overviewData = [];
 let overviewSortCol = 'position';
 let overviewSortAsc = true;
 
@@ -819,7 +1173,7 @@ async function fetchMemberOverview() {
   const container = document.getElementById('admin-overview-data');
   container.innerHTML = '<div class="channel-loading">LOADING MEMBER OVERVIEW... (this may take a moment)</div>';
   try {
-    const res  = await fetch('/api/admin/member-overview');
+    const res = await fetch('/api/admin/member-overview');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     overviewData = data.members || [];
@@ -906,8 +1260,8 @@ function renderMemberOverview() {
       : '—';
 
     const energyDisplay = m.energy ? `${m.energy.current}/${m.energy.maximum}` : '—';
-    const isDonator     = m.energy?.maximum >= 150;
-    const donatorBadge  = m.energy
+    const isDonator = m.energy?.maximum >= 150;
+    const donatorBadge = m.energy
       ? `<span style="font-size:0.7rem;color:${isDonator ? '#f0a500' : '#555'};margin-left:0.3rem;">${isDonator ? '★' : '○'}</span>`
       : '';
 
@@ -935,16 +1289,16 @@ function renderMemberOverview() {
         : `<span style="color:#2ecc71;">Ready</span>`)
       : '—';
 
-    const lastActionTs    = m.tornLastAction?.timestamp ?? m.last_action?.timestamp ?? null;
-    const lastActionCell  = lastActionTs ? formatLastAction(lastActionTs) : '—';
-    const isStale         = lastActionTs && (Date.now() / 1000 - lastActionTs) > 23 * 3600;
+    const lastActionTs = m.tornLastAction?.timestamp ?? m.last_action?.timestamp ?? null;
+    const lastActionCell = lastActionTs ? formatLastAction(lastActionTs) : '—';
+    const isStale = lastActionTs && (Date.now() / 1000 - lastActionTs) > 23 * 3600;
     const lastActionStyle = isStale ? 'color:#ff4444;font-weight:600;' : 'color:#a0a0a0;';
 
-    const hasKey         = m.hasApiKey ? '✅' : '❌';
-    const keyUpdated     = m.tornKeyUpdatedAt
+    const hasKey = m.hasApiKey ? '✅' : '❌';
+    const keyUpdated = m.tornKeyUpdatedAt
       ? new Date(m.tornKeyUpdatedAt).toLocaleDateString()
       : m.lastSeen ? new Date(m.lastSeen).toLocaleDateString() : '—';
-    const apiCell        = `${hasKey}<br><span style="font-size:0.75rem;color:#555;">${keyUpdated}</span>`;
+    const apiCell = `${hasKey}<br><span style="font-size:0.75rem;color:#555;">${keyUpdated}</span>`;
 
     const removeBtn = m.discordId
       ? `<button class="btn btn-small btn-danger" onclick="removeUser('${m.discordId}', '${escapeHtml(m.name)}')">Remove</button>`
@@ -1005,13 +1359,13 @@ function formatCooldown(seconds) {
 }
 
 function formatLastAction(timestamp) {
-  const now     = Math.floor(Date.now() / 1000);
-  const diff    = now - timestamp;
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - timestamp;
   const minutes = Math.floor(diff / 60);
-  const hours   = Math.floor(diff / 3600);
-  const days    = Math.floor(diff / 86400);
+  const hours = Math.floor(diff / 3600);
+  const days = Math.floor(diff / 86400);
 
-  if (diff < 3600)  return `${minutes}m ago`;
+  if (diff < 3600) return `${minutes}m ago`;
   if (diff < 86400) return `${Math.round(hours)}h ago`;
   return `${days}d ago`;
 }
@@ -1042,35 +1396,35 @@ function exportOverviewCSV() {
 
   const rows = sorted.map((m, i) => {
     const lastActionTs = m.tornLastAction?.timestamp ?? m.last_action?.timestamp ?? null;
-    const lastAction   = lastActionTs ? formatLastAction(lastActionTs) : '—';
-    const keyUpdated   = m.tornKeyUpdatedAt ? new Date(m.tornKeyUpdatedAt).toLocaleDateString() : '—';
+    const lastAction = lastActionTs ? formatLastAction(lastActionTs) : '—';
+    const keyUpdated = m.tornKeyUpdatedAt ? new Date(m.tornKeyUpdatedAt).toLocaleDateString() : '—';
 
     return [
       i + 1,
       m.name,
       m.id,
-      m.position         || '—',
-      m.property         || '—',
-      m.job?.position    || '—',
+      m.position || '—',
+      m.property || '—',
+      m.job?.position || '—',
       m.job?.company_name || '—',
-      m.energy?.current  ?? '—',
-      m.energy?.maximum  ?? '—',
+      m.energy?.current ?? '—',
+      m.energy?.maximum ?? '—',
       m.energy?.maximum >= 150 ? 'Yes' : 'No',
-      m.cooldowns?.drug     ?? '—',
-      m.cooldowns?.booster  ?? '—',
-      m.cooldowns?.medical  ?? '—',
+      m.cooldowns?.drug ?? '—',
+      m.cooldowns?.booster ?? '—',
+      m.cooldowns?.medical ?? '—',
       lastAction,
       m.hasApiKey ? 'Yes' : 'No',
       keyUpdated
     ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
   });
 
-  const csv  = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n');
+  const csv = [headers.map(h => `"${h}"`).join(','), ...rows].join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url  = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   const date = new Date().toISOString().slice(0, 10);
-  link.href     = url;
+  link.href = url;
   link.download = `SSG_Members_${date}.csv`;
   link.click();
   URL.revokeObjectURL(url);
@@ -1081,7 +1435,7 @@ async function fetchMemberStats() {
   const container = document.getElementById('admin-stats-data');
   container.innerHTML = '<div class="channel-loading">LOADING MEMBER STATS... (this may take a moment)</div>';
   try {
-    const res  = await fetch('/api/admin/member-stats');
+    const res = await fetch('/api/admin/member-stats');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderMemberStats(data.stats || []);
@@ -1134,7 +1488,7 @@ async function removeUser(discordId, name) {
     return;
   }
   try {
-    const res  = await fetch(`/api/admin/user/${discordId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/admin/user/${discordId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
     alert(`✅ ${data.removed} has been removed from the dashboard.`);
@@ -1214,6 +1568,7 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Filter</strong> dropdown to show All, Earned only, or Not Earned</div></div>
           <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Sort</strong> dropdown to sort by rarity, name, or earned status</div></div>
           <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">The progress bar at the top shows your overall completion percentage</div></div>
+          <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">Load</strong> to fetch your honors data. This loads on-demand to reduce API calls.</div>
         `
       },
       {
@@ -1225,7 +1580,19 @@ const HELP_CONTENT = {
       {
         heading: 'Crime XP',
         content: `
-          <p class="help-text">Shows your crime-related merit levels broken down by crime type.</p>
+          <p class="help-text">Shows your crime-related merit levels broken down by crime type. This includes all crime merits like theft, fraud, scams, bootlegging, and more.</p>
+          <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">Load</strong> to fetch your crime XP data. This loads on-demand to reduce API calls.</div>
+        `
+      },
+      {
+        heading: 'Racing Stats',
+        content: `
+          <p class="help-text">Shows your racing performance including wins, podiums, crashes, and detailed track breakdowns.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Set the number of races to analyze (1-1000) in the input field</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Load</strong> to fetch your racing data</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Review your overall performance, track breakdown, car performance, and crash history</div></div>
+          <div class="help-callout">💡 Data includes win rates, average positions, best lap times, and crash analysis.</div>
+          <div class="help-callout">⚡ Lazy Loading: Racing stats load on-demand to reduce API calls and improve performance.</div>
         `
       }
     ]
@@ -1271,16 +1638,6 @@ const HELP_CONTENT = {
         content: `
           <p class="help-text">Shows your current travel status — whether you're in Torn, departing, or returning from abroad.</p>
           <img src="/images/travelimage.png" alt="Travel status" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
-        `
-      },
-      {
-        heading: 'Foreign Stock',
-        content: `
-          <p class="help-text">Shows available items at foreign destinations using live YATA data. Use this to plan profitable buying trips.</p>
-          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select a country from the dropdown to filter to one destination, or leave as All Countries</div></div>
-          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the Sort dropdown to sort by Type, Name, Quantity, or Cost</div></div>
-          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh Stock</strong> to get the latest data</div></div>
-          <div class="help-callout">💡 Only items currently in stock (quantity > 0) are shown.</div>
         `
       }
     ]
@@ -1336,8 +1693,8 @@ let currentHelpSection = 'profile';
 
 function openHelp(section) {
   currentHelpSection = section || 'profile';
-  const modal   = document.getElementById('help-modal');
-  const tabsEl  = document.getElementById('help-tabs');
+  const modal = document.getElementById('help-modal');
+  const tabsEl = document.getElementById('help-tabs');
   const titleEl = document.getElementById('help-modal-title');
 
   const content = HELP_CONTENT[currentHelpSection];
@@ -1370,7 +1727,7 @@ function switchHelpTab(section) {
 
 function renderHelpBody(section) {
   const content = HELP_CONTENT[section];
-  const bodyEl  = document.getElementById('help-modal-body');
+  const bodyEl = document.getElementById('help-modal-body');
   bodyEl.innerHTML = content.sections.map(s => `
     <div class="help-heading">${s.heading}</div>
     ${s.content}
@@ -1405,12 +1762,14 @@ function infoBadge(label, value) {
 function formatNum(n) {
   if (n == null) return '—';
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1) + 'B';
-  if (n >= 1_000_000)     return (n / 1_000_000).toFixed(1)     + 'M';
-  if (n >= 1_000)         return (n / 1_000).toFixed(1)         + 'K';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 }
 
+
+
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 setInterval(() => {
-  fetch('/api/ping').catch(() => {});
+  fetch('/api/ping').catch(() => { });
 }, 14 * 60 * 1000 + 30 * 1000);
