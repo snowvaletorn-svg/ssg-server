@@ -178,7 +178,7 @@ app.use(cors({
     if (!origin) return callback(null, true);
     // Allow your specific origins
     const allowedOrigins = [
-      'http://localhost:3003'
+      'http://localhost:3000'
 
     ];
     if (allowedOrigins.indexOf(origin) !== -1) {
@@ -217,7 +217,7 @@ app.use(session({
 passport.use(new DiscordStrategy({
   clientID: process.env.DISCORD_CLIENT_ID,
   clientSecret: process.env.DISCORD_CLIENT_SECRET,
-  callbackURL: 'http://localhost:3003/auth/discord/callback',
+  callbackURL: 'http://localhost:3000/auth/discord/callback',
   scope: ['identify', 'email', 'guilds', 'guilds.members.read']
 },
   async (accessToken, refreshToken, profile, done) => {
@@ -1169,7 +1169,7 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 async function startServer() {
   try {
-    const fixedPort = 3003;
+    const fixedPort = 3000;
     
     // Check if port is available
     const net = require('net');
