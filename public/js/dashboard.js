@@ -1666,6 +1666,42 @@ const HELP_CONTENT = {
       }
     ]
   },
+  bankRates: {
+    title: '🏦 Bank Rates',
+    sections: [
+      {
+        heading: 'Current Bank Interest Rates',
+        content: `
+          <p class="help-text">Shows the current interest rates for all bank time periods in Torn City. Rates are cached for 1 hour to reduce API calls.</p>
+          <div class="help-callout">💡 Interest rates update periodically on Torn's servers. Click Refresh to get the latest rates.</div>
+          <img src="/images/bankratesimage.png" alt="Bank rates" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'Bank Calculator',
+        content: `
+          <p class="help-text">Use the calculator to see how much interest you'll earn by depositing money in the bank for different time periods.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Enter the amount you want to deposit in the input field</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Calculate</strong> to see potential earnings for each time period</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Use <strong style="color:#c0bcbc;">Clear</strong> to reset the calculator</div></div>
+          <div class="help-callout">💡 The calculator uses simple interest formula: Interest = Principal × Rate × Time</div>
+          <div class="help-callout">💡 Rates are annual percentages. The calculator converts them to the appropriate time period.</div>
+        `
+      },
+      {
+        heading: 'API Key Setup Required',
+        content: `
+          <div class="help-callout warning">⚠️ Bank rates require a Torn API key with the "Bank" access level. Your current key does not have this permission.</div>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Go to <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#a78df5;">torn.com → Preferences → API</a></div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Create a <strong style="color:#c0bcbc;">new API key</strong> (don't edit your existing one)</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Under <strong style="color:#c0bcbc;">"Access Levels"</strong>, select <strong style="color:#ff4444;">"Bank"</strong> (NOT "Full Access")</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Copy the new key and save it in your <strong style="color:#c0bcbc;">Profile</strong> section</div></div>
+          <div class="help-callout">💡 You can have multiple API keys. Keep your current "Full Access" key for other features, and create a separate "Bank" key for this feature.</div>
+          <div class="help-callout">💡 After saving the new key, refresh the Bank Rates page to see the data.</div>
+        `
+      }
+    ]
+  },
   admin: {
     title: '🛡️ Admin',
     sections: [
@@ -1768,6 +1804,191 @@ function formatNum(n) {
 }
 
 
+
+// ── Bank Rates ────────────────────────────────────────────────────────────────
+async function fetchBankRates() {
+  const container = document.getElementById('bank-rates-data');
+  container.innerHTML = '<div class="channel-loading">LOADING BANK RATES...</div>';
+  try {
+    const res = await fetch('/api/torn/bank-rates');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    
+    // Debug: Log the raw API response
+    console.log('Bank Rates API Response:', data);
+    console.log('Rates object:', data.rates);
+    
+    // Debug: Check if rates are all zero
+    const rates = data.rates || {};
+    const allZero = Object.values(rates).every(rate => rate === 0);
+    if (allZero) {
+      console.log('⚠️ All rates are zero - this indicates an API issue');
+      console.log('Full API response for debugging:', data);
+    }
+    
+    container.innerHTML = renderBankRates(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderBankRates(data) {
+  const rates = data.rates || {};
+  const lastUpdated = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'Unknown';
+  
+  const rateRows = [
+    { period: '1 Week', key: '1_week', rate: rates['1_week'] },
+    { period: '2 Weeks', key: '2_weeks', rate: rates['2_weeks'] },
+    { period: '1 Month', key: '1_month', rate: rates['1_month'] },
+    { period: '2 Months', key: '2_months', rate: rates['2_months'] },
+    { period: '3 Months', key: '3_months', rate: rates['3_months'] }
+  ];
+
+  const rows = rateRows.map(r => {
+    // API returns percentages directly, so just format them
+    const percentage = r.rate.toFixed(2);
+    return `
+    <tr>
+      <td>${r.period}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${percentage}%</td>
+      <td style="text-align:right;color:#888;font-size:0.8rem;">${formatRateDescription(parseFloat(percentage))}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-header">Current Bank Interest Rates <span style="float:right;font-size:0.8rem;color:#555;">Updated: ${lastUpdated}</span></div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr><th>Time Period</th><th style="text-align:center;">Interest Rate</th><th style="text-align:right;">Description</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="3" class="muted" style="padding:1rem;">No rate data available</td></tr>'}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function formatRateDescription(rate) {
+  if (rate >= 10) return 'Excellent';
+  if (rate >= 7) return 'Good';
+  if (rate >= 5) return 'Decent';
+  if (rate >= 3) return 'Low';
+  return 'Very Low';
+}
+
+async function calculateBankEarnings() {
+  const container = document.getElementById('bank-calculator-results');
+  const amountInput = document.getElementById('bank-amount-input');
+  const amount = parseFloat(amountInput.value);
+  
+  if (!amount || amount <= 0) {
+    container.innerHTML = '<div class="channel-error">⚠️ Please enter a valid amount greater than 0.</div>';
+    return;
+  }
+
+  // Get cached rates from the current display or fetch fresh
+  const ratesContainer = document.getElementById('bank-rates-data');
+  let rates = {};
+  
+  // Try to extract rates from the current display
+  const rateCells = ratesContainer.querySelectorAll('td:nth-child(2)');
+  if (rateCells.length >= 5) {
+    rates = {
+      '1_week': parseFloat(rateCells[0].textContent.replace('%', '')),
+      '2_weeks': parseFloat(rateCells[1].textContent.replace('%', '')),
+      '1_month': parseFloat(rateCells[2].textContent.replace('%', '')),
+      '2_months': parseFloat(rateCells[3].textContent.replace('%', '')),
+      '3_months': parseFloat(rateCells[4].textContent.replace('%', ''))
+    };
+  } else {
+    // Fallback: fetch fresh rates
+    try {
+      const res = await fetch('/api/torn/bank-rates');
+      const data = await res.json();
+      rates = data.rates || {};
+    } catch (err) {
+      container.innerHTML = `<div class="channel-error">⚠️ Error fetching rates: ${err.message}</div>`;
+      return;
+    }
+  }
+
+  // Fetch merits to calculate bonus
+  let meritsBonus = 0;
+  try {
+    const res = await fetch('/api/torn/honors');
+    const data = await res.json();
+    if (res.ok && data.merits) {
+      meritsBonus = calculateMeritsBonus(data.merits);
+    }
+  } catch (err) {
+    console.warn('Could not fetch merits for bonus calculation:', err);
+  }
+
+  displayCalculatorResults(amount, rates, meritsBonus);
+}
+
+function displayCalculatorResults(amount, rates, meritsBonus = 0) {
+  const container = document.getElementById('bank-calculator-results');
+  
+  const results = [
+    { period: '1 Week', key: '1_week', days: 7 },
+    { period: '2 Weeks', key: '2_weeks', days: 14 },
+    { period: '1 Month', key: '1_month', days: 30 },
+    { period: '2 Months', key: '2_months', days: 60 },
+    { period: '3 Months', key: '3_months', days: 90 }
+  ];
+
+  const rows = results.map(r => {
+    const rate = rates[r.key] || 0;
+    const earnings = calculateInterest(amount, rate, meritsBonus);
+    const total = amount + earnings;
+    return `
+      <tr>
+        <td>${r.period}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${rate}%</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#4caf50;">+$${formatNum(earnings)}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(total)}</td>
+      </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-header">Bank Calculator Results <span style="float:right;font-size:0.8rem;color:#555;">Amount: $${formatNum(amount)}</span></div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr><th>Time Period</th><th style="text-align:center;">Rate</th><th style="text-align:right;">Earnings</th><th style="text-align:right;">Total</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+function calculateMeritsBonus(merits) {
+  // Bank Interest merit: each level adds 1% bonus to the base rate
+  // Max level 10 = +10% of the base rate
+  const bankInterest = merits['Bank Interest'] || 0;
+  return bankInterest * 1.0; // returns e.g. 10 for max level
+}
+
+function calculateInterest(principal, ratePercent, meritsBonus = 0) {
+  // Torn bank rate is a flat rate applied directly to principal
+  // e.g. 44.13% for 1 month means you earn principal * 0.4413
+  // Merit bonus adds on top: Bank Interest at level 10 adds 10% of the base rate
+  const baseInterest   = principal * (ratePercent / 100);
+  const meritInterest  = baseInterest * (meritsBonus / 100);
+  return Math.round(baseInterest + meritInterest);
+}
+
+function clearBankCalculator() {
+  const container = document.getElementById('bank-calculator-results');
+  const input = document.getElementById('bank-amount-input');
+  
+  input.value = '1000000';
+  container.innerHTML = `
+    <div class="empty-state">
+      <span class="empty-icon">📊</span>
+      <p>Enter an amount and click Calculate to see potential earnings.</p>
+    </div>`;
+}
 
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 setInterval(() => {

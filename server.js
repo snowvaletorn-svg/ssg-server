@@ -8,6 +8,7 @@ const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
 const mongoose = require('mongoose');
+const rateLimit = require('express-rate-limit');
 const factionData = require('./data/factions');
 const User = require('./models/User');
 const FactionConfig = require('./models/FactionConfig');
@@ -145,15 +146,57 @@ if (isProduction && process.env.MONGO_URI) {
   sessionStore = new session.MemoryStore();
 }
 
+// ─── RATE LIMITING ────────────────────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: {
+    error: 'Too many requests from this IP, please try again later.'
+  },
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+});
+
+const bankRatesLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10, // limit each IP to 10 requests per hour for bank rates
+  message: {
+    error: 'Too many bank rate requests from this IP, please try again later.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ─── APP SETTINGS & MIDDLEWARE ────────────────────────────────────────────────
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-app.use(cors());
+app.use(cors({
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    // Allow your specific origins
+    const allowedOrigins = [
+      'http://localhost:3003'
+
+    ];
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Apply rate limiting to all API routes
+app.use('/api/', apiLimiter);
+// Apply stricter rate limiting to bank rates specifically
+app.use('/api/torn/bank-rates', bankRatesLimiter);
 
 // ─── SESSION ──────────────────────────────────────────────────────────────────
 app.use(session({
@@ -174,7 +217,7 @@ app.use(session({
 passport.use(new DiscordStrategy({
   clientID: process.env.DISCORD_CLIENT_ID,
   clientSecret: process.env.DISCORD_CLIENT_SECRET,
-  callbackURL: process.env.DISCORD_CALLBACK_URL,
+  callbackURL: 'http://localhost:3003/auth/discord/callback',
   scope: ['identify', 'email', 'guilds', 'guilds.members.read']
 },
   async (accessToken, refreshToken, profile, done) => {
@@ -1050,16 +1093,150 @@ app.get('/api/torn/addiction', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: Bank Rates ──────────────────────────────────────────────────────────
+app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
+  console.log('Bank Rates API called for user:', req.user.id);
+  
+  try {
+    // Force fresh fetch - ignore cache completely
+    console.log('Forcing fresh fetch - ignoring cache');
+    
+    // Fetch from Torn API using user's saved API key
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    if (!dbUser?.tornApiKey) {
+      console.log('No API key found for user');
+      return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
+    }
+
+    console.log('Fetching bank data from Torn API for user:', dbUser.tornPlayerId);
+    
+    const tornRes = await axios.get(
+      'https://api.torn.com/torn/?selections=bank&key=' + dbUser.tornApiKey
+    );
+
+    if (tornRes.data.error) {
+      console.log('Torn API error:', tornRes.data.error);
+      return res.status(400).json({ error: 'Failed to fetch bank rates: ' + tornRes.data.error.error });
+    }
+
+    console.log('Bank API Response:', JSON.stringify(tornRes.data, null, 2));
+    
+    const bankData = tornRes.data.bank || {};
+    console.log('Bank data object:', bankData);
+    console.log('1w value:', bankData['1w']);
+    console.log('2w value:', bankData['2w']);
+    console.log('1m value:', bankData['1m']);
+    console.log('2m value:', bankData['2m']);
+    console.log('3m value:', bankData['3m']);
+    
+    // Extract the 5 interest rates - API uses short field names
+    const rates = {
+      '1_week': bankData['1w'] || 0,
+      '2_weeks': bankData['2w'] || 0,
+      '1_month': bankData['1m'] || 0,
+      '2_months': bankData['2m'] || 0,
+      '3_months': bankData['3m'] || 0
+    };
+    
+    console.log('Mapped rates:', rates);
+
+    const now = new Date();
+    const cacheDuration = 60 * 60 * 1000; // 1 hour
+    const result = {
+      rates: rates,
+      lastUpdated: now.toISOString(),
+      cacheExpiry: new Date(now.getTime() + cacheDuration).toISOString()
+    };
+
+    // Cache the result
+    await User.findOneAndUpdate(
+      { discordId: req.user.id },
+      { 
+        bankRatesCache: result, 
+        bankRatesCachedAt: now 
+      }
+    );
+
+    console.log('Bank rates fetched and cached successfully');
+    res.json(result);
+
+  } catch (err) {
+    console.error('[/api/torn/bank-rates]', err.message);
+    return res.status(500).json({ error: 'Server error fetching bank rates.' });
+  }
+});
+
 // ─── START SERVER ─────────────────────────────────────────────────────────────
 async function startServer() {
   try {
-    const availablePort = await findAvailablePort(PORT);
-    app.listen(availablePort, () => {
-      console.log(`SSG Server listening on http://localhost:${availablePort}`);
-      if (availablePort !== PORT) {
-        console.log(`Note: Port ${PORT} was in use, using port ${availablePort} instead`);
-      }
+    const fixedPort = 3003;
+    
+    // Check if port is available
+    const net = require('net');
+    const checkPort = (port) => {
+      return new Promise((resolve) => {
+        const server = net.createServer();
+        server.listen(port, () => {
+          server.once('close', () => {
+            resolve(true);
+          });
+          server.close();
+        });
+        server.on('error', (err) => {
+          if (err.code === 'EADDRINUSE') {
+            resolve(false);
+          } else {
+            resolve(true); // Other errors, assume port is available
+          }
+        });
+      });
+    };
+
+    const isPortAvailable = await checkPort(fixedPort);
+    if (!isPortAvailable) {
+      console.log(`Port ${fixedPort} is already in use. Please stop any other server running on this port.`);
+      console.log('You can use the following command to find and kill the process:');
+      console.log(`  netstat -ano | findstr :${fixedPort}`);
+      console.log(`  taskkill /PID <PID> /F`);
+      process.exit(1);
+    }
+
+    const server = app.listen(fixedPort, () => {
+      console.log(`SSG Server listening on http://localhost:${fixedPort}`);
     });
+
+    // Graceful shutdown handling
+    process.on('SIGINT', () => {
+      console.log('\nReceived SIGINT (Ctrl+C). Shutting down gracefully...');
+      server.close(() => {
+        console.log('Server closed successfully.');
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('\nReceived SIGTERM. Shutting down gracefully...');
+      server.close(() => {
+        console.log('Server closed successfully.');
+        process.exit(0);
+      });
+    });
+
+    // Handle uncaught exceptions
+    process.on('uncaughtException', (err) => {
+      console.error('Uncaught Exception:', err);
+      server.close(() => {
+        process.exit(1);
+      });
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+      server.close(() => {
+        process.exit(1);
+      });
+    });
+
   } catch (error) {
     console.error('Failed to start server:', error);
     process.exit(1);

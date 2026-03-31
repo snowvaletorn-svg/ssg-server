@@ -40,6 +40,7 @@
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
+            <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
             <% if (isOwner || isLeadership) { %>
               <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
               <% } %>
@@ -374,6 +375,40 @@
                 </div>
                 <% } %>
           </section>
+
+          <!-- ── BANK RATES ── -->
+          <section id="bank-rates" class="section">
+            <div class="section-header">
+              <h3>🏦 Bank Rates</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary btn-small" onclick="fetchBankRates()">↻ Refresh</button>
+                <span class="muted" style="font-size:0.75rem;">Updated hourly</span>
+              </div>
+            </div>
+            <div id="bank-rates-data">
+              <div class="empty-state">
+                <span class="empty-icon">🏦</span>
+                <p>Click Refresh to load current bank interest rates.</p>
+              </div>
+            </div>
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>💰 Calculator</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <label style="font-size:0.75rem;color:#888;">Amount to deposit:</label>
+                <input id="bank-amount-input" type="number" value="1000000" min="0"
+                  style="width:120px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:2px 6px;font-size:0.8rem;">
+                <button class="btn btn-primary btn-small" onclick="calculateBankEarnings()">Calculate</button>
+                <button class="btn btn-small btn-outline" onclick="clearBankCalculator()">Clear</button>
+              </div>
+            </div>
+            <div id="bank-calculator-results">
+              <div class="empty-state">
+                <span class="empty-icon">📊</span>
+                <p>Enter an amount and click Calculate to see potential earnings.</p>
+              </div>
+            </div>
+          </section>
+
           <!-- ── ADMIN ── -->
           <% if (isOwner || isLeadership) { %>
             <section id="admin" class="section">

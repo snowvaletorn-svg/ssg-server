@@ -11,7 +11,9 @@ const userSchema = new mongoose.Schema({
   createdAt:        { type: Date,   default: Date.now },
   updatedAt:        { type: Date,   default: Date.now },
   levelProgressCache: { type: Object, default: null },
-  levelProgressCachedAt: { type: Date, default: null }
+  levelProgressCachedAt: { type: Date, default: null },
+  bankRatesCache: { type: Object, default: null },
+  bankRatesCachedAt: { type: Date, default: null }
 });
 
 userSchema.pre('save', function(next) {
