@@ -341,6 +341,73 @@
                 <p>Select a country or click Refresh Stock to load available items.</p>
               </div>
             </div>
+
+            <!-- Travel Profits -->
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>💰 Travel Profits</h3>
+              <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">Load</button>
+            </div>
+            <div class="card mt-1" style="background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-body">
+                <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;">
+                  <!-- Travel Method -->
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Travel Method</label>
+                    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="radio" name="travelMethod" value="standard" checked onchange="renderTravelProfits()"/> Standard
+                      </label>
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="radio" name="travelMethod" value="airstrip" onchange="renderTravelProfits()"/> Airstrip
+                      </label>
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="radio" name="travelMethod" value="private" onchange="renderTravelProfits()"/> Private
+                      </label>
+                    </div>
+                  </div>
+                  <!-- Item Types -->
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Item Types</label>
+                    <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-plushie" checked onchange="renderTravelProfits()"/> Plushie
+                      </label>
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-flower" checked onchange="renderTravelProfits()"/> Flower
+                      </label>
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-drug" checked onchange="renderTravelProfits()"/> Drug
+                      </label>
+                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-other" onchange="renderTravelProfits()"/> Other
+                      </label>
+                    </div>
+                  </div>
+                  <!-- Quantity -->
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Quantity</label>
+                    <input type="number" id="profit-quantity" class="form-input" value="25" min="5" max="29" onchange="renderTravelProfits()" style="width:80px;"/>
+                  </div>
+                  <!-- Sort -->
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Sort By</label>
+                    <select id="profit-sort" class="channel-dropdown" onchange="renderTravelProfits()" style="min-width:140px;">
+                      <option value="profitPerRun">Profit/Run</option>
+                      <option value="profit">Profit/Item</option>
+                      <option value="profitPercent">Profit %</option>
+                      <option value="country">Country</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div id="travel-profits-data">
+              <div class="empty-state">
+                <span class="empty-icon">💰</span>
+                <p>Click Refresh to load travel profit opportunities.</p>
+                <p class="muted">Shows items available abroad with current market prices and profit calculations.</p>
+              </div>
+            </div>
           </section>
           <!-- ── TRAINING ── -->
           <section id="training" class="section">

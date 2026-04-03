@@ -292,19 +292,11 @@ async function fetchLevelProgress(currentLevel) {
 }
 
 // ── Addiction Level ──────────────────────────────────────────────────────────
-async function fetchAddictionLevel() {
-  // Check if we have cached data from today
-  const today = new Date().toDateString();
-  const cachedData = localStorage.getItem('addictionLevelCache');
-  const cachedDate = localStorage.getItem('addictionLevelCacheDate');
-  
-  if (cachedData && cachedDate === today) {
-    // Use cached data
-    const data = JSON.parse(cachedData);
-    updateAddictionDisplay(data);
-    return;
-  }
+// Clear any stale addiction cache on page load
+localStorage.removeItem('addictionLevelCache');
+localStorage.removeItem('addictionLevelCacheDate');
 
+async function fetchAddictionLevel() {
   try {
     const res = await fetch('/api/torn/addiction', { credentials: 'include' });
     const data = await res.json();
@@ -313,16 +305,12 @@ async function fetchAddictionLevel() {
       const addictionEl = document.getElementById('addiction-display');
       if (addictionEl) {
         addictionEl.innerHTML = '—';
-        console.error ('Failed to fetch addiction level:', data.error || 'Unknown error');
+        console.error('Failed to fetch addiction level:', data.error || 'Unknown error');
       }
       return;
     }
 
-    // Cache the data for today
-    localStorage.setItem('addictionLevelCache', JSON.stringify(data));
-    localStorage.setItem('addictionLevelCacheDate', today);
-
-    // Update addiction level badge
+    // Update addiction level badge (always fetch fresh data - no caching)
     updateAddictionDisplay(data);
   } catch {
     // Clear loading text on error
@@ -337,12 +325,15 @@ async function fetchAddictionLevel() {
 function updateAddictionDisplay(data) {
   const addictionEl = document.getElementById('addiction-display');
   if (addictionEl) {
-    const addictionLevel = parseInt(data.display);
-    const color = addictionLevel > 0 ? '#ff4444' : '#2ecc71';
+    const addictionStr = data.display || data.addiction || 'Clean';
+    const addictionLevel = data.addictionLevel ?? 0;
+    // Color based on addiction level: Clean=green, Occasional=yellow, Light=orange, Moderate=red, High=dark red
+    const colors = { 'Clean': '#2ecc71', 'Occasional': '#f1c40f', 'Light': '#e67e22', 'Moderate': '#e74c3c', 'High': '#c0392b' };
+    const color = colors[addictionStr] || '#2ecc71';
     const status = addictionLevel > 0 ? '⚠️ Addicted' : '✅ Clean';
     
     addictionEl.innerHTML = `
-      <span style="color:${color};font-weight:600;">${data.display}</span>
+      <span style="color:${color};font-weight:600;">${addictionStr}</span>
       <span style="color:#888;font-size:0.75rem;margin-left:0.3rem;">${status}</span>`;
   }
 }
@@ -1994,3 +1985,225 @@ function clearBankCalculator() {
 setInterval(() => {
   fetch('/api/ping').catch(() => { });
 }, 14 * 60 * 1000 + 30 * 1000);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// TRAVEL PROFITS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let travelProfitsCache = null;
+
+async function fetchTravelProfits() {
+  const container = document.getElementById('travel-profits-data');
+  container.innerHTML = '<div class="channel-loading">LOADING TRAVEL PROFITS...</div>';
+  try {
+    const res = await fetch('/api/travel-profits');
+    const data = await res.json();
+    if (!res.ok) {
+      let errorMsg = `<div class="channel-error">⚠️ ${data.error}</div>`;
+      if (data.help) {
+        errorMsg += `<div class="channel-error" style="margin-top:0.5rem;padding:0.75rem;background:#1a1919;border:1px solid #333;border-radius:4px;font-size:0.85rem;">
+          <strong style="color:#f0a500;">How to fix:</strong><br>
+          ${data.help}<br><br>
+          <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#a78df5;">Go to API Key Settings →</a>
+        </div>`;
+      }
+      container.innerHTML = errorMsg;
+      return;
+    }
+    travelProfitsCache = data;
+    renderTravelProfits();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderTravelProfits() {
+  const container = document.getElementById('travel-profits-data');
+
+  if (!travelProfitsCache || !travelProfitsCache.profits || !travelProfitsCache.profits.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">💰</span>
+        <p>No profitable items found.</p>
+        <p class="muted">Items may not be available or market prices may not exceed foreign costs.</p>
+      </div>`;
+    return;
+  }
+
+  // Get travel method from radio buttons
+  const travelMethod = document.querySelector('input[name="travelMethod"]:checked')?.value || 'standard';
+  
+  // Get quantity from input (default 25, min 5, max 29)
+  const quantityInput = document.getElementById('profit-quantity');
+  let quantity = parseInt(quantityInput?.value) || 25;
+  quantity = Math.max(5, Math.min(29, quantity));
+  
+  // Get item types from checkboxes
+  const typePlushie = document.getElementById('type-plushie')?.checked ?? true;
+  const typeFlower = document.getElementById('type-flower')?.checked ?? true;
+  const typeDrug = document.getElementById('type-drug')?.checked ?? true;
+  const typeOther = document.getElementById('type-other')?.checked ?? false;
+  
+  const sortBy = document.getElementById('profit-sort')?.value || 'profitPerRun';
+
+  let profits = [...travelProfitsCache.profits];
+
+  // Filter by item type using checkboxes
+  profits = profits.filter(p => {
+    const type = p.type.toLowerCase();
+    // Normalize type to singular form for comparison
+    const normalizedType = type.endsWith('s') ? type.slice(0, -1) : type;
+    
+    if (normalizedType === 'plushie' && typePlushie) return true;
+    if (normalizedType === 'flower' && typeFlower) return true;
+    if (normalizedType === 'drug' && typeDrug) return true;
+    if (!['plushie', 'flower', 'drug'].includes(normalizedType) && typeOther) return true;
+    
+    return false;
+  });
+
+  // Sort
+  switch (sortBy) {
+    case 'profit':
+      profits.sort((a, b) => b.profit - a.profit);
+      break;
+    case 'profitPercent':
+      profits.sort((a, b) => b.profitPercent - a.profitPercent);
+      break;
+    case 'country':
+      profits.sort((a, b) => a.country.localeCompare(b.country));
+      break;
+    case 'profitPerRun':
+    default:
+      // Sort by profit per run (profit per item × quantity)
+      profits.sort((a, b) => (b.profit * quantity) - (a.profit * quantity));
+      break;
+  }
+
+  // Group by country
+  const grouped = {};
+  profits.forEach(p => {
+    if (!grouped[p.country]) grouped[p.country] = [];
+    grouped[p.country].push(p);
+  });
+
+  const summary = travelProfitsCache.summary || {};
+
+  // Find the best profit per run (highest profit × quantity)
+  const bestRun = profits.length > 0 ? profits.reduce((best, current) => {
+    const bestProfit = best.profit * quantity;
+    const currentProfit = current.profit * quantity;
+    return currentProfit > bestProfit ? current : best;
+  }) : null;
+
+  let html = `
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        💰 Travel Profits Summary
+        <span style="float:right;font-size:0.8rem;color:#555;">
+          ${profits.length} items across ${Object.keys(grouped).length} countries
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          ${bestRun ? statTile('+' + formatNum(bestRun.profit * quantity), 'Best Profit/Run') : statTile('—', 'Best Profit/Run')}
+          ${bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country')}
+          ${bestRun ? statTile(escapeHtml(bestRun.name), 'Best Item') : statTile('—', 'Best Item')}
+          ${statTile(travelMethod === 'standard' ? '✈️ Standard' : travelMethod === 'airstrip' ? '🛫 Airstrip' : '🚀 Private', 'Travel Method')}
+        </div>
+      </div>
+    </div>`;
+
+  Object.entries(grouped).forEach(([country, items]) => {
+    const countryTotal = items.reduce((sum, p) => sum + (p.profit * quantity), 0);
+    const travelTime = items[0].travelTimes[travelMethod];
+
+    const rows = items.map(item => {
+      const profitPerRun = item.profit * quantity;
+      
+      // Format best leave time display (to arrive at restock time)
+      let restockDisplay = '<span style="color:#555;">—</span>';
+      
+      if (item.minutesUntilLeave !== null && item.minutesUntilLeave !== undefined) {
+        const minsUntilLeave = item.minutesUntilLeave;
+        const leaveTime = item.bestLeaveTime || '—';
+        
+        if (minsUntilLeave <= 0) {
+          // Should leave now to arrive at restock
+          restockDisplay = `<span style="color:#4caf50;font-weight:600;">Leave Now!<br><small>Restock: ${leaveTime}</small></span>`;
+        } else if (minsUntilLeave < 60) {
+          // Leave in X minutes
+          restockDisplay = `<span style="color:#219653;">In ${minsUntilLeave}m<br><small>Leave at ${leaveTime}</small></span>`;
+        } else {
+          const h = Math.floor(minsUntilLeave / 60);
+          const m = minsUntilLeave % 60;
+          restockDisplay = `<span style="color:#219653;">In ${h}h ${m}m<br><small>Leave at ${leaveTime}</small></span>`;
+        }
+      } else if (item.estimatedRestockIn !== null && item.estimatedRestockIn !== undefined) {
+        // Fallback: just show restock countdown
+        const mins = item.estimatedRestockIn;
+        if (mins <= 0) {
+          restockDisplay = '<span style="color:#4caf50;font-weight:600;">Restocking Now</span>';
+        } else if (mins < 60) {
+          restockDisplay = `<span style="color:#f0a500;">~${mins}m to restock</span>`;
+        } else {
+          const h = Math.floor(mins / 60);
+          restockDisplay = `<span style="color:#ff9800;">~${h}h to restock</span>`;
+        }
+      }
+      
+      return `
+        <tr>
+          <td>${escapeHtml(item.name)}</td>
+          <td style="color:#888;font-size:0.85rem;">${escapeHtml(item.type)}</td>
+          <td style="text-align:center;">${item.quantity.toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.buyPrice)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.marketValue)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#4caf50;">+$${formatNum(item.profit)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${item.profitPercent.toFixed(1)}%</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">+$${formatNum(profitPerRun)}</td>
+          <!-- <td style="text-align:center;font-size:0.85rem;">${restockDisplay}</td> -->
+        </tr>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">
+          🌍 ${getCountryName(country)}
+          <span style="float:right;font-size:0.75rem;color:#555;">
+            Travel: ~${travelTime}min (${travelMethod}) | Total (${quantity} items): $${formatNum(countryTotal)}
+          </span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table class="members-table">
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th>Type</th>
+                <th style="text-align:center;">Avail</th>
+                <th style="text-align:right;">Buy Price</th>
+                <th style="text-align:right;">Market Price</th>
+                <th style="text-align:right;">Profit/Item</th>
+                <th style="text-align:right;">Profit %</th>
+                <th style="text-align:right;">Profit/Run</th>
+                <!-- <th style="text-align:center;">Restock</th> -->
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  });
+
+  container.innerHTML = html;
+}
+
+function getCountryName(code) {
+  const names = {
+    mex: 'Mexico', cay: 'Cayman Islands', can: 'Canada',
+    haw: 'Hawaii', uni: 'United Kingdom', arg: 'Argentina',
+    swi: 'Switzerland', jap: 'Japan', chi: 'China',
+    uae: 'UAE', sou: 'South Africa'
+  };
+  return names[code] || code;
+}

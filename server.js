@@ -654,17 +654,252 @@ app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   }
 });
 
-// ─── API: YATA foreign stock data ────────────────────────────────────────────
+// ─── API: YATA foreign stock data (with Prometheus fallback) ─────────────────
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
+    // Try YATA first
     const yataRes = await axios.get('https://yata.yt/api/v1/travel/export/', {
-      headers: { 'User-Agent': 'SSG-Dashboard/1.0' },
-      timeout: 10000
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      timeout: 15000,
+      maxRedirects: 5,
+      withCredentials: false
     });
-    res.json(yataRes.data);
+    res.json({ ...yataRes.data, source: 'yata' });
   } catch (err) {
-    console.error('YATA API error:', err.message);
-    res.status(500).json({ error: 'Failed to fetch YATA travel data' });
+    console.error('YATA API error, trying Prometheus fallback:', err.message);
+    
+    // Fallback to Prometheus API
+    try {
+      const promRes = await axios.get('https://api.prombot.co.uk/api/travel', {
+        headers: { 
+          'User-Agent': 'SSG-Dashboard/1.0',
+          'Accept': 'application/json'
+        },
+        timeout: 15000
+      });
+      
+      // Prometheus returns data in a similar format, pass it through
+      res.json({ ...promRes.data, source: 'prometheus' });
+    } catch (promErr) {
+      console.error('Prometheus API fallback also failed:', promErr.message);
+      if (err.code === 'ECONNABORTED' || promErr.code === 'ECONNABORTED') {
+        res.status(504).json({ 
+          error: 'Travel data APIs timed out. Please try again.',
+          details: 'Both YATA and Prometheus APIs are taking too long to respond.'
+        });
+      } else {
+        res.status(500).json({ 
+          error: 'Travel data APIs unavailable. Both YATA and Prometheus are down.',
+          details: `YATA: ${err.message}, Prometheus: ${promErr.message}`
+        });
+      }
+    }
+  }
+});
+
+// ─── API: Travel Profits Calculator ───────────────────────────────────────────
+// Combines YATA/Prometheus stock data with Torn market prices to calculate travel profits
+// Uses Torn API v1 'items' selection which includes market_value
+app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    const apiKey = dbUser?.tornApiKey?.trim();
+    if (!apiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
+    }
+
+    // Fetch travel stock data (YATA with Prometheus fallback) and Torn Items
+    let travelData;
+    let dataSource = 'unknown';
+    
+    try {
+      // Try YATA first
+      const yataRes = await axios.get('https://yata.yt/api/v1/travel/export/', {
+        headers: { 'User-Agent': 'SSG-Dashboard/1.0' },
+        timeout: 15000
+      });
+      travelData = yataRes.data;
+      dataSource = 'yata';
+    } catch (err) {
+      console.error('YATA API failed for travel-profits, trying Prometheus:', err.message);
+      try {
+        // Fallback to Prometheus
+        const promRes = await axios.get('https://api.prombot.co.uk/api/travel', {
+          headers: { 'User-Agent': 'SSG-Dashboard/1.0' },
+          timeout: 15000
+        });
+        travelData = promRes.data;
+        dataSource = 'prometheus';
+      } catch (promErr) {
+        return res.status(500).json({ 
+          error: 'Travel data APIs unavailable. Both YATA and Prometheus are down.',
+          details: `YATA: ${err.message}, Prometheus: ${promErr.message}`
+        });
+      }
+    }
+
+    const itemsRes = await axios.get(`https://api.torn.com/torn/?selections=items&key=${apiKey}`, {
+      timeout: 30000
+    });
+
+    const yataData = travelData;
+    const itemsData = itemsRes.data;
+
+    if (itemsData.error) {
+      return res.status(400).json({ error: 'Torn API error: ' + itemsData.error.error });
+    }
+
+    // Build catalog using the 'market_value' field from Torn API v1
+    const itemCatalog = {};
+    Object.entries(itemsData.items || {}).forEach(([id, item]) => {
+      itemCatalog[id] = {
+        id: parseInt(id),
+        name: item.name,
+        type: item.type,
+        marketValue: item.market_value || 0
+      };
+    });
+
+    // Travel times by country (in minutes) - Standard travel times
+    // Based on official Torn travel times
+    const standardTravelTimes = {
+      mex: 26, cay: 35, can: 41, haw: 134, uni: 159,
+      arg: 167, swi: 175, jap: 225, chi: 242, uae: 271, sou: 297
+    };
+
+    // Airstrip travel times (specific times, not a simple multiplier)
+    const airstripTravelTimes = {
+      mex: 18, cay: 25, can: 29, haw: 94, uni: 111,
+      arg: 117, swi: 123, jap: 158, chi: 169, uae: 190, sou: 208
+    };
+
+    // Private jet / WLT benefit travel times
+    const privateTravelTimes = {
+      mex: 13, cay: 18, can: 20, haw: 67, uni: 80,
+      arg: 83, swi: 88, jap: 113, chi: 121, uae: 135, sou: 149
+    };
+
+    // Static restock time estimates based on Torn's known restock cycles
+    // Most items restock every 15-30 minutes, with some variation
+    const restockCycleMinutes = 25; // Average restock cycle
+    const now = Math.floor(Date.now() / 1000);
+    const currentMinute = new Date().getMinutes();
+    
+    // Calculate time until next restock (items restock at :00 and :30 typically)
+    let minutesUntilRestock = 0;
+    if (currentMinute < 30) {
+      minutesUntilRestock = 30 - currentMinute;
+    } else {
+      minutesUntilRestock = 60 - currentMinute;
+    }
+
+    // Process YATA Stock Data and calculate profits
+    const stockData = yataData.stocks || {};
+    const profits = [];
+
+    Object.entries(stockData).forEach(([countryCode, countryData]) => {
+      const standardTime = standardTravelTimes[countryCode] || 120;
+      const airstripTime = airstripTravelTimes[countryCode] || Math.round(standardTime * 0.7);
+      const privateTime = privateTravelTimes[countryCode] || Math.round(standardTime * 0.5);
+
+      (countryData.stocks || []).forEach(stockItem => {
+        if (stockItem.quantity <= 0) return;
+
+        const catalogItem = itemCatalog[stockItem.id] || itemCatalog[String(stockItem.id)] || itemCatalog[Number(stockItem.id)];
+        if (!catalogItem || catalogItem.marketValue <= 0) return;
+
+        const profit = catalogItem.marketValue - stockItem.cost;
+        if (profit <= 0) return;
+
+        const profitPercent = ((profit / stockItem.cost) * 100);
+
+        // Check for restock time data from API (various possible field names)
+        let restockTime = null;
+        let restockIn = null;
+        
+        // YATA/Prometheus may provide restock data in different formats
+        if (stockItem.restock_time) {
+          restockTime = stockItem.restock_time;
+        } else if (stockItem.restock_in) {
+          restockIn = stockItem.restock_in;
+        } else if (stockItem.next_restock) {
+          // Calculate minutes until next restock
+          const now = Math.floor(Date.now() / 1000);
+          restockIn = Math.max(0, stockItem.next_restock - now);
+        } else if (countryData.restock_time) {
+          // Country-level restock time
+          restockTime = countryData.restock_time;
+        }
+
+        // Calculate estimated restock time (static estimate based on Torn's cycles)
+        // Items typically restock at :00 and :30 past the hour
+        const estimatedRestockIn = minutesUntilRestock;
+        const nextRestockTime = new Date();
+        nextRestockTime.setMinutes(nextRestockTime.getMinutes() + estimatedRestockIn);
+        
+        // Calculate best time to leave (leave now to arrive around restock time)
+        // Optimal: leave so you arrive 1-2 minutes before restock
+        const travelTimeStandard = standardTime;
+        const minutesUntilLeave = Math.max(0, estimatedRestockIn - travelTimeStandard);
+        
+        // Format best leave time
+        const leaveTime = new Date();
+        leaveTime.setMinutes(leaveTime.getMinutes() + minutesUntilLeave);
+        const leaveTimeStr = leaveTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        profits.push({
+          id: stockItem.id,
+          name: catalogItem.name,
+          type: catalogItem.type,
+          country: countryCode,
+          countryName: countryData.name || countryCode,
+          quantity: stockItem.quantity,
+          buyPrice: stockItem.cost,
+          marketValue: catalogItem.marketValue,
+          profit: profit,
+          profitPercent: profitPercent,
+          restockTime: restockTime,
+          restockIn: restockIn,
+          estimatedRestockIn: estimatedRestockIn,
+          nextRestockTime: nextRestockTime.toISOString(),
+          bestLeaveTime: leaveTimeStr,
+          minutesUntilLeave: minutesUntilLeave,
+          profitPerMinute: {
+            standard: profit / standardTime,
+            airstrip: profit / airstripTime,
+            private: profit / privateTime
+          },
+          travelTimes: {
+            standard: standardTime,
+            airstrip: airstripTime,
+            private: privateTime
+          }
+        });
+      });
+    });
+
+    // Sort by profit per minute (standard) descending
+    profits.sort((a, b) => b.profitPerMinute.standard - a.profitPerMinute.standard);
+
+    res.json({
+      profits,
+      lastUpdated: new Date().toISOString(),
+      summary: {
+        totalItems: profits.length,
+        totalPotentialProfit: profits.reduce((sum, p) => sum + (p.profit * p.quantity), 0),
+        avgProfitPercent: profits.length > 0
+          ? profits.reduce((sum, p) => sum + p.profitPercent, 0) / profits.length
+          : 0
+      }
+    });
+
+  } catch (err) {
+    console.error('Travel Profits API error:', err.message);
+    res.status(500).json({ error: 'Failed to fetch travel profits data: ' + err.message });
   }
 });
 
@@ -1080,11 +1315,23 @@ app.get('/api/torn/addiction', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: tornRes.data.error.error });
     }
 
-    const addiction = tornRes.data.addiction || 0;
+    const addictionMap = {
+      'Clean': 0,
+      'Occasional': 1,
+      'Light': 2,
+      'Moderate': 3,
+      'High': 4
+    };
+    
+    // Note: The addiction field is not currently returned by the Torn API
+    // Defaulting to 'Clean' until an alternative data source is found
+    const addictionStr = tornRes.data.addiction || 'Clean';
+    const addictionNum = addictionMap[addictionStr] ?? 0;
     
     res.json({
-      addiction: addiction,
-      display: addiction
+      addiction: addictionStr,
+      addictionLevel: addictionNum,
+      display: addictionStr
     });
 
   } catch (err) {

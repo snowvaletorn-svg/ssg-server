@@ -832,6 +832,13 @@
   font-family: 'Share Tech Mono', monospace;
 }
 
+/* ── Travel Profits Filter Labels ────────────────────────────────────────── */
+.channel-dropdown,
+input[type="radio"],
+input[type="checkbox"] {
+  color: #a0a0a0;
+}
+
 /* ── Scrollbar styling ─────────────────────────────────────────────────── */
 .channel-feed::-webkit-scrollbar { width: 6px; }
 .channel-feed::-webkit-scrollbar-track { background: #0f0f0f; }
