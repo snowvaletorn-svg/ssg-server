@@ -130,6 +130,80 @@ const apiLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
+// ─── OAuth Rate Limiter ─────────────────────────────────────────────────────────
+// Discord has strict rate limits on token endpoint (error 1015 = rate limited)
+// This queues OAuth requests to space them out and avoid hitting Discord's rate limit
+const oauthQueue = [];
+let oauthProcessing = false;
+const OAUTH_DELAY_MS = 2000; // 2 seconds between OAuth token requests
+
+async function processOAuthQueue() {
+  if (oauthProcessing || oauthQueue.length === 0) return;
+  
+  oauthProcessing = true;
+  
+  while (oauthQueue.length > 0) {
+    const item = oauthQueue.shift();
+    
+    try {
+      // Process the OAuth authentication
+      await new Promise((resolve, reject) => {
+        passport.authenticate('discord', (err, user, info) => {
+          if (err) {
+            console.error('OAuth authentication error:', err);
+            item.res.redirect('/?error=discord_auth_failed');
+            resolve(); // Resolve to continue queue, don't reject
+          } else if (!user) {
+            console.error('No user returned from Discord OAuth');
+            item.res.redirect('/?error=discord_auth_failed');
+            resolve();
+          } else {
+            item.req.logIn(user, (loginErr) => {
+              if (loginErr) {
+                console.error('Login error:', loginErr);
+                item.res.redirect('/?error=discord_auth_failed');
+                resolve();
+              } else {
+                item.req.session.save((saveErr) => {
+                  if (saveErr) {
+                    console.error('Session save error:', saveErr);
+                    item.res.redirect('/?error=discord_auth_failed');
+                    resolve();
+                  } else {
+                    item.res.redirect('/dashboard');
+                    resolve();
+                  }
+                });
+              }
+            });
+          }
+        })(item.req, item.res, item.next);
+      });
+    } catch (err) {
+      console.error('Error processing OAuth queue item:', err);
+      try {
+        item.res.redirect('/?error=discord_auth_failed');
+      } catch (redirectErr) {
+        // Response already sent
+      }
+    }
+    
+    // Wait before processing next OAuth request
+    if (oauthQueue.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, OAUTH_DELAY_MS));
+    }
+  }
+  
+  oauthProcessing = false;
+}
+
+function handleOAuthCallback(req, res, next) {
+  // Add request to queue and start processing
+  oauthQueue.push({ req, res, next });
+  processOAuthQueue();
+  // Don't call next() here - the queue handler will handle the response
+}
+
 const bankRatesLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // limit each IP to 10 requests per hour for bank rates
@@ -314,38 +388,7 @@ app.get('/', async (req, res) => {
 
 app.get('/auth/discord', passport.authenticate('discord'));
 
-app.get('/auth/discord/callback',
-  (req, res, next) => {
-    // Custom error handling for OAuth failures
-    passport.authenticate('discord', (err, user, info) => {
-      if (err) {
-        console.error('Discord OAuth Error:', err);
-        console.error('Error name:', err.name);
-        console.error('Error message:', err.message);
-        console.error('OAuth error details:', err.oauthError);
-        console.error('Stack:', err.stack);
-        return res.redirect('/?error=discord_auth_failed');
-      }
-      if (!user) {
-        console.error('No user returned from Discord OAuth');
-        return res.redirect('/?error=discord_auth_failed');
-      }
-      req.logIn(user, (loginErr) => {
-        if (loginErr) {
-          console.error('Login error:', loginErr);
-          return res.redirect('/?error=discord_auth_failed');
-        }
-        req.session.save((saveErr) => {
-          if (saveErr) {
-            console.error('Session save error:', saveErr);
-            return res.redirect('/?error=discord_auth_failed');
-          }
-          res.redirect('/dashboard');
-        });
-      });
-    })(req, res, next);
-  }
-);
+app.get('/auth/discord/callback', handleOAuthCallback);
 
 app.get('/dashboard', isAuthenticated, async (req, res) => {
   const ssgRoles = req.user.ssgRoles || [];
