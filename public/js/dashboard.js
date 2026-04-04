@@ -365,52 +365,378 @@ function renderHonorsTable(data, filter = 'all', sort = 'earned-first') {
 // ── Crime XP ──────────────────────────────────────────────────────────────────
 async function fetchCrimeExp() {
   const container = document.getElementById('crime-exp-data');
-  container.innerHTML = '<div class="channel-loading">LOADING CRIME XP...</div>';
+  container.innerHTML = '<div class="channel-loading">LOADING CRIME RECORD...</div>';
   try {
-    const res = await fetch('/api/torn/crimeexp');
-    const data = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderCrimeExp(data.merits || data);
+    // Fetch both criminal record and skills in parallel
+    const [recordRes, skillsRes] = await Promise.all([
+      fetch('/api/torn/crimeexp'),
+      fetch('/api/torn/crimeskills')
+    ]);
+    
+    const recordData = await recordRes.json();
+    const skillsData = await skillsRes.json();
+    
+    if (!recordRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${recordData.error}</div>`; return; }
+    
+    // The criminal record is directly in the response, not nested
+    const criminalRecord = recordData.criminalrecord || recordData;
+    
+    // Skills might be nested in data.skills or data.merits
+    const skills = skillsData.skills || skillsData.merits || {};
+    
+    console.log('Criminal Record:', criminalRecord);
+    console.log('Skills:', skills);
+    
+    container.innerHTML = renderCrimeExp(criminalRecord, skills);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
-function renderCrimeExp(merits) {
-  const crimeKeys = Object.entries(merits).filter(([key]) =>
-    key.toLowerCase().includes('crime') ||
-    key.toLowerCase().includes('theft') ||
-    key.toLowerCase().includes('fraud') ||
-    key.toLowerCase().includes('scam') ||
-    key.toLowerCase().includes('bootlegging') ||
-    key.toLowerCase().includes('graffiti') ||
-    key.toLowerCase().includes('shoplift') ||
-    key.toLowerCase().includes('pickpocket') ||
-    key.toLowerCase().includes('card') ||
-    key.toLowerCase().includes('counterfeiting') ||
-    key.toLowerCase().includes('disposal') ||
-    key.toLowerCase().includes('cracking') ||
-    key.toLowerCase().includes('traffic') ||
-    key.toLowerCase().includes('murder') ||
-    key.toLowerCase().includes('assassination')
-  );
+// Crime to category mapping - handles the criminalrecord API format
+// The criminalrecord API returns category-level counts (vandalism, theft, etc.)
+const CRIME_CATEGORIES = {
+  'vandalism': 'Vandalism',
+  'Vandalism': 'Vandalism',
+  'theft': 'Theft',
+  'Theft': 'Theft',
+  'counterfeiting': 'Counterfeiting',
+  'Counterfeiting': 'Counterfeiting',
+  'fraud': 'Fraud',
+  'Fraud': 'Fraud',
+  'illicitservices': 'Illicit Services',
+  'Illicit Services': 'Illicit Services',
+  'illicit_services': 'Illicit Services',
+  'cybercrime': 'Cybercrime',
+  'Cybercrime': 'Cybercrime',
+  'extortion': 'Extortion',
+  'Extortion': 'Extortion',
+  'illegalproduction': 'Illegal Production',
+  'Illegal Production': 'Illegal Production',
+  'illegal_production': 'Illegal Production'
+};
 
-  const rows = (crimeKeys.length > 0 ? crimeKeys : Object.entries(merits)).map(([key, val]) => `
-    <tr>
-      <td>${formatMeritName(key)}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${val}</td>
-    </tr>`).join('');
+const CATEGORY_ORDER = [
+  'Vandalism', 'Theft', 'Counterfeiting', 'Fraud', 
+  'Illicit Services', 'Cybercrime', 'Extortion', 'Illegal Production'
+];
 
-  return `
-    <div class="card">
-      <div class="card-header">Crime Merits</div>
-      <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr><th>Crime Type</th><th style="text-align:right;">XP / Level</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
+const CATEGORY_ICONS = {
+  'Vandalism': '🎨',
+  'Theft': '🦹',
+  'Counterfeiting': '🏦',
+  'Fraud': '🎭',
+  'Illicit Services': '💼',
+  'Cybercrime': '💻',
+  'Extortion': '🔫',
+  'Illegal Production': '🏭'
+};
+
+// ── Crime Skills ──────────────────────────────────────────────────────────────
+async function fetchCrimeSkills() {
+  const container = document.getElementById('crime-skills-data');
+  container.innerHTML = '<div class="channel-loading">LOADING CRIME SKILLS...</div>';
+  try {
+    const res = await fetch('/api/torn/crimeskills');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    
+    console.log('Crime Skills API Response:', data);
+    console.log('Full data object keys:', Object.keys(data));
+    console.log('Skills:', data.skills);
+    console.log('Skills keys:', data.skills ? Object.keys(data.skills) : 'null');
+    
+    // The skills might be nested differently - try different paths
+    const skills = data.skills || data.merits || {};
+    container.innerHTML = renderCrimeSkills(skills);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+// Crime skills to category mapping - comprehensive list of all crime skills
+const SKILL_CATEGORIES = {
+  // Vandalism
+  'graffiti': 'Vandalism',
+  'Graffiti': 'Vandalism',
+  // Theft
+  'shoplifting': 'Theft',
+  'Shoplifting': 'Theft',
+  'pickpocketing': 'Theft',
+  'Pickpocketing': 'Theft',
+  'card_skimming': 'Theft',
+  'card skimming': 'Theft',
+  'Card Skimming': 'Theft',
+  'burglary': 'Theft',
+  'Burglary': 'Theft',
+  'hustling': 'Theft',
+  'Hustling': 'Theft',
+  'search_for_cash': 'Theft',
+  'search for cash': 'Theft',
+  'Search for Cash': 'Theft',
+  // Counterfeiting
+  'counterfeiting': 'Counterfeiting',
+  'Counterfeiting': 'Counterfeiting',
+  'forgery': 'Counterfeiting',
+  'Forgery': 'Counterfeiting',
+  // Fraud
+  'scamming': 'Fraud',
+  'Scamming': 'Fraud',
+  'fraud': 'Fraud',
+  'Fraud': 'Fraud',
+  // Illicit Services
+  'illegal_services': 'Illicit Services',
+  'illegal services': 'Illicit Services',
+  'Illegal Services': 'Illicit Services',
+  // Cybercrime
+  'cracking': 'Cybercrime',
+  'Cracking': 'Cybercrime',
+  // Extortion
+  'extortion': 'Extortion',
+  'Extortion': 'Extortion',
+  // Illegal Production
+  'bootlegging': 'Illegal Production',
+  'Bootlegging': 'Illegal Production',
+  'disposal': 'Illegal Production',
+  'Disposal': 'Illegal Production',
+  'arson': 'Illegal Production',
+  'Arson': 'Illegal Production'
+};
+
+const SKILL_CATEGORY_ICONS = {
+  'Vandalism': '🎨',
+  'Theft': '🦹',
+  'Counterfeiting': '🏦',
+  'Fraud': '🎭',
+  'Illicit Services': '💼',
+  'Cybercrime': '💻',
+  'Extortion': '🔫',
+  'Illegal Production': '🏭'
+};
+
+function renderCrimeSkills(skills) {
+  // Filter for crime-related skills
+  const crimeSkillEntries = Object.entries(skills).filter(([key]) => {
+    const lowerKey = key.toLowerCase();
+    return SKILL_CATEGORIES[lowerKey] || SKILL_CATEGORIES[key];
+  });
+  
+  if (crimeSkillEntries.length === 0) {
+    return `
+      <div class="empty-state">
+        <span class="empty-icon">⚡</span>
+        <p>No crime skills found.</p>
+        <p class="muted">You haven't unlocked any crime skills yet. Commit crimes to gain skill levels.</p>
+      </div>`;
+  }
+
+  // Group by category
+  const grouped = {};
+  let totalSkillPoints = 0;
+  
+  crimeSkillEntries.forEach(([skill, level]) => {
+    const lowerKey = skill.toLowerCase();
+    const category = SKILL_CATEGORIES[lowerKey] || SKILL_CATEGORIES[skill];
+    if (!category) return;
+    
+    if (!grouped[category]) {
+      grouped[category] = { skills: [], totalLevel: 0 };
+    }
+    const skillLevel = parseInt(level) || 0;
+    grouped[category].skills.push({ name: skill, level: skillLevel });
+    grouped[category].totalLevel += skillLevel;
+    totalSkillPoints += skillLevel;
+  });
+
+  // Sort skills within each category by level descending
+  Object.values(grouped).forEach(cat => {
+    cat.skills.sort((a, b) => b.level - a.level);
+  });
+
+  // Build HTML
+  let html = `
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        ⚡ Crime Skills Summary
+        <span style="float:right;font-size:0.8rem;color:#555;">Total Skill Points: ${totalSkillPoints}</span>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          ${statTile(Object.keys(grouped).length, 'Skill Categories')}
+          ${statTile(crimeSkillEntries.length, 'Skills Unlocked')}
+          ${statTile(totalSkillPoints, 'Total Level')}
+        </div>
       </div>
     </div>`;
+
+  // Render each category
+  CATEGORY_ORDER.forEach(category => {
+    if (!grouped[category]) return;
+    
+    const catData = grouped[category];
+    const icon = SKILL_CATEGORY_ICONS[category] || '📁';
+    
+    let skillRows = catData.skills.map(skill => {
+      const maxLevel = 10;
+      const progress = skill.level / maxLevel;
+      const color = skill.level >= maxLevel ? '#4caf50' : skill.level >= 5 ? '#f0a500' : '#4a90e2';
+      
+      return `
+        <div style="margin-bottom:0.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+            <span style="font-size:0.85rem;color:#c0bcbc;">${skill.name}</span>
+            <span style="font-size:0.75rem;color:#555;font-family:'Share Tech Mono',monospace;">Level ${skill.level}/${maxLevel}</span>
+          </div>
+          <div style="background:#2a2828;border-radius:4px;height:8px;overflow:hidden;position:relative;">
+            <div style="width:${progress * 100}%;height:100%;background:${color};border-radius:4px;transition:width 0.3s;"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    html += `
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">
+          ${icon} ${category}
+          <span style="float:right;font-size:0.8rem;color:#555;">${catData.skills.length} skills · Level ${catData.totalLevel}</span>
+        </div>
+        <div class="card-body">
+          ${skillRows}
+        </div>
+      </div>`;
+  });
+
+  return html;
+}
+
+function renderCrimeExp(criminalRecord, skills) {
+  // Build a map of skill levels by normalized key
+  // Skills is an array of {slug, name, level} objects
+  const skillMap = {};
+  if (skills && Array.isArray(skills)) {
+    skills.forEach(skill => {
+      const slug = skill.slug ? skill.slug.toLowerCase() : '';
+      const name = skill.name ? skill.name.toLowerCase() : '';
+      const level = parseFloat(skill.level) || 0;
+      
+      // Map by both slug and name for flexibility
+      if (SKILL_CATEGORIES[slug] || SKILL_CATEGORIES[name]) {
+        skillMap[slug] = Math.round(level); // Round to whole number
+      }
+    });
+  } else if (skills && typeof skills === 'object') {
+    // Fallback for object format
+    Object.entries(skills).forEach(([key, level]) => {
+      const lowerKey = key.toLowerCase();
+      if (SKILL_CATEGORIES[lowerKey] || SKILL_CATEGORIES[key]) {
+        skillMap[lowerKey] = parseInt(level) || 0;
+      }
+    });
+  }
+
+  // Define the offense categories and their associated skills
+  const offenseCategories = {
+    'Vandalism': {
+      icon: '🎨',
+      skills: ['graffiti', 'arson']
+    },
+    'Theft': {
+      icon: '🦹',
+      skills: ['search_for_cash', 'shoplifting', 'pickpocketing', 'burglary']
+    },
+    'Counterfeiting': {
+      icon: '🏦',
+      skills: ['bootlegging', 'forgery']
+    },
+    'Fraud': {
+      icon: '🎭',
+      skills: ['card_skimming', 'hustling', 'scamming']
+    },
+    'Illicit Services': {
+      icon: '💼',
+      skills: ['disposal']
+    },
+    'Cybercrime': {
+      icon: '💻',
+      skills: ['cracking']
+    },
+    'Extortion': {
+      icon: '🔫',
+      skills: ['extortion']
+    },
+    'Illegal Production': {
+      icon: '🏭',
+      skills: [] // This category may have skills added in the future
+    }
+  };
+
+  // Check if there's any data
+  const hasCriminalRecord = Object.keys(criminalRecord || {}).length > 0;
+  const hasSkills = Object.keys(skillMap).length > 0;
+
+  if (!hasCriminalRecord && !hasSkills) {
+    return `
+      <div class="empty-state">
+        <span class="empty-icon">🔍</span>
+        <p>No crime data found.</p>
+        <p class="muted">You haven't committed any crimes or unlocked any crime skills yet.</p>
+      </div>`;
+  }
+
+  // Build HTML
+  let html = '';
+
+  // Render each offense category
+  CATEGORY_ORDER.forEach(category => {
+    const categoryData = offenseCategories[category];
+    if (!categoryData) return;
+
+    const { icon, skills: categorySkills } = categoryData;
+
+    // Get crime count from criminal record for this category
+    let categoryCrimeCount = 0;
+    Object.entries(criminalRecord || {}).forEach(([crime, count]) => {
+      const crimeCategory = CRIME_CATEGORIES[crime];
+      if (crimeCategory === category) {
+        categoryCrimeCount += parseInt(count) || 0;
+      }
+    });
+
+    // Build skill rows
+    let skillRows = '';
+    categorySkills.forEach(skillName => {
+      const skillLevel = skillMap[skillName] || 0;
+      const maxLevel = 100;
+      const progress = skillLevel / maxLevel;
+      const color = skillLevel >= 100 ? '#4caf50' : skillLevel >= 50 ? '#f0a500' : '#4a90e2';
+      const formattedSkillName = skillName.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+      skillRows += `
+        <div style="margin-bottom:0.75rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
+            <span style="font-size:0.85rem;color:#c0bcbc;">${formattedSkillName}</span>
+            <span style="font-size:0.75rem;color:#555;font-family:'Share Tech Mono',monospace;">${skillLevel}/${maxLevel}</span>
+          </div>
+          <div style="background:#2a2828;border-radius:4px;height:8px;overflow:hidden;position:relative;">
+            <div style="width:${progress * 100}%;height:100%;background:${color};border-radius:4px;transition:width 0.3s;"></div>
+          </div>
+        </div>`;
+    });
+
+    if (!skillRows && categoryCrimeCount === 0) return;
+
+    html += `
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">
+          ${icon} ${category} Offenses
+          <span style="float:right;font-size:0.8rem;color:#555;">${categoryCrimeCount.toLocaleString()} crimes committed</span>
+        </div>
+        <div class="card-body">
+          ${skillRows || '<p class="muted" style="font-size:0.85rem;">No skills unlocked in this category yet.</p>'}
+        </div>
+      </div>`;
+  });
+
+  return html;
 }
 
 function formatMeritName(key) {
@@ -1619,7 +1945,7 @@ const HELP_CONTENT = {
         `
       },
       {
-        heading: 'Crime XP',
+        heading: 'Crime Record',
         content: `
           <p class="help-text">Shows your crime-related merit levels broken down by crime type. This includes all crime merits like theft, fraud, scams, bootlegging, and more.</p>
           <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">Load</strong> to fetch your crime XP data. This loads on-demand to reduce API calls.</div>
@@ -2230,22 +2556,21 @@ function renderTravelProfits() {
         <div class="card-header">
           🌍 ${getCountryName(country)}
           <span style="float:right;font-size:0.75rem;color:#555;">
-            Travel: ~${travelTime}min (${travelMethod}) | Total (${quantity} items): $${formatNum(countryTotal)}
+            Travel: ~${travelTime}min | Total: $${formatNum(countryTotal)}
           </span>
         </div>
-        <div style="overflow-x:auto;">
-          <table class="members-table">
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
+          <table class="members-table" style="min-width:700px;">
             <thead>
               <tr>
-                <th>Item</th>
-                <th>Type</th>
-                <th style="text-align:center;">Avail</th>
-                <th style="text-align:right;">Buy Price</th>
-                <th style="text-align:right;">Market Price</th>
-                <th style="text-align:right;">Profit/Item</th>
-                <th style="text-align:right;">Profit %</th>
-                <th style="text-align:right;">Profit/Run</th>
-                <!-- <th style="text-align:center;">Restock</th> -->
+                <th style="white-space:nowrap;">Item</th>
+                <th style="white-space:nowrap;">Type</th>
+                <th style="text-align:center;white-space:nowrap;">Avail</th>
+                <th style="text-align:right;white-space:nowrap;">Buy</th>
+                <th style="text-align:right;white-space:nowrap;">Market</th>
+                <th style="text-align:right;white-space:nowrap;">Profit</th>
+                <th style="text-align:right;white-space:nowrap;">%</th>
+                <th style="text-align:right;white-space:nowrap;">Run</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>

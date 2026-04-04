@@ -523,8 +523,29 @@ app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
+    // Fetch criminal record data which includes crime counts by type
     const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=merits&key=${dbUser.tornApiKey}`
+      `https://api.torn.com/user/?selections=criminalrecord&key=${dbUser.tornApiKey}`
+    );
+    if (tornRes.data.error) {
+      return res.status(400).json({ error: tornRes.data.error.error });
+    }
+    res.json(tornRes.data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Personal crime skills ──────────────────────────────────────────────
+app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ discordId: req.user.id });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+    // Fetch skills data using v2 API which includes crime-related skills
+    const tornRes = await axios.get(
+      `https://api.torn.com/v2/user/?selections=skills&key=${dbUser.tornApiKey}`
     );
     if (tornRes.data.error) {
       return res.status(400).json({ error: tornRes.data.error.error });
