@@ -235,15 +235,6 @@ function renderTornUser(d) {
             ${infoBadge('Donator', d.donator === 1 ? '✅ Yes' : '❌ No')}
           </div>
         </div>
-        ${d.competition?.name ? `
-        <div style="margin-top:1.25rem;">
-          <div class="badge-label">Competition</div>
-          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Event', d.competition.name)}
-            ${infoBadge('Status', d.competition.status)}
-            ${infoBadge('HP', `${d.competition.current_hp}/${d.competition.max_hp}`)}
-          </div>
-        </div>` : ''}
         ${d.personalstats ? `
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Battle Stats</div>
@@ -262,7 +253,7 @@ function renderTornUser(d) {
 //            ${infoBadge('True Level', '<span id="true-level-display">Loading...</span>')}
 //            ${infoBadge('Addiction Level', '<span id="addiction-display">Loading...</span>')}
 
-/* REMOVE COMMENT WHEN READY TO REIMPLEMENT.
+/* REMOVE COMMENT WHEN READY TO RE-IMPLEMENT.
 async function fetchLevelProgress(currentLevel) {
   try {
     const res = await fetch('/api/torn/levelprogress');
