@@ -315,12 +315,35 @@ app.get('/', async (req, res) => {
 app.get('/auth/discord', passport.authenticate('discord'));
 
 app.get('/auth/discord/callback',
-  passport.authenticate('discord', { failureRedirect: '/' }),
   (req, res, next) => {
-    req.session.save((err) => {
-      if (err) return next(err);
-      res.redirect('/dashboard');
-    });
+    // Custom error handling for OAuth failures
+    passport.authenticate('discord', (err, user, info) => {
+      if (err) {
+        console.error('Discord OAuth Error:', err);
+        console.error('Error name:', err.name);
+        console.error('Error message:', err.message);
+        console.error('OAuth error details:', err.oauthError);
+        console.error('Stack:', err.stack);
+        return res.redirect('/?error=discord_auth_failed');
+      }
+      if (!user) {
+        console.error('No user returned from Discord OAuth');
+        return res.redirect('/?error=discord_auth_failed');
+      }
+      req.logIn(user, (loginErr) => {
+        if (loginErr) {
+          console.error('Login error:', loginErr);
+          return res.redirect('/?error=discord_auth_failed');
+        }
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error('Session save error:', saveErr);
+            return res.redirect('/?error=discord_auth_failed');
+          }
+          res.redirect('/dashboard');
+        });
+      });
+    })(req, res, next);
   }
 );
 
