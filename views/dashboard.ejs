@@ -41,9 +41,12 @@
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
             <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
+            <% if (isOwner || isLeadership || isWarlord) { %>
+              <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
+            <% } %>
             <% if (isOwner || isLeadership) { %>
               <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
-              <% } %>
+            <% } %>
           </nav>
         </aside>
 
@@ -81,31 +84,30 @@
                 <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono">
                     <%= user.id %>
                   </span></div>-->
-                <% if (user.ssgRoles && user.ssgRoles.length > 0) { %>
+                <% if (user.ssgRoles && user.ssgRoles.length> 0) { %>
                   <div class="profile-detail"><span class="label">SSG Roles</span>
                     <span class="value">
-                      <% 
-                        const roleNames = { 
-                          '1433161746365026334': 'Ownership',
-                          '1462906795860295802': 'Leadership',
-                          '1435059774722015232': 'Strategy',
-                          '1435060058063896698': 'Strength',
-                          '1435060175525384303': 'Growth'
-                        };
-                        const myRoles = user.ssgRoles.filter(r => roleNames[r]).map(r => roleNames[r]);
-                      %>
-                      <% if (myRoles.length > 0) { %>
-                        <% myRoles.forEach(function(role) { %>
-                          <span class="role-badge role-<%= role.toLowerCase() %>">
-                            <%= role %>
-                          </span>
-                        <% }); %>
-                      <% } else { %>
-                        <span class="muted">No SSG roles assigned</span>
-                      <% } %>
+                      <% const roleNames = {
+                        '1433161746365026334': 'Ownership',
+                        '1462906795860295802': 'Leadership',
+                        '1489569860403855540': 'Warlord',
+                        '1435059774722015232': 'Strategy',
+                        '1435060058063896698': 'Strength',
+                        '1435060175525384303': 'Growth'
+                      };
+                      const myRoles = user.ssgRoles.filter(r => roleNames[r]).map(r => roleNames[r]); %>
+                        <% if (myRoles.length> 0) { %>
+                          <% myRoles.forEach(function(role) { %>
+                            <span class="role-badge role-<%= role.toLowerCase() %>">
+                              <%= role %>
+                            </span>
+                            <% }); %>
+                              <% } else { %>
+                                <span class="muted">No SSG roles assigned</span>
+                                <% } %>
                     </span>
                   </div>
-                <% } %>
+                  <% } %>
               </div>
             </div>
 
@@ -169,7 +171,7 @@
               <h3>Discord Channels</h3>
               <button class="btn btn-small btn-outline" onclick="openHelp('channels')">❓ Help</button>
             </div>
-            <% if (accessibleChannels && accessibleChannels.length > 0) { %>
+            <% if (accessibleChannels && accessibleChannels.length> 0) { %>
               <div class="channel-toolbar">
                 <label for="channel-select" class="toolbar-label">Select Channel:</label>
                 <select id="channel-select" class="channel-dropdown" onchange="loadChannel(this.value)">
@@ -281,16 +283,7 @@
                 <p>Click Refresh to load faction data.</p>
               </div>
             </div>
-            <div class="section-header" style="margin-top:2rem;">
-              <h3>War Stats</h3>
-              <button class="btn btn-primary btn-small" onclick="fetchWarStats()">↻ Refresh</button>
-            </div>
-            <div id="war-stats-data">
-              <div class="empty-state">
-                <span class="empty-icon">⚔️</span>
-                <p>Click Refresh to load current war stats.</p>
-              </div>
-            </div>
+            
           </section>
 
           <!-- ── TRAVEL ── -->
@@ -352,46 +345,65 @@
                 <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;">
                   <!-- Travel Method -->
                   <div>
-                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Travel Method</label>
+                    <label
+                      style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Travel
+                      Method</label>
                     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="radio" name="travelMethod" value="standard" checked onchange="renderTravelProfits()"/> Standard
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="radio" name="travelMethod" value="standard" checked
+                          onchange="renderTravelProfits()" /> Standard
                       </label>
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="radio" name="travelMethod" value="airstrip" onchange="renderTravelProfits()"/> Airstrip
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="radio" name="travelMethod" value="airstrip" onchange="renderTravelProfits()" />
+                        Airstrip
                       </label>
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="radio" name="travelMethod" value="private" onchange="renderTravelProfits()"/> Private
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="radio" name="travelMethod" value="private" onchange="renderTravelProfits()" />
+                        Private
                       </label>
                     </div>
                   </div>
                   <!-- Item Types -->
                   <div>
-                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Item Types</label>
+                    <label
+                      style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Item
+                      Types</label>
                     <div style="display:flex;gap:0.75rem;flex-wrap:wrap;">
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="checkbox" id="type-plushie" checked onchange="renderTravelProfits()"/> Plushie
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-plushie" checked onchange="renderTravelProfits()" /> Plushie
                       </label>
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="checkbox" id="type-flower" checked onchange="renderTravelProfits()"/> Flower
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-flower" checked onchange="renderTravelProfits()" /> Flower
                       </label>
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="checkbox" id="type-drug" checked onchange="renderTravelProfits()"/> Drug
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-drug" checked onchange="renderTravelProfits()" /> Drug
                       </label>
-                      <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="checkbox" id="type-other" onchange="renderTravelProfits()"/> Other
+                      <label
+                        style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                        <input type="checkbox" id="type-other" onchange="renderTravelProfits()" /> Other
                       </label>
                     </div>
                   </div>
                   <!-- Quantity -->
                   <div>
-                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Quantity</label>
-                    <input type="number" id="profit-quantity" class="form-input" value="25" min="5" max="29" onchange="renderTravelProfits()" style="width:80px;"/>
+                    <label
+                      style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Quantity</label>
+                    <input type="number" id="profit-quantity" class="form-input" value="25" min="5" max="29"
+                      onchange="renderTravelProfits()" style="width:80px;" />
                   </div>
                   <!-- Sort -->
                   <div>
-                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Sort By</label>
-                    <select id="profit-sort" class="channel-dropdown" onchange="renderTravelProfits()" style="min-width:140px;">
+                    <label
+                      style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.4rem;">Sort
+                      By</label>
+                    <select id="profit-sort" class="channel-dropdown" onchange="renderTravelProfits()"
+                      style="min-width:140px;">
                       <option value="profitPerRun">Profit/Run</option>
                       <option value="profit">Profit/Item</option>
                       <option value="profitPercent">Profit %</option>
@@ -415,9 +427,9 @@
               <h3>Training Resources</h3>
               <button class="btn btn-small btn-outline" onclick="openHelp('training')">❓ Help</button>
             </div>
-            <% if (accessibleTraining && accessibleTraining.length > 0) { %>
+            <% if (accessibleTraining && accessibleTraining.length> 0) { %>
               <div class="training-grid">
-                  <% accessibleTraining.forEach(function(ch) { %>
+                <% accessibleTraining.forEach(function(ch) { %>
                   <div class="training-card">
                     <div class="training-card-header">
                       <%= ch.name %>
@@ -476,47 +488,85 @@
             </div>
           </section>
 
-          <!-- ── ADMIN ── -->
-          <% if (isOwner || isLeadership) { %>
-            <section id="admin" class="section">
+          <!-- War Section -->
+          <% if (isOwner || isLeadership || isWarlord) { %>
+            <section id="war" class="section">
               <div class="section-header">
-                <h3>Admin Panel</h3>
-                <button class="btn btn-small btn-outline" onclick="openHelp('admin')">❓ Help</button>
+                <h3>War Panel</h3>
+                <button class="btn btn-small btn-outline" onclick="openHelp('war')">❓ Help</button>
               </div>
 
-              <!-- Member Overview -->
+              <!-- War Data Overview -->
               <div class="section-header" style="margin-top:0;">
-                <h3>Member Overview</h3>
+                <h3>War Data Overview</h3>
                 <div style="display:flex;gap:0.75rem;">
-                  <button class="btn btn-primary btn-small" onclick="fetchMemberOverview()">↻ Refresh</button>
-                  <button class="btn btn-small btn-outline" onclick="exportOverviewCSV()">⬇️ Export CSV</button>
+                  <button class="btn btn-primary btn-small" onclick="fetchWarDataOverview()">↻ Refresh</button>
                 </div>
               </div>
               <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
-                Enriched data shown for members with a saved API key. Click any column header to sort.
+                Enriched data shown for war to assist Warlords in planning. Click any column header to sort.
               </p>
-              <div id="admin-overview-data">
+              <div id="war-overview-data">
                 <div class="empty-state">
                   <span class="empty-icon">🛡️</span>
-                  <p>Click Refresh to load member overview.</p>
+                  <p>Click Refresh to load war data overview.</p>
                 </div>
               </div>
-
-              <!-- Member Total Stats -->
               <div class="section-header" style="margin-top:2rem;">
-                <h3>Member Total Stats</h3>
-                <button class="btn btn-primary btn-small" onclick="fetchMemberStats()">↻ Refresh</button>
+              <h3>War Stats</h3>
+              <button class="btn btn-primary btn-small" onclick="fetchWarStats()">↻ Refresh</button>
+            </div>
+            <div id="war-stats-data">
+              <div class="empty-state">
+                <span class="empty-icon">⚔️</span>
+                <p>Click Refresh to load current war stats.</p>
               </div>
-              <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">Only members who have saved their API key
-                are shown.</p>
-              <div id="admin-stats-data">
-                <div class="empty-state">
-                  <span class="empty-icon">📊</span>
-                  <p>Click Refresh to load member stats.</p>
-                </div>
-              </div>
+            </div>
             </section>
             <% } %>
+
+              <!-- ── ADMIN ── -->
+              <% if (isOwner || isLeadership) { %>
+                <section id="admin" class="section">
+                  <div class="section-header">
+                    <h3>Admin Panel</h3>
+                    <button class="btn btn-small btn-outline" onclick="openHelp('admin')">❓ Help</button>
+                  </div>
+
+                  <!-- Member Overview -->
+                  <div class="section-header" style="margin-top:0;">
+                    <h3>Member Overview</h3>
+                    <div style="display:flex;gap:0.75rem;">
+                      <button class="btn btn-primary btn-small" onclick="fetchMemberOverview()">↻ Refresh</button>
+                      <button class="btn btn-small btn-outline" onclick="exportOverviewCSV()">⬇️ Export CSV</button>
+                    </div>
+                  </div>
+                  <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                    Enriched data shown for members with a saved API key. Click any column header to sort.
+                  </p>
+                  <div id="admin-overview-data">
+                    <div class="empty-state">
+                      <span class="empty-icon">🛡️</span>
+                      <p>Click Refresh to load member overview.</p>
+                    </div>
+                  </div>
+
+                  <!-- Member Total Stats -->
+                  <div class="section-header" style="margin-top:2rem;">
+                    <h3>Member Total Stats</h3>
+                    <button class="btn btn-primary btn-small" onclick="fetchMemberStats()">↻ Refresh</button>
+                  </div>
+                  <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">Only members who have saved their API
+                    key
+                    are shown.</p>
+                  <div id="admin-stats-data">
+                    <div class="empty-state">
+                      <span class="empty-icon">📊</span>
+                      <p>Click Refresh to load member stats.</p>
+                    </div>
+                  </div>
+                </section>
+                <% } %>
 
         </main>
       </div>
@@ -536,7 +586,11 @@
   <script>
     const IS_LEADERSHIP = <% if (isOwner || isLeadership) { %> true <% } else { %> false <% } %>;
   </script>
-  <script src="/js/dashboard.js"></script>
+  <script>
+    const IS_WARLORD = <% if (isWarlord) { %> true <% } else { %> false <% } %>;
+  </script>
+  <script src="/js/dashboard.js">
+  </script>
 </body>
 
 </html>

@@ -62,6 +62,7 @@ const CHANNELS = {
 const ROLES = {
   ownership: '1433161746365026334',
   leadership: '1462906795860295802',
+  warlord: '1489569860403855540',
   strategy: '1435059774722015232',
   strength: '1435060058063896698',
   growth: '1435060175525384303',
@@ -70,6 +71,7 @@ const ROLES = {
 const ROLE_CHANNEL_ACCESS = {
   [ROLES.ownership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
   [ROLES.leadership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  [ROLES.warlord]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
   [ROLES.strategy]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
   [ROLES.strength]: ['announcements', 'strength', 'war'],
   [ROLES.growth]: ['announcements', 'growth', 'war'],
@@ -80,37 +82,37 @@ const TRAINING_CHANNELS = [
     id: '1435414594410512494',
     name: '📊 Stats Training',
     description: 'Advanced stat training guides and strategies.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength]
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.warlord]
   },
   {
     id: '1435416169946415194',
     name: '💰 Money Making Training',
     description: 'Guides on making money to fund your stats growth.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength]
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.warlord]
   },
   {
     id: '1435413325725958165',
     name: '⬆️ Level Training',
     description: 'Everything you need to know about leveling up fast.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
   },
   {
     id: '1435414982316654746',
     name: '🔗 Chains',
     description: 'Detailed walkthrough on what chains are.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
   },
   {
     id: '1435416378709508138',
     name: '🫆 Crimes Training',
     description: 'Guide for all members on Crimes in Torn.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
   },
   {
     id: '1435416812706857225',
     name: '🗝️ Organized Crimes Training',
     description: 'Guide for all members on Organized Crimes in Torn.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth]
+    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
   },
 ];
 
@@ -275,6 +277,13 @@ const isLeadershipOrOwnership = (req, res, next) => {
   next();
 };
 
+const isWarlord = (req, res, next) => {
+  if (!req.user?.ssgRoles?.includes(ROLES.warlord)) {
+    return res.status(403).json({ error: 'Ownership, Leadership, or Warlord role required.' });
+  }
+  next();
+};
+
 // ─── HELPER ──────────────────────────────────────────────────────────────────
 function getAccessibleChannels(ssgRoles) {
   const accessible = new Set();
@@ -303,8 +312,8 @@ app.get('/', async (req, res) => {
         'Leader': 'Ownership',
         'Co-leader': 'Ownership',
         'Matriarch': 'Ownership',
-        'War Lord': 'Leadership',
         'Leadership': 'Leadership',
+        'Warlord': 'Warlord',
         'Team Strategy': 'Strategy',
         'Team Strength': 'Strength',
         'Team Growth': 'Growth',
@@ -356,6 +365,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
   const isOwner = req.user.ssgRoles?.includes(ROLES.ownership) || false;
   const isLeadership = req.user.ssgRoles?.includes(ROLES.leadership) || false;
+  const isWarlord = req.user.ssgRoles?.includes(ROLES.warlord) || false;
   const factionKey = await getFactionApiKey();
 
   const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
@@ -369,6 +379,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     tornApiKey: dbUser?.tornApiKey || null,
     isOwner,
     isLeadership,
+    isWarlord,
     hasFactionKey: !!factionKey
   });
 });
@@ -1300,6 +1311,7 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Addiction level ─────────────────────────────────────────────────────
+/* Remove Comment to pull addiction script back in
 app.get('/api/torn/addiction', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ discordId: req.user.id });
@@ -1338,7 +1350,7 @@ app.get('/api/torn/addiction', isAuthenticated, async (req, res) => {
     console.error('[/api/torn/addiction]', err.message);
     return res.status(500).json({ error: 'Server error fetching addiction level.' });
   }
-});
+});*/
 
 // ─── API: Bank Rates ──────────────────────────────────────────────────────────
 app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {

@@ -124,7 +124,7 @@
     <div class="groups-grid">
       <% groups.forEach(function(group) { %>
         <div
-          class="<%= group.name.toLowerCase() === 'ownership' ? 'owner-card' : group.name.toLowerCase() === 'leadership' ? 'lead-card' : group.name.toLowerCase() === 'strategy' ? 'strat-card' : group.name.toLowerCase() === 'strength' ? 'stren-card' : 'grow-card' %>">
+          class="<%= group.name.toLowerCase() === 'ownership' ? 'owner-card' : group.name.toLowerCase() === 'leadership' ? 'lead-card' : group.name.toLowerCase() === 'strategy' ? 'strat-card' : group.name.toLowerCase() === 'warlord' ? 'strat-card' : group.name.toLowerCase() === 'strength' ? 'stren-card' : 'grow-card' %>">
           <div class="group-header">
             <h3>
               <%= group.name %>
@@ -152,16 +152,18 @@
     <div class="apply-section">
       <h2 style="text-align:center;margin-bottom:0.5rem;">Apply to S.S.G</h2>
       <p style="text-align:center;color:#666;margin-bottom:2rem;">Answer the questions below honestly. All must be
-        agreed to before applying.</p>
+        agreed to before applying.
+        <br>
+        Your Torn name comes from your profile. It's under Basic Information and appears like Chedburn_Jr_Rocks [1234567]</p>
 
       <div class="apply-card">
         <div class="apply-field">
           <label class="apply-label">Your Torn Name</label>
-          <input type="text" id="apply-torn-name" class="apply-input" placeholder="e.g. The_Rev_Skippy" />
+          <input type="text" id="apply-torn-name" class="apply-input" placeholder="e.g. Chedburn_Jr_Rocks" />
         </div>
         <div class="apply-field">
           <label class="apply-label">Your Torn ID</label>
-          <input type="text" id="apply-torn-id" class="apply-input" placeholder="e.g. 3811076" />
+          <input type="text" id="apply-torn-id" class="apply-input" placeholder="e.g. 1234567" />
         </div>
 
         <div class="apply-questions">
@@ -197,7 +199,9 @@
           </div>
           <div class="apply-question">
             <p class="apply-q-text">5. Do you agree that once you're over level 15, you will do a stat jump (candy,
-              happy, console, etc.) weekly?</p>
+              happy, console, etc.) weekly?
+              <br>
+              <strong>A candy or happy jump consists of 4 Xanax, 49 candies or 5 DVDs, and an ecstasy.</strong></p>
             <div class="apply-radio-group">
               <label class="apply-radio"><input type="radio" name="q5" value="yes"> Yes</label>
               <label class="apply-radio"><input type="radio" name="q5" value="no"> No</label>

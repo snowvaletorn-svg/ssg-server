@@ -6,9 +6,10 @@ function showSection(sectionId, el) {
   if (el) el.classList.add('active');
 
   if (sectionId === 'torn') { fetchTornUser(); }
-  if (sectionId === 'faction') { fetchFaction(); fetchWarStats(); }
+  if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
+  if (sectionId === 'war') {fetchWarDataOverview(); fetchWarStats(); }
   if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
 }
 
@@ -177,9 +178,11 @@ async function fetchTornUser() {
     container.innerHTML = renderTornUser(data);
     // Random delay 0-5 seconds before level progress to avoid simultaneous HOF calls
     const delay = Math.floor(Math.random() * 5000);
-    setTimeout(() => fetchLevelProgress(data.level), delay);
+    //Remove comment tag when ready to display True Level after getting it to work.
+    //setTimeout(() => fetchLevelProgress(data.level), delay);
     // Fetch addiction level
-    fetchAddictionLevel();
+    //Remove comment tag when ready to display Addiction level after getting it to work.
+    //fetchAddictionLevel();
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
@@ -230,8 +233,6 @@ function renderTornUser(d) {
             ${infoBadge('Property', d.property || 'None')}
             ${infoBadge('Rank', d.rank || 'N/A')}
             ${infoBadge('Donator', d.donator === 1 ? '✅ Yes' : '❌ No')}
-            ${infoBadge('True Level', '<span id="true-level-display">Loading...</span>')}
-            ${infoBadge('Addiction Level', '<span id="addiction-display">Loading...</span>')}
           </div>
         </div>
         ${d.competition?.name ? `
@@ -247,17 +248,21 @@ function renderTornUser(d) {
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Battle Stats</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-            ${infoBadge('Strength', formatNum(d.personalstats.strength))}
-            ${infoBadge('Defense', formatNum(d.personalstats.defense))}
-            ${infoBadge('Speed', formatNum(d.personalstats.speed))}
-            ${infoBadge('Dexterity', formatNum(d.personalstats.dexterity))}
-            ${infoBadge('Total', formatNum(d.personalstats.totalstats))}
+            ${infoBadge('Strength', formatNumFull(d.personalstats.strength))}
+            ${infoBadge('Defense', formatNumFull(d.personalstats.defense))}
+            ${infoBadge('Speed', formatNumFull(d.personalstats.speed))}
+            ${infoBadge('Dexterity', formatNumFull(d.personalstats.dexterity))}
+            ${infoBadge('Total', formatNumFull(d.personalstats.totalstats))}
           </div>
         </div>` : ''}
       </div>
     </div>`;
 }
+//Add these lines back in at line 236 and 237 when ready (underneath the donator line)
+//            ${infoBadge('True Level', '<span id="true-level-display">Loading...</span>')}
+//            ${infoBadge('Addiction Level', '<span id="addiction-display">Loading...</span>')}
 
+/* REMOVE COMMENT WHEN READY TO REIMPLEMENT.
 async function fetchLevelProgress(currentLevel) {
   try {
     const res = await fetch('/api/torn/levelprogress');
@@ -288,11 +293,12 @@ async function fetchLevelProgress(currentLevel) {
         trueEl.innerHTML = `<span style="color:#2ecc71;">${data.display}</span>`;
       }
     }
-  } catch { /* silent fail */ }
+  } catch { // silent fail  }
 }
-
+*/
 // ── Addiction Level ──────────────────────────────────────────────────────────
 // Clear any stale addiction cache on page load
+/* REMOVE COMMENT WHEN READY TO REIMPLEMENT.
 localStorage.removeItem('addictionLevelCache');
 localStorage.removeItem('addictionLevelCacheDate');
 
@@ -337,7 +343,7 @@ function updateAddictionDisplay(data) {
       <span style="color:#888;font-size:0.75rem;margin-left:0.3rem;">${status}</span>`;
   }
 }
-
+*/
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
 async function fetchHonors() {
   const container = document.getElementById('honors-data');
@@ -847,7 +853,7 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
   const hasStats = Object.keys(statsMap).length > 0;
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
     'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
   };
 
@@ -862,7 +868,7 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
       const status = m.last_action?.status || 'Offline';
       const statusClass = `status-${status.toLowerCase()}`;
       const memberStats = statsMap[m.id];
-      const totalStats = memberStats ? formatNum(memberStats.totalstats) : '—';
+      const totalStats = memberStats ? formatNumFull(memberStats.totalstats) : '—';
 
       const travelInfo = travelMap[m.id];
       let travelCell = '🏠 Torn';
@@ -1154,6 +1160,151 @@ function renderWarStats(data) {
       </div>
     </div>`;
 }
+// ── War Data Overview ─────────────────────────────────────────────────────
+let warDataOverview = [];
+let warDataOverviewSortCol = 'position';
+let warDataOverviewSortAsc = true;
+
+async function fetchWarDataOverview() {
+  const container = document.getElementById('war-overview-data');
+  container.innerHTML = '<div class="channel-loading">LOADING WAR DATA OVERVIEW...</div>';
+  try {
+    const res = await fetch('/api/admin/member-overview');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    warDataOverview = data.members || [];
+    renderWarOverview();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function sortWarDataOverview(col) {
+  if (warDataOverviewSortCol === col) {
+    warDataOverviewSortAsc = !warDataOverviewSortAsc;
+  } else {
+    warDataOverviewSortCol = col;
+    warDataOverviewSortAsc = true;
+  }
+  renderWarOverview();
+}
+
+function renderWarOverview() {
+  const container = document.getElementById('war-overview-data');
+  if (!warDataOverview.length) {
+    container.innerHTML = '<div class="empty-state"><p class="muted">No member data found.</p></div>';
+    return;
+  }
+
+  const positionOrder = {
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
+    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+  };
+
+  const sorted = [...warDataOverview].sort((a, b) => {
+    let aVal, bVal;
+    switch (warDataOverviewSortCol) {
+      case 'name':
+        aVal = a.name?.toLowerCase() || '';
+        bVal = b.name?.toLowerCase() || '';
+        break;
+      case 'position':
+        aVal = positionOrder[a.position] ?? 99;
+        bVal = positionOrder[b.position] ?? 99;
+        break;
+      case 'energy':
+        aVal = a.energy?.current ?? -1;
+        bVal = b.energy?.current ?? -1;
+        break;
+      case 'medical':
+        aVal = a.cooldowns?.medical ?? -1;
+        bVal = b.cooldowns?.medical ?? -1;
+        break;
+      default:
+        aVal = a.name?.toLowerCase() || '';
+        bVal = b.name?.toLowerCase() || '';
+    }
+    if (typeof aVal === 'string') {
+      return warDataOverviewSortAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    }
+    return warDataOverviewSortAsc ? aVal - bVal : bVal - aVal;
+  });
+
+  const arrow = col => warDataOverviewSortCol === col ? (warDataOverviewSortAsc ? ' ▲' : ' ▼') : '';
+
+  const rows = sorted.map((m, i) => {
+    const property = m.property || '—';
+
+    const job = m.job
+      ? `${escapeHtml(m.job.position)}<br><span style="color:#555;font-size:0.78rem;">${escapeHtml(m.job.company_name)}</span>`
+      : '—';
+
+    const energyDisplay = m.energy ? `${m.energy.current}/${m.energy.maximum}` : '—';
+    const isDonator = m.energy?.maximum >= 150;
+    const donatorBadge = m.energy
+      ? `<span style="font-size:0.7rem;color:${isDonator ? '#f0a500' : '#555'};margin-left:0.3rem;">${isDonator ? '★' : '○'}</span>`
+      : '';
+
+    const drugCD = m.cooldowns
+      ? (m.cooldowns.drug > 0
+        ? `<span title="Drug cooldown: ${formatCooldown(m.cooldowns.drug)}" style="cursor:help;color:#e74c3c;">💊 ${formatCooldown(m.cooldowns.drug)}</span>`
+        : `<span style="color:#2ecc71;">💊 Ready</span>`)
+      : '—';
+
+    const boosterCD = m.cooldowns
+      ? (m.cooldowns.booster > 0
+        ? `<span style="color:#e67e22;">⚡ ${formatCooldown(m.cooldowns.booster)}</span>`
+        : `<span style="color:#2ecc71;">⚡ Ready</span>`)
+      : '—';
+
+    const energyCell = m.energy || m.cooldowns ? `
+      <div>${energyDisplay}${donatorBadge}</div>
+      <div style="font-size:0.78rem;margin-top:0.2rem;">${drugCD}</div>
+      <div style="font-size:0.78rem;">${boosterCD}</div>
+    ` : '—';
+
+    const medicalCell = m.cooldowns
+      ? (m.cooldowns.medical > 0
+        ? `<span style="color:#e74c3c;">${formatCooldown(m.cooldowns.medical)}</span>`
+        : `<span style="color:#2ecc71;">Ready</span>`)
+      : '—';
+
+    return `<tr>
+      <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
+      <td>
+        <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" rel="noopener"
+          style="color:#a78df5;text-decoration:none;">${escapeHtml(m.name)}</a>
+        <span style="color:#555;font-size:0.75rem;"> [${m.id}]</span>
+      </td>
+      <td style="font-size:0.85rem;">${m.position || '—'}</td>
+      <td style="font-size:0.85rem;">${energyCell}</td>
+      <td style="font-size:0.85rem;text-align:center;">${medicalCell}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="members-table overview-table">
+        <thead>
+          <tr>
+            <th style="text-align:center;width:40px;">#</th>
+            <th class="sortable" onclick="sortWarDataOverview('name')"       style="cursor:pointer;">Name${arrow('name')}</th>
+            <th class="sortable" onclick="sortWarDataOverview('position')"   style="cursor:pointer;">Position${arrow('position')}</th>
+            <th class="sortable" onclick="sortWarDataOverview('energy')"     style="cursor:pointer;">Energy & Cooldowns${arrow('energy')}</th>
+            <th class="sortable" onclick="sortWarDataOverview('medical')"    style="cursor:pointer;">Medical CD${arrow('medical')}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
+      ★ = Donator &nbsp;|&nbsp; 💊 = Drug cooldown &nbsp;|&nbsp; ⚡ = Booster cooldown &nbsp;|&nbsp;
+      <span style="color:#ff4444;">Red last action</span> = offline 23+ hours
+    </p>`;
+}
+
+
 
 // ── Admin Member Overview ─────────────────────────────────────────────────────
 let overviewData = [];
@@ -1192,7 +1343,7 @@ function renderMemberOverview() {
   }
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
     'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
   };
 
@@ -1375,7 +1526,7 @@ function exportOverviewCSV() {
   ];
 
   const positionOrder = {
-    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'War Lord': 4,
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
     'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
   };
 
@@ -1447,11 +1598,11 @@ function renderMemberStats(stats) {
       <td style="color:#555;font-size:0.8rem;">${i + 1}</td>
       <td>${escapeHtml(m.name)}</td>
       <td style="text-align:center;">${m.level || '—'}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.strength)}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.defense)}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.speed)}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNum(m.dexterity)}</td>
-      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-weight:600;">${formatNum(m.totalstats)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(m.strength)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(m.defense)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(m.speed)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(m.dexterity)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-weight:600;">${formatNumFull(m.totalstats)}</td>
     </tr>`).join('');
 
   return `
@@ -1793,6 +1944,15 @@ function formatNum(n) {
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
   return n.toLocaleString();
 }
+
+function formatNumFull(n) {
+  if (n == null) return '—';
+  return n.toLocaleString();
+}
+
+// Examples:
+// 123456789 -> "123,456,789"
+// 1000      -> "1,000"
 
 
 
