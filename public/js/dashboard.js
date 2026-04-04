@@ -176,13 +176,6 @@ async function fetchTornUser() {
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     container.innerHTML = renderTornUser(data);
-    // Random delay 0-5 seconds before level progress to avoid simultaneous HOF calls
-    const delay = Math.floor(Math.random() * 5000);
-    //Remove comment tag when ready to display True Level after getting it to work.
-    //setTimeout(() => fetchLevelProgress(data.level), delay);
-    // Fetch addiction level
-    //Remove comment tag when ready to display Addiction level after getting it to work.
-    //fetchAddictionLevel();
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
@@ -249,92 +242,6 @@ function renderTornUser(d) {
       </div>
     </div>`;
 }
-//Add these lines back in at line 236 and 237 when ready (underneath the donator line)
-//            ${infoBadge('True Level', '<span id="true-level-display">Loading...</span>')}
-//            ${infoBadge('Addiction Level', '<span id="addiction-display">Loading...</span>')}
-
-/* REMOVE COMMENT WHEN READY TO RE-IMPLEMENT.
-async function fetchLevelProgress(currentLevel) {
-  try {
-    const res = await fetch('/api/torn/levelprogress');
-    const data = await res.json();
-    if (!res.ok || !data.display) return;
-
-    // Update level tile
-    const levelEl = document.getElementById('level-display');
-    if (levelEl) {
-      levelEl.textContent = data.display;
-      levelEl.title = `${data.progress ?? '?'}% to level ${currentLevel + 1}`;
-    }
-
-    // Update true level badge
-    const trueEl = document.getElementById('true-level-display');
-    if (trueEl) {
-      const trueLevel = parseFloat(data.display);
-      const isHolding = trueLevel >= currentLevel + 1;
-      const levelsHeld = Math.floor(trueLevel) - currentLevel;
-
-      if (isHolding) {
-        trueEl.innerHTML = `
-          <span style="color:#f0a500;font-weight:600;">${data.display}</span>
-          <span style="color:#e74c3c;font-size:0.75rem;margin-left:0.3rem;">
-            ⚠️ Holding ${levelsHeld} level${levelsHeld !== 1 ? 's' : ''}
-          </span>`;
-      } else {
-        trueEl.innerHTML = `<span style="color:#2ecc71;">${data.display}</span>`;
-      }
-    }
-  } catch { // silent fail  }
-}
-*/
-// ── Addiction Level ──────────────────────────────────────────────────────────
-// Clear any stale addiction cache on page load
-/* REMOVE COMMENT WHEN READY TO REIMPLEMENT.
-localStorage.removeItem('addictionLevelCache');
-localStorage.removeItem('addictionLevelCacheDate');
-
-async function fetchAddictionLevel() {
-  try {
-    const res = await fetch('/api/torn/addiction', { credentials: 'include' });
-    const data = await res.json();
-    if (!res.ok || data.display === undefined || data.display === null) {
-      // Clear loading text on failure
-      const addictionEl = document.getElementById('addiction-display');
-      if (addictionEl) {
-        addictionEl.innerHTML = '—';
-        console.error('Failed to fetch addiction level:', data.error || 'Unknown error');
-      }
-      return;
-    }
-
-    // Update addiction level badge (always fetch fresh data - no caching)
-    updateAddictionDisplay(data);
-  } catch {
-    // Clear loading text on error
-    const addictionEl = document.getElementById('addiction-display');
-    if (addictionEl) {
-      addictionEl.innerHTML = '—';
-      console.error('Failed to fetch addiction level: network or parse error');
-    }
-  }
-}
-
-function updateAddictionDisplay(data) {
-  const addictionEl = document.getElementById('addiction-display');
-  if (addictionEl) {
-    const addictionStr = data.display || data.addiction || 'Clean';
-    const addictionLevel = data.addictionLevel ?? 0;
-    // Color based on addiction level: Clean=green, Occasional=yellow, Light=orange, Moderate=red, High=dark red
-    const colors = { 'Clean': '#2ecc71', 'Occasional': '#f1c40f', 'Light': '#e67e22', 'Moderate': '#e74c3c', 'High': '#c0392b' };
-    const color = colors[addictionStr] || '#2ecc71';
-    const status = addictionLevel > 0 ? '⚠️ Addicted' : '✅ Clean';
-    
-    addictionEl.innerHTML = `
-      <span style="color:${color};font-weight:600;">${addictionStr}</span>
-      <span style="color:#888;font-size:0.75rem;margin-left:0.3rem;">${status}</span>`;
-  }
-}
-*/
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
 async function fetchHonors() {
   const container = document.getElementById('honors-data');
@@ -1160,7 +1067,7 @@ async function fetchWarDataOverview() {
   const container = document.getElementById('war-overview-data');
   container.innerHTML = '<div class="channel-loading">LOADING WAR DATA OVERVIEW...</div>';
   try {
-    const res = await fetch('/api/admin/member-overview');
+    const res = await fetch('/api/war/member-overview');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
     warDataOverview = data.members || [];
@@ -1270,6 +1177,7 @@ function renderWarOverview() {
       <td style="font-size:0.85rem;">${m.position || '—'}</td>
       <td style="font-size:0.85rem;">${energyCell}</td>
       <td style="font-size:0.85rem;text-align:center;">${medicalCell}</td>
+      <td style="font-size:0.85rem;text-align:center;">${m.revive_setting || '—'}</td>
     </tr>`;
   }).join('');
 
@@ -1283,7 +1191,7 @@ function renderWarOverview() {
             <th class="sortable" onclick="sortWarDataOverview('position')"   style="cursor:pointer;">Position${arrow('position')}</th>
             <th class="sortable" onclick="sortWarDataOverview('energy')"     style="cursor:pointer;">Energy & Cooldowns${arrow('energy')}</th>
             <th class="sortable" onclick="sortWarDataOverview('medical')"    style="cursor:pointer;">Medical CD${arrow('medical')}</th>
-            <th></th>
+            <th>Revive</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>

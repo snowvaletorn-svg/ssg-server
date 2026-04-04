@@ -17,35 +17,6 @@ const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Function to find an available port starting from the preferred port
-async function findAvailablePort(startPort) {
-  const net = require('net');
-  
-  return new Promise((resolve) => {
-    function checkPort(port) {
-      const server = net.createServer();
-      
-      server.listen(port, () => {
-        server.once('close', () => {
-          resolve(port);
-        });
-        server.close();
-      });
-      
-      server.on('error', (err) => {
-        if (err.code === 'EADDRINUSE') {
-          // Port is in use, try next port
-          checkPort(port + 1);
-        } else {
-          // Some other error, fallback to original port
-          resolve(startPort);
-        }
-      });
-    }
-    
-    checkPort(parseInt(startPort));
-  });
-}
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const SSG_GUILD_ID = '1432576178383753309';
@@ -278,7 +249,8 @@ const isLeadershipOrOwnership = (req, res, next) => {
 };
 
 const isWarlord = (req, res, next) => {
-  if (!req.user?.ssgRoles?.includes(ROLES.warlord)) {
+  const roles = req.user?.ssgRoles || [];
+  if (!roles.includes(ROLES.ownership) && !roles.includes(ROLES.leadership) && !roles.includes(ROLES.warlord)) {
     return res.status(403).json({ error: 'Ownership, Leadership, or Warlord role required.' });
   }
   next();
@@ -1000,6 +972,72 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
   }
 });
 
+// ─── API: War member overview (Warlord, Leadership, Ownership) ─────────────────
+app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
+    const factionMembers = factionRes.data.members || [];
+
+    const dbUsers = await User.find({}, 'discordId username tornApiKey tornPlayerId tornName lastSeen tornKeyUpdatedAt');
+    const dbByTornId = {};
+    dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
+
+    const enrichResults = await Promise.allSettled(
+      factionMembers.map(async m => {
+        const dbUser = dbByTornId[m.id];
+        const base = {
+          id: m.id,
+          name: m.name,
+          level: m.level,
+          position: m.position,
+          days_in_faction: m.days_in_faction,
+          last_action: m.last_action,
+          revive_setting: m.revive_setting,
+          status: m.status,
+          hasApiKey: !!dbUser?.tornApiKey,
+          discordId: dbUser?.discordId || null,
+          lastSeen: dbUser?.lastSeen || null,
+          tornKeyUpdatedAt: dbUser?.tornKeyUpdatedAt || null,
+          property: null,
+          job: null,
+          energy: null,
+          cooldowns: null,
+          tornLastAction: null
+        };
+
+        if (!dbUser?.tornApiKey) return base;
+
+        try {
+          const [v1Res, v2Res] = await Promise.all([
+            axios.get(`https://api.torn.com/user/?selections=basic,profile,bars&key=${dbUser.tornApiKey}`),
+            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${dbUser.tornApiKey}`)
+          ]);
+          if (!v1Res.data.error) {
+            base.property = v1Res.data.property || null;
+            base.job = v1Res.data.job || null;
+            base.energy = v1Res.data.energy || null;
+            base.tornLastAction = v1Res.data.last_action || null;
+          }
+          if (!v2Res.data.error) {
+            base.cooldowns = v2Res.data.cooldowns || null;
+          }
+        } catch { /* enrichment failed, return base */ }
+
+        return base;
+      })
+    );
+
+    res.json({
+      members: enrichResults.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => r.value)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Admin member overview ───────────────────────────────────────────────
 app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
@@ -1309,48 +1347,6 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
     return res.status(500).json({ error: 'Server error fetching races.' });
   }
 });
-
-// ─── API: Addiction level ─────────────────────────────────────────────────────
-/* Remove Comment to pull addiction script back in
-app.get('/api/torn/addiction', isAuthenticated, async (req, res) => {
-  try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
-    if (!dbUser?.tornApiKey) {
-      return res.status(400).json({ error: 'No Torn API key saved.' });
-    }
-
-    const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=profile&key=${dbUser.tornApiKey}`
-    );
-    
-    if (tornRes.data.error) {
-      return res.status(400).json({ error: tornRes.data.error.error });
-    }
-
-    const addictionMap = {
-      'Clean': 0,
-      'Occasional': 1,
-      'Light': 2,
-      'Moderate': 3,
-      'High': 4
-    };
-    
-    // Note: The addiction field is not currently returned by the Torn API
-    // Defaulting to 'Clean' until an alternative data source is found
-    const addictionStr = tornRes.data.addiction || 'Clean';
-    const addictionNum = addictionMap[addictionStr] ?? 0;
-    
-    res.json({
-      addiction: addictionStr,
-      addictionLevel: addictionNum,
-      display: addictionStr
-    });
-
-  } catch (err) {
-    console.error('[/api/torn/addiction]', err.message);
-    return res.status(500).json({ error: 'Server error fetching addiction level.' });
-  }
-});*/
 
 // ─── API: Bank Rates ──────────────────────────────────────────────────────────
 app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
