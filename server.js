@@ -345,6 +345,9 @@ function getAccessibleChannels(ssgRoles) {
 app.get('/', async (req, res) => {
   let liveGroups = factionData.groups;
   let totalMembers = factionData.faction.memberCount;
+  
+  // Check for error in query params
+  const error = req.query.error || null;
 
   try {
     const factionKey = await getFactionApiKey();
@@ -382,7 +385,8 @@ app.get('/', async (req, res) => {
   res.render('index', {
     user: req.user,
     faction: { ...factionData.faction, memberCount: totalMembers },
-    groups: liveGroups
+    groups: liveGroups,
+    error: error
   });
 });
 
