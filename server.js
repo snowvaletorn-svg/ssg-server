@@ -2,8 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
-const passport = require('passport');
-const DiscordStrategy = require('passport-discord').Strategy;
 const cors = require('cors');
 const axios = require('axios');
 const path = require('path');
@@ -17,7 +15,6 @@ const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const SSG_GUILD_ID = '1432576178383753309';
 const SSG_FACTION_ID = 53272;
@@ -30,22 +27,31 @@ const CHANNELS = {
   war: { id: '1435065561494196254', name: '⚔️ War Chat' },
 };
 
-const ROLES = {
-  ownership: '1433161746365026334',
-  leadership: '1462906795860295802',
-  warlord: '1489569860403855540',
-  strategy: '1435059774722015232',
-  strength: '1435060058063896698',
-  growth: '1435060175525384303',
+// Torn faction positions mapped to permission groups
+const POSITIONS = {
+  ownership: ['Leader', 'Co-leader', 'Matriarch'],
+  leadership: ['Leadership'],
+  warlord: ['Warlord'],
+  strategy: ['Team Strategy'],
+  strength: ['Team Strength'],
+  growth: ['Team Growth', 'Recruit'],
 };
 
+// Map faction position to permission group
+function getPositionGroup(position) {
+  for (const [group, positions] of Object.entries(POSITIONS)) {
+    if (positions.includes(position)) return group;
+  }
+  return null;
+}
+
 const ROLE_CHANNEL_ACCESS = {
-  [ROLES.ownership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.leadership]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.warlord]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.strategy]: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  [ROLES.strength]: ['announcements', 'strength', 'war'],
-  [ROLES.growth]: ['announcements', 'growth', 'war'],
+  ownership: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  leadership: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  warlord: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  strategy: ['announcements', 'growth', 'strength', 'strategy', 'war'],
+  strength: ['announcements', 'strength', 'war'],
+  growth: ['announcements', 'growth', 'war'],
 };
 
 const TRAINING_CHANNELS = [
@@ -53,37 +59,37 @@ const TRAINING_CHANNELS = [
     id: '1435414594410512494',
     name: '📊 Stats Training',
     description: 'Advanced stat training guides and strategies.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.warlord]
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
   },
   {
     id: '1435416169946415194',
     name: '💰 Money Making Training',
     description: 'Guides on making money to fund your stats growth.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.warlord]
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
   },
   {
     id: '1435413325725958165',
     name: '⬆️ Level Training',
     description: 'Everything you need to know about leveling up fast.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414982316654746',
     name: '🔗 Chains',
     description: 'Detailed walkthrough on what chains are.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416378709508138',
     name: '🫆 Crimes Training',
     description: 'Guide for all members on Crimes in Torn.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416812706857225',
     name: '🗝️ Organized Crimes Training',
     description: 'Guide for all members on Organized Crimes in Torn.',
-    roles: [ROLES.ownership, ROLES.leadership, ROLES.strategy, ROLES.strength, ROLES.growth, ROLES.warlord]
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
 ];
 
@@ -96,6 +102,44 @@ async function getFactionApiKey() {
     console.error('Error fetching faction config:', err.message);
   }
   return process.env.TORN_FACTION_API_KEY || null;
+}
+
+// ─── HELPER: Validate Torn API key and get user data ─────────────────────────
+async function validateTornApiKey(apiKey) {
+  try {
+    const res = await axios.get(`https://api.torn.com/user/?selections=basic,profile&key=${apiKey}`);
+    if (res.data.error) {
+      return { valid: false, error: res.data.error.error };
+    }
+    return {
+      valid: true,
+      playerId: res.data.player_id,
+      name: res.data.name,
+      data: res.data
+    };
+  } catch (err) {
+    return { valid: false, error: err.message };
+  }
+}
+
+// ─── HELPER: Check if player is in SSG faction ───────────────────────────────
+async function isPlayerInFaction(playerId) {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return { inFaction: false, error: 'No faction API key configured' };
+
+    const res = await axios.get(
+      `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
+    );
+    if (res.data.error) {
+      return { inFaction: false, error: res.data.error.error };
+    }
+
+    const member = res.data.members?.find(m => m.id === playerId);
+    return { inFaction: !!member, member: member || null };
+  } catch (err) {
+    return { inFaction: false, error: err.message };
+  }
 }
 
 // ─── MONGODB ──────────────────────────────────────────────────────────────────
@@ -121,116 +165,26 @@ if (isProduction && process.env.MONGO_URI) {
 
 // ─── RATE LIMITING ────────────────────────────────────────────────────────────
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: {
-    error: 'Too many requests from this IP, please try again later.'
-  },
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// ─── OAuth Rate Limiter with Exponential Backoff ────────────────────────────────
-// Discord has strict rate limits on token endpoint (error 1015 = rate limited)
-// This queues OAuth requests and implements exponential backoff to avoid hitting limits
-const oauthQueue = [];
-let oauthProcessing = false;
-let currentDelay = 2000; // Start with 2 seconds
-const INITIAL_DELAY = 2000;
-const MAX_DELAY = 30000; // Cap at 30 seconds
-
-async function processOAuthQueue() {
-  if (oauthProcessing || oauthQueue.length === 0) return;
-  
-  oauthProcessing = true;
-  
-  while (oauthQueue.length > 0) {
-    const item = oauthQueue.shift();
-    let rateLimited = false;
-    
-    try {
-      // Process the OAuth authentication with rate limit detection
-      await new Promise((resolve, reject) => {
-        passport.authenticate('discord', (err, user, info) => {
-          if (err) {
-            console.error('OAuth authentication error:', err);
-            // Check if this is a rate limit error
-            if (err.oauthError && err.oauthError.statusCode === 429) {
-              rateLimited = true;
-              console.warn('⚠️ Discord rate limit detected. Increasing delay to', currentDelay, 'ms');
-            }
-            item.res.redirect('/?error=discord_auth_failed');
-            resolve(); // Resolve to continue queue, don't reject
-          } else if (!user) {
-            console.error('No user returned from Discord OAuth');
-            item.res.redirect('/?error=discord_auth_failed');
-            resolve();
-          } else {
-            // Success - reset delay to normal
-            if (currentDelay > INITIAL_DELAY) {
-              console.log('✅ OAuth success. Resetting delay to', INITIAL_DELAY, 'ms');
-              currentDelay = INITIAL_DELAY;
-            }
-            item.req.logIn(user, (loginErr) => {
-              if (loginErr) {
-                console.error('Login error:', loginErr);
-                item.res.redirect('/?error=discord_auth_failed');
-                resolve();
-              } else {
-                item.req.session.save((saveErr) => {
-                  if (saveErr) {
-                    console.error('Session save error:', saveErr);
-                    item.res.redirect('/?error=discord_auth_failed');
-                    resolve();
-                  } else {
-                    item.res.redirect('/dashboard');
-                    resolve();
-                  }
-                });
-              }
-            });
-          }
-        })(item.req, item.res, item.next);
-      });
-      
-      // If we hit a rate limit, increase delay exponentially
-      if (rateLimited) {
-        currentDelay = Math.min(currentDelay * 2, MAX_DELAY);
-        console.log('Next request will wait', currentDelay, 'ms');
-      }
-    } catch (err) {
-      console.error('Error processing OAuth queue item:', err);
-      try {
-        item.res.redirect('/?error=discord_auth_failed');
-      } catch (redirectErr) {
-        // Response already sent
-      }
-    }
-    
-    // Wait before processing next OAuth request
-    if (oauthQueue.length > 0) {
-      console.log(`OAuth queue: Processing next request in ${currentDelay}ms (${oauthQueue.length} waiting)`);
-      await new Promise(resolve => setTimeout(resolve, currentDelay));
-    }
-  }
-  
-  oauthProcessing = false;
-}
-
-function handleOAuthCallback(req, res, next) {
-  // Add request to queue and start processing
-  oauthQueue.push({ req, res, next });
-  console.log(`OAuth request queued. Queue size: ${oauthQueue.length}`);
-  processOAuthQueue();
-  // Don't call next() here - the queue handler will handle the response
-}
+// Login-specific rate limiter (stricter)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10, // 10 login attempts per 15 minutes
+  message: { error: 'Too many login attempts. Please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 const bankRatesLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // limit each IP to 10 requests per hour for bank rates
-  message: {
-    error: 'Too many bank rate requests from this IP, please try again later.'
-  },
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many bank rate requests from this IP, please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -242,13 +196,8 @@ app.set('views', path.join(__dirname, 'views'));
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-    // Allow your specific origins
-    const allowedOrigins = [
-      'http://localhost:3000'
-
-    ];
+    const allowedOrigins = ['http://localhost:3000'];
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
@@ -261,14 +210,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Apply rate limiting to all API routes
 app.use('/api/', apiLimiter);
-// Apply stricter rate limiting to bank rates specifically
+app.use('/api/login', loginLimiter);
 app.use('/api/torn/bank-rates', bankRatesLimiter);
 
 // ─── SESSION ──────────────────────────────────────────────────────────────────
-// Session timeout: 72 hours (3 days) - extended to handle Discord outages
-const SESSION_MAX_AGE = 72 * 60 * 60 * 1000; // 72 hours in milliseconds
+const SESSION_MAX_AGE = 72 * 60 * 60 * 1000; // 72 hours (default)
+const STAY_LOGGED_IN_MAX_AGE = 100 * 60 * 60 * 1000; // 100 hours (extended)
 
 app.use(session({
   store: sessionStore,
@@ -284,94 +232,74 @@ app.use(session({
   }
 }));
 
-// ─── PASSPORT ────────────────────────────────────────────────────────────────
-passport.use(new DiscordStrategy({
-  clientID: process.env.DISCORD_CLIENT_ID,
-  clientSecret: process.env.DISCORD_CLIENT_SECRET,
-  callbackURL: process.env.DISCORD_CALLBACK_URL || 'http://localhost:3000/auth/discord/callback',
-  scope: ['identify', 'email', 'guilds', 'guilds.members.read']
-},
-  async (accessToken, refreshToken, profile, done) => {
-    try {
-      profile.accessToken = accessToken;
-      const memberRes = await axios.get(
-        `https://discord.com/api/v10/users/@me/guilds/${SSG_GUILD_ID}/member`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      profile.ssgRoles = memberRes.data.roles || [];
-      profile.ssgNick = memberRes.data.nick || profile.username;
-    } catch (err) {
-      console.error('Could not fetch SSG member data:', err.response?.data || err.message);
-      profile.ssgRoles = [];
-      profile.ssgNick = profile.username;
+// Middleware to extend session on each request if stayLoggedIn is set
+app.use((req, res, next) => {
+  if (req.session && req.session.stayLoggedIn) {
+    // Reset the session expiration on each request
+    req.session.cookie.maxAge = STAY_LOGGED_IN_MAX_AGE;
+    // Touch the session to update expiration in store
+    if (req.session.touch) {
+      req.session.touch(Date.now());
     }
-
-    try {
-      await User.findOneAndUpdate(
-        { discordId: profile.id },
-        { discordId: profile.id, username: profile.username, lastSeen: new Date() },
-        { upsert: true, returnDocument: 'after' }
-      );
-    } catch (err) {
-      console.error('MongoDB upsert error:', err.message);
-    }
-
-    return done(null, profile);
-  }));
-
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((obj, done) => done(null, obj));
-
-app.use(passport.initialize());
-app.use(passport.session());
+  }
+  next();
+});
 
 // ─── AUTH MIDDLEWARE ──────────────────────────────────────────────────────────
 const isAuthenticated = (req, res, next) => {
-  if (!req.user) return res.redirect('/');
+  if (!req.session || !req.session.userId) return res.redirect('/login');
   next();
 };
 
+// Helper to check if user has a specific position group
+function hasPositionGroup(user, group) {
+  const position = user?.factionPosition;
+  if (!position) return false;
+  return POSITIONS[group]?.includes(position) || false;
+}
+
 const isOwnership = (req, res, next) => {
-  if (!req.user?.ssgRoles?.includes(ROLES.ownership)) {
-    return res.status(403).json({ error: 'Ownership role required.' });
+  if (!hasPositionGroup(req.session.user, 'ownership')) {
+    return res.status(403).json({ error: 'Ownership position required (Leader, Co-leader, or Matriarch).' });
   }
   next();
 };
 
 const isLeadershipOrOwnership = (req, res, next) => {
-  const roles = req.user?.ssgRoles || [];
-  if (!roles.includes(ROLES.ownership) && !roles.includes(ROLES.leadership)) {
-    return res.status(403).json({ error: 'Leadership or Ownership role required.' });
+  if (!hasPositionGroup(req.session.user, 'ownership') && !hasPositionGroup(req.session.user, 'leadership')) {
+    return res.status(403).json({ error: 'Leadership or Ownership position required.' });
   }
   next();
 };
 
 const isWarlord = (req, res, next) => {
-  const roles = req.user?.ssgRoles || [];
-  if (!roles.includes(ROLES.ownership) && !roles.includes(ROLES.leadership) && !roles.includes(ROLES.warlord)) {
-    return res.status(403).json({ error: 'Ownership, Leadership, or Warlord role required.' });
+  if (!hasPositionGroup(req.session.user, 'ownership') && 
+      !hasPositionGroup(req.session.user, 'leadership') && 
+      !hasPositionGroup(req.session.user, 'warlord')) {
+    return res.status(403).json({ error: 'Ownership, Leadership, or Warlord position required.' });
   }
   next();
 };
 
-// ─── HELPER ──────────────────────────────────────────────────────────────────
-function getAccessibleChannels(ssgRoles) {
-  const accessible = new Set();
-  for (const roleId of ssgRoles) {
-    const channels = ROLE_CHANNEL_ACCESS[roleId];
-    if (channels) channels.forEach(ch => accessible.add(ch));
-  }
-  if (accessible.size === 0) accessible.add('announcements');
-  return [...accessible].map(key => ({ key, ...CHANNELS[key] }));
+// ─── HELPER: Get accessible channels based on position group ──────────────────
+function getAccessibleChannels(positionGroup) {
+  if (!positionGroup) return [{ key: 'announcements', ...CHANNELS.announcements }];
+  const channels = ROLE_CHANNEL_ACCESS[positionGroup];
+  if (!channels) return [{ key: 'announcements', ...CHANNELS.announcements }];
+  return channels.map(key => ({ key, ...CHANNELS[key] }));
+}
+
+// ─── HELPER: Check if position group has access to training channel ──────────
+function hasTrainingAccess(positionGroup, trainingChannel) {
+  return trainingChannel.positionGroups.includes(positionGroup);
 }
 
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
+
+// Home page
 app.get('/', async (req, res) => {
   let liveGroups = factionData.groups;
   let totalMembers = factionData.faction.memberCount;
-  
-  // Check for error in query params
-  const error = req.query.error || null;
 
   try {
     const factionKey = await getFactionApiKey();
@@ -407,51 +335,143 @@ app.get('/', async (req, res) => {
   }
 
   res.render('index', {
-    user: req.user,
+    user: req.session.user || null,
     faction: { ...factionData.faction, memberCount: totalMembers },
-    groups: liveGroups,
-    error: error
+    groups: liveGroups
   });
 });
 
-app.get('/auth/discord', passport.authenticate('discord'));
+// Login page
+app.get('/login', (req, res) => {
+  if (req.session.user) return res.redirect('/dashboard');
+  res.render('login');
+});
 
-app.get('/auth/discord/callback', handleOAuthCallback);
+// Torn-based login API
+app.post('/api/login', async (req, res) => {
+  const { tornName, tornId, apiKey, stayLoggedIn } = req.body;
 
+  if (!tornName || !tornId || !apiKey) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  // Step 1: Validate API key
+  const validation = await validateTornApiKey(apiKey);
+  if (!validation.valid) {
+    return res.status(401).json({ error: `Invalid API key: ${validation.error}` });
+  }
+
+  // Step 2: Verify name and ID match
+  if (validation.name !== tornName || validation.playerId !== tornId) {
+    return res.status(401).json({ error: 'Torn name or ID does not match the API key.' });
+  }
+
+  // Step 3: Check if user exists in database
+  let user = await User.findOne({ tornPlayerId: tornId });
+
+  if (user) {
+    // Existing user - update API key and login
+    user.tornApiKey = apiKey;
+    user.tornName = tornName;
+    user.tornKeyUpdatedAt = new Date();
+    user.lastSeen = new Date();
+    await user.save();
+  } else {
+    // New user - check if they're in the faction
+    const factionCheck = await isPlayerInFaction(tornId);
+    if (!factionCheck.inFaction) {
+      return res.status(403).json({ error: 'You are not a member of SSG faction. Please apply first.' });
+    }
+
+    // Create new user
+    user = new User({
+      tornPlayerId: tornId,
+      tornName: tornName,
+      tornApiKey: apiKey,
+      username: tornName,
+      lastSeen: new Date()
+    });
+    await user.save();
+  }
+
+  // Step 4: Fetch faction position from Torn API
+  let factionPosition = null;
+  let positionGroup = null;
+  try {
+    const factionCheck = await isPlayerInFaction(tornId);
+    if (factionCheck.inFaction && factionCheck.member) {
+      factionPosition = factionCheck.member.position;
+      positionGroup = getPositionGroup(factionPosition);
+    }
+  } catch (err) {
+    console.log('Could not fetch faction position for user:', err.message);
+  }
+
+  // Step 5: Create session
+  req.session.userId = user.tornPlayerId;
+  req.session.user = {
+    id: user.tornPlayerId,
+    username: tornName,
+    tornName: tornName,
+    factionPosition: factionPosition,
+    positionGroup: positionGroup,
+    tornApiKey: user.tornApiKey,
+    // Avatar is in profile_image field
+    tornAvatar: validation.data?.profile_image ?? null
+  };
+  
+  console.log('Session tornAvatar:', req.session.user.tornAvatar);
+
+  // Step 6: Handle "Stay logged in" option
+  if (stayLoggedIn) {
+    req.session.stayLoggedIn = true;
+    req.session.cookie.maxAge = STAY_LOGGED_IN_MAX_AGE;
+  }
+
+  res.json({ success: true, user: { username: tornName } });
+});
+
+// Dashboard
 app.get('/dashboard', isAuthenticated, async (req, res) => {
-  const ssgRoles = req.user.ssgRoles || [];
-  const allowedRoles = Object.values(ROLES);
-  const hasRole = ssgRoles.some(r => allowedRoles.includes(r));
+  const positionGroup = req.session.user?.positionGroup;
+  const factionPosition = req.session.user?.factionPosition;
 
-  if (!hasRole) return res.redirect('/?error=no_access');
+  // Check if user is in faction (all faction members get basic access)
+  let canAccess = !!positionGroup;
+  if (!canAccess) {
+    const factionCheck = await isPlayerInFaction(req.session.userId);
+    canAccess = factionCheck.inFaction;
+  }
 
-  await User.findOneAndUpdate({ discordId: req.user.id }, { lastSeen: new Date() });
+  if (!canAccess) return res.redirect('/?error=no_access');
 
-  const dbUser = await User.findOne({ discordId: req.user.id });
-  const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
-  const isOwner = req.user.ssgRoles?.includes(ROLES.ownership) || false;
-  const isLeadership = req.user.ssgRoles?.includes(ROLES.leadership) || false;
-  const isWarlord = req.user.ssgRoles?.includes(ROLES.warlord) || false;
+  const user = await User.findOne({ tornPlayerId: req.session.userId });
+  const accessibleChannels = getAccessibleChannels(positionGroup);
+  const isOwner = hasPositionGroup(req.session.user, 'ownership');
+  const isLeadership = hasPositionGroup(req.session.user, 'leadership');
+  const isWarlordRole = hasPositionGroup(req.session.user, 'warlord');
   const factionKey = await getFactionApiKey();
 
   const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
-    ch.roles.some(r => (req.user.ssgRoles || []).includes(r))
+    positionGroup && ch.positionGroups.includes(positionGroup)
   );
 
   res.render('dashboard', {
-    user: req.user,
+    user: req.session.user,
     accessibleChannels,
     accessibleTraining,
-    tornApiKey: dbUser?.tornApiKey || null,
+    tornApiKey: user?.tornApiKey || null,
     isOwner,
     isLeadership,
-    isWarlord,
-    hasFactionKey: !!factionKey
+    isWarlord: isWarlordRole,
+    hasFactionKey: !!factionKey,
+    factionPosition: factionPosition
   });
 });
 
+// Logout
 app.get('/logout', (req, res) => {
-  req.logout((err) => {
+  req.session.destroy((err) => {
     if (err) return res.status(500).json({ error: 'Logout failed' });
     res.redirect('/');
   });
@@ -469,7 +489,7 @@ app.get('/api/discord/channel/:channelId', isAuthenticated, async (req, res) => 
   if (!allowed.includes(channelId)) {
     return res.status(403).json({ error: 'Channel not permitted' });
   }
-  const accessibleChannels = getAccessibleChannels(req.user.ssgRoles || []);
+  const accessibleChannels = getAccessibleChannels(req.session.user?.positionGroup);
   const hasAccess = accessibleChannels.some(c => c.id === channelId);
   if (!hasAccess) {
     return res.status(403).json({ error: 'You do not have access to this channel' });
@@ -514,7 +534,7 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'Invalid Torn API key: ' + tornRes.data.error.error });
     }
     await User.findOneAndUpdate(
-      { discordId: req.user.id },
+      { tornPlayerId: req.session.userId },
       {
         tornApiKey: apiKey.trim(),
         tornPlayerId: tornRes.data.player_id,
@@ -523,6 +543,8 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
       },
       { upsert: true }
     );
+    // Update session
+    req.session.user.tornApiKey = apiKey.trim();
     res.json({ success: true, player: tornRes.data });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -544,7 +566,7 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
     }
     await FactionConfig.findOneAndUpdate(
       { key: 'config' },
-      { tornFactionApiKey: apiKey.trim(), setBy: req.user.id, updatedAt: new Date() },
+      { tornFactionApiKey: apiKey.trim(), setBy: req.session.userId, updatedAt: new Date() },
       { upsert: true }
     );
     res.json({ success: true, faction: tornRes.data });
@@ -556,7 +578,7 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
 // ─── API: Personal Torn stats ─────────────────────────────────────────────────
 app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
@@ -588,7 +610,7 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
 // ─── API: Personal honors, merits, awards ────────────────────────────────────
 app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
@@ -613,11 +635,10 @@ app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
 // ─── API: Personal crime XP (merits) ─────────────────────────────────────────
 app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
-    // Fetch criminal record data which includes crime counts by type
     const tornRes = await axios.get(
       `https://api.torn.com/user/?selections=criminalrecord&key=${dbUser.tornApiKey}`
     );
@@ -633,11 +654,10 @@ app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
 // ─── API: Personal crime skills ──────────────────────────────────────────────
 app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
-    // Fetch skills data using v2 API which includes crime-related skills
     const tornRes = await axios.get(
       `https://api.torn.com/v2/user/?selections=skills&key=${dbUser.tornApiKey}`
     );
@@ -655,7 +675,7 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) {
-      return res.status(400).json({ error: 'No faction API key configured. An Ownership member must set it in their profile.' });
+      return res.status(400).json({ error: 'No faction API key configured.' });
     }
     const tornRes = await axios.get(
       `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`
@@ -717,7 +737,7 @@ app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
 // ─── API: Travel status from Torn ────────────────────────────────────────────
 app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
@@ -733,10 +753,10 @@ app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
   }
 });
 
-// ─── API: Torn item catalog (for categories) ──────────────────────────────────
+// ─── API: Torn item catalog ──────────────────────────────────────────────────
 app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
@@ -752,13 +772,12 @@ app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   }
 });
 
-// ─── API: YATA foreign stock data (with Prometheus fallback) ─────────────────
+// ─── API: YATA foreign stock data ────────────────────────────────────────────
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
-    // Try YATA first
     const yataRes = await axios.get('https://yata.yt/api/v1/travel/export/', {
       headers: { 
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
         'Accept-Language': 'en-US,en;q=0.9'
       },
@@ -769,74 +788,48 @@ app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
     res.json({ ...yataRes.data, source: 'yata' });
   } catch (err) {
     console.error('YATA API error, trying Prometheus fallback:', err.message);
-    
-    // Fallback to Prometheus API
     try {
       const promRes = await axios.get('https://api.prombot.co.uk/api/travel', {
-        headers: { 
-          'User-Agent': 'SSG-Dashboard/1.0',
-          'Accept': 'application/json'
-        },
+        headers: { 'User-Agent': 'SSG-Dashboard/1.0', 'Accept': 'application/json' },
         timeout: 15000
       });
-      
-      // Prometheus returns data in a similar format, pass it through
       res.json({ ...promRes.data, source: 'prometheus' });
     } catch (promErr) {
       console.error('Prometheus API fallback also failed:', promErr.message);
       if (err.code === 'ECONNABORTED' || promErr.code === 'ECONNABORTED') {
-        res.status(504).json({ 
-          error: 'Travel data APIs timed out. Please try again.',
-          details: 'Both YATA and Prometheus APIs are taking too long to respond.'
-        });
+        res.status(504).json({ error: 'Travel data APIs timed out. Please try again.' });
       } else {
-        res.status(500).json({ 
-          error: 'Travel data APIs unavailable. Both YATA and Prometheus are down.',
-          details: `YATA: ${err.message}, Prometheus: ${promErr.message}`
-        });
+        res.status(500).json({ error: 'Travel data APIs unavailable.', details: `YATA: ${err.message}, Prometheus: ${promErr.message}` });
       }
     }
   }
 });
 
 // ─── API: Travel Profits Calculator ───────────────────────────────────────────
-// Combines YATA/Prometheus stock data with Torn market prices to calculate travel profits
-// Uses Torn API v1 'items' selection which includes market_value
 app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     const apiKey = dbUser?.tornApiKey?.trim();
     if (!apiKey) {
-      return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
+      return res.status(400).json({ error: 'No Torn API key saved.' });
     }
 
-    // Fetch travel stock data (YATA with Prometheus fallback) and Torn Items
     let travelData;
-    let dataSource = 'unknown';
-    
     try {
-      // Try YATA first
       const yataRes = await axios.get('https://yata.yt/api/v1/travel/export/', {
         headers: { 'User-Agent': 'SSG-Dashboard/1.0' },
         timeout: 15000
       });
       travelData = yataRes.data;
-      dataSource = 'yata';
     } catch (err) {
-      console.error('YATA API failed for travel-profits, trying Prometheus:', err.message);
       try {
-        // Fallback to Prometheus
         const promRes = await axios.get('https://api.prombot.co.uk/api/travel', {
           headers: { 'User-Agent': 'SSG-Dashboard/1.0' },
           timeout: 15000
         });
         travelData = promRes.data;
-        dataSource = 'prometheus';
       } catch (promErr) {
-        return res.status(500).json({ 
-          error: 'Travel data APIs unavailable. Both YATA and Prometheus are down.',
-          details: `YATA: ${err.message}, Prometheus: ${promErr.message}`
-        });
+        return res.status(500).json({ error: 'Travel data APIs unavailable.' });
       }
     }
 
@@ -844,14 +837,11 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
       timeout: 30000
     });
 
-    const yataData = travelData;
     const itemsData = itemsRes.data;
-
     if (itemsData.error) {
       return res.status(400).json({ error: 'Torn API error: ' + itemsData.error.error });
     }
 
-    // Build catalog using the 'market_value' field from Torn API v1
     const itemCatalog = {};
     Object.entries(itemsData.items || {}).forEach(([id, item]) => {
       itemCatalog[id] = {
@@ -862,41 +852,23 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
       };
     });
 
-    // Travel times by country (in minutes) - Standard travel times
-    // Based on official Torn travel times
     const standardTravelTimes = {
       mex: 26, cay: 35, can: 41, haw: 134, uni: 159,
       arg: 167, swi: 175, jap: 225, chi: 242, uae: 271, sou: 297
     };
-
-    // Airstrip travel times (specific times, not a simple multiplier)
     const airstripTravelTimes = {
       mex: 18, cay: 25, can: 29, haw: 94, uni: 111,
       arg: 117, swi: 123, jap: 158, chi: 169, uae: 190, sou: 208
     };
-
-    // Private jet / WLT benefit travel times
     const privateTravelTimes = {
       mex: 13, cay: 18, can: 20, haw: 67, uni: 80,
       arg: 83, swi: 88, jap: 113, chi: 121, uae: 135, sou: 149
     };
 
-    // Static restock time estimates based on Torn's known restock cycles
-    // Most items restock every 15-30 minutes, with some variation
-    const restockCycleMinutes = 25; // Average restock cycle
-    const now = Math.floor(Date.now() / 1000);
     const currentMinute = new Date().getMinutes();
-    
-    // Calculate time until next restock (items restock at :00 and :30 typically)
-    let minutesUntilRestock = 0;
-    if (currentMinute < 30) {
-      minutesUntilRestock = 30 - currentMinute;
-    } else {
-      minutesUntilRestock = 60 - currentMinute;
-    }
+    let minutesUntilRestock = currentMinute < 30 ? 30 - currentMinute : 60 - currentMinute;
 
-    // Process YATA Stock Data and calculate profits
-    const stockData = yataData.stocks || {};
+    const stockData = travelData.stocks || {};
     const profits = [];
 
     Object.entries(stockData).forEach(([countryCode, countryData]) => {
@@ -914,41 +886,15 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
         if (profit <= 0) return;
 
         const profitPercent = ((profit / stockItem.cost) * 100);
-
-        // Check for restock time data from API (various possible field names)
-        let restockTime = null;
-        let restockIn = null;
-        
-        // YATA/Prometheus may provide restock data in different formats
-        if (stockItem.restock_time) {
-          restockTime = stockItem.restock_time;
-        } else if (stockItem.restock_in) {
-          restockIn = stockItem.restock_in;
-        } else if (stockItem.next_restock) {
-          // Calculate minutes until next restock
-          const now = Math.floor(Date.now() / 1000);
-          restockIn = Math.max(0, stockItem.next_restock - now);
-        } else if (countryData.restock_time) {
-          // Country-level restock time
-          restockTime = countryData.restock_time;
-        }
-
-        // Calculate estimated restock time (static estimate based on Torn's cycles)
-        // Items typically restock at :00 and :30 past the hour
         const estimatedRestockIn = minutesUntilRestock;
         const nextRestockTime = new Date();
         nextRestockTime.setMinutes(nextRestockTime.getMinutes() + estimatedRestockIn);
-        
-        // Calculate best time to leave (leave now to arrive around restock time)
-        // Optimal: leave so you arrive 1-2 minutes before restock
         const travelTimeStandard = standardTime;
         const minutesUntilLeave = Math.max(0, estimatedRestockIn - travelTimeStandard);
-        
-        // Format best leave time
         const leaveTime = new Date();
         leaveTime.setMinutes(leaveTime.getMinutes() + minutesUntilLeave);
         const leaveTimeStr = leaveTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        
+
         profits.push({
           id: stockItem.id,
           name: catalogItem.name,
@@ -960,8 +906,6 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
           marketValue: catalogItem.marketValue,
           profit: profit,
           profitPercent: profitPercent,
-          restockTime: restockTime,
-          restockIn: restockIn,
           estimatedRestockIn: estimatedRestockIn,
           nextRestockTime: nextRestockTime.toISOString(),
           bestLeaveTime: leaveTimeStr,
@@ -980,7 +924,6 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
       });
     });
 
-    // Sort by profit per minute (standard) descending
     profits.sort((a, b) => b.profitPerMinute.standard - a.profitPerMinute.standard);
 
     res.json({
@@ -994,7 +937,6 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
           : 0
       }
     });
-
   } catch (err) {
     console.error('Travel Profits API error:', err.message);
     res.status(500).json({ error: 'Failed to fetch travel profits data: ' + err.message });
@@ -1053,7 +995,7 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
   }
 });
 
-// ─── API: Member total stats (Leadership/Ownership only) ─────────────────────
+// ─── API: Member total stats ──────────────────────────────────────────────────
 app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey username');
@@ -1087,7 +1029,7 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
   }
 });
 
-// ─── API: War member overview (Warlord, Leadership, Ownership) ─────────────────
+// ─── API: War member overview ─────────────────────────────────────────────────
 app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -1096,7 +1038,7 @@ app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res)
     const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
     const factionMembers = factionRes.data.members || [];
 
-    const dbUsers = await User.find({}, 'discordId username tornApiKey tornPlayerId tornName lastSeen tornKeyUpdatedAt');
+    const dbUsers = await User.find({}, 'tornPlayerId tornName tornApiKey lastSeen tornKeyUpdatedAt discordId');
     const dbByTornId = {};
     dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
@@ -1113,7 +1055,6 @@ app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res)
           revive_setting: m.revive_setting,
           status: m.status,
           hasApiKey: !!dbUser?.tornApiKey,
-          discordId: dbUser?.discordId || null,
           lastSeen: dbUser?.lastSeen || null,
           tornKeyUpdatedAt: dbUser?.tornKeyUpdatedAt || null,
           property: null,
@@ -1139,7 +1080,7 @@ app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res)
           if (!v2Res.data.error) {
             base.cooldowns = v2Res.data.cooldowns || null;
           }
-        } catch { /* enrichment failed, return base */ }
+        } catch { /* enrichment failed */ }
 
         return base;
       })
@@ -1162,7 +1103,7 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
     const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
     const factionMembers = factionRes.data.members || [];
 
-    const dbUsers = await User.find({}, 'discordId username tornApiKey tornPlayerId tornName lastSeen tornKeyUpdatedAt');
+    const dbUsers = await User.find({}, 'tornPlayerId tornName tornApiKey lastSeen tornKeyUpdatedAt discordId');
     const dbByTornId = {};
     dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
@@ -1179,7 +1120,6 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
           revive_setting: m.revive_setting,
           status: m.status,
           hasApiKey: !!dbUser?.tornApiKey,
-          discordId: dbUser?.discordId || null,
           lastSeen: dbUser?.lastSeen || null,
           tornKeyUpdatedAt: dbUser?.tornKeyUpdatedAt || null,
           property: null,
@@ -1205,7 +1145,7 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
           if (!v2Res.data.error) {
             base.cooldowns = v2Res.data.cooldowns || null;
           }
-        } catch { /* enrichment failed, return base */ }
+        } catch { /* enrichment failed */ }
 
         return base;
       })
@@ -1219,39 +1159,20 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
   }
 });
 
-// ─── API: Remove user from dashboard (Ownership only) ─────────────────────────
-app.delete('/api/admin/user/:discordId', isAuthenticated, isOwnership, async (req, res) => {
-  try {
-    const { discordId } = req.params;
-    if (discordId === req.user.id) {
-      return res.status(400).json({ error: 'You cannot remove yourself.' });
-    }
-    const result = await User.findOneAndDelete({ discordId });
-    if (!result) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-    res.json({ success: true, removed: result.username });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ─── API: Level progress via HOF ──────────────────────────────────────────────
 app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
 
-    // ── Check cache first ──
     const CACHE_DURATION = 24 * 60 * 60 * 1000;
     if (dbUser.levelProgressCache && dbUser.levelProgressCachedAt &&
       Date.now() - new Date(dbUser.levelProgressCachedAt).getTime() < CACHE_DURATION) {
       return res.json(dbUser.levelProgressCache);
     }
 
-    // ── Cache miss — fetch from Torn API ──
     const hofRes = await axios.get(
       `https://api.torn.com/v2/user/hof?key=${dbUser.tornApiKey}`
     );
@@ -1265,7 +1186,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     if (level >= 100) {
       const result = { level, rank, progress: 100, display: '100.00' };
       await User.findOneAndUpdate(
-        { discordId: req.user.id },
+        { tornPlayerId: req.session.userId },
         { levelProgressCache: result, levelProgressCachedAt: new Date() }
       );
       return res.json(result);
@@ -1274,16 +1195,12 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     const currentTime = Math.floor(Date.now() / 1000);
 
     async function findInactiveAtLevel(targetLevel, startRank) {
-      // For lower levels cast a wider net
       const searchBuffer = targetLevel < 20 ? 2000 : 500;
       let offset = Math.max(0, startRank - searchBuffer);
       offset = Math.floor(offset / 100) * 100;
 
       const THRESHOLDS = [
-        365 * 24 * 60 * 60,  // 1 year
-        180 * 24 * 60 * 60,  // 6 months
-        90 * 24 * 60 * 60,  // 3 months
-        30 * 24 * 60 * 60   // 1 month — last resort
+        365 * 24 * 60 * 60, 180 * 24 * 60 * 60, 90 * 24 * 60 * 60, 30 * 24 * 60 * 60
       ];
 
       for (const threshold of THRESHOLDS) {
@@ -1308,20 +1225,16 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
           const maxLevel = Math.max(...levels);
 
           for (const player of players) {
-            if (player.level === targetLevel &&
-              (currentTime - player.last_action) > threshold) {
+            if (player.level === targetLevel && (currentTime - player.last_action) > threshold) {
               return player.position;
             }
           }
 
           if (maxLevel < targetLevel) {
-            // All players lower level — go backwards
             searchOffset = Math.max(0, searchOffset - 100);
           } else if (minLevel > targetLevel) {
-            // All players higher level — go forwards
             searchOffset += 100;
           } else {
-            // Target level in range but no inactive found — zigzag
             if (passedTarget) {
               searchOffset = Math.max(0, searchOffset - 200);
               passedTarget = false;
@@ -1351,7 +1264,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     const result = { level, rank, progress: Math.round(relative * 100), display };
 
     await User.findOneAndUpdate(
-      { discordId: req.user.id },
+      { tornPlayerId: req.session.userId },
       { levelProgressCache: result, levelProgressCachedAt: new Date() }
     );
 
@@ -1360,6 +1273,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 // ─── API: Faction application ─────────────────────────────────────────────────
 app.post('/api/apply', async (req, res) => {
   const { answers, tornName, tornId, allYes } = req.body;
@@ -1395,11 +1309,16 @@ app.post('/api/apply', async (req, res) => {
   ].join('\n');
 
   try {
-    const membersRes = await axios.get(
-      `https://discord.com/api/v10/guilds/${SSG_GUILD_ID}/members?limit=1000`,
-      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) {
+      return res.status(500).json({ error: 'No faction API key configured' });
+    }
+    const factionRes = await axios.get(
+      `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
     );
-    const ownershipMembers = membersRes.data.filter(m => m.roles.includes(ROLES.ownership));
+    const factionMembers = factionRes.data.members || [];
+    const ownershipPositions = POSITIONS.ownership;
+    const ownershipMembers = factionMembers.filter(m => ownershipPositions.includes(m.position));
 
     await Promise.allSettled(
       ownershipMembers.map(async member => {
@@ -1423,21 +1342,19 @@ app.post('/api/apply', async (req, res) => {
   }
 });
 
-
 // ─── API: Racing stats ────────────────────────────────────────────────────────
 app.get('/api/torn/races', isAuthenticated, async (req, res) => {
   try {
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
 
-    const limit    = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
+    const limit = Math.min(Math.max(parseInt(req.query.limit) || 100, 1), 1000);
     const allRaces = [];
-    let offset     = 0;
+    let offset = 0;
     const pageSize = 100;
 
-    // Paginate through API pages until we have enough races
     while (allRaces.length < limit) {
       const tornRes = await axios.get(
         `https://api.torn.com/v2/user/races?limit=${pageSize}&offset=${offset}&key=${dbUser.tornApiKey}`
@@ -1446,9 +1363,9 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
         return res.status(400).json({ error: tornRes.data.error.error });
       }
       const page = tornRes.data.races || [];
-      if (!page.length) { break; }
+      if (!page.length) break;
       allRaces.push(...page);
-      if (page.length < pageSize) { break; } // no more pages
+      if (page.length < pageSize) break;
       offset += pageSize;
     }
 
@@ -1456,7 +1373,6 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
       player_id: dbUser.tornPlayerId,
       races: allRaces.slice(0, limit)
     });
-
   } catch (err) {
     console.error('[/api/torn/races]', err.message);
     return res.status(500).json({ error: 'Server error fetching races.' });
@@ -1465,41 +1381,21 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
 
 // ─── API: Bank Rates ──────────────────────────────────────────────────────────
 app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
-  console.log('Bank Rates API called for user:', req.user.id);
-  
   try {
-    // Force fresh fetch - ignore cache completely
-    console.log('Forcing fresh fetch - ignoring cache');
-    
-    // Fetch from Torn API using user's saved API key
-    const dbUser = await User.findOne({ discordId: req.user.id });
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
     if (!dbUser?.tornApiKey) {
-      console.log('No API key found for user');
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
 
-    console.log('Fetching bank data from Torn API for user:', dbUser.tornPlayerId);
-    
     const tornRes = await axios.get(
       'https://api.torn.com/torn/?selections=bank&key=' + dbUser.tornApiKey
     );
 
     if (tornRes.data.error) {
-      console.log('Torn API error:', tornRes.data.error);
       return res.status(400).json({ error: 'Failed to fetch bank rates: ' + tornRes.data.error.error });
     }
 
-    console.log('Bank API Response:', JSON.stringify(tornRes.data, null, 2));
-    
     const bankData = tornRes.data.bank || {};
-    console.log('Bank data object:', bankData);
-    console.log('1w value:', bankData['1w']);
-    console.log('2w value:', bankData['2w']);
-    console.log('1m value:', bankData['1m']);
-    console.log('2m value:', bankData['2m']);
-    console.log('3m value:', bankData['3m']);
-    
-    // Extract the 5 interest rates - API uses short field names
     const rates = {
       '1_week': bankData['1w'] || 0,
       '2_weeks': bankData['2w'] || 0,
@@ -1507,29 +1403,21 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
       '2_months': bankData['2m'] || 0,
       '3_months': bankData['3m'] || 0
     };
-    
-    console.log('Mapped rates:', rates);
 
     const now = new Date();
-    const cacheDuration = 60 * 60 * 1000; // 1 hour
+    const cacheDuration = 60 * 60 * 1000;
     const result = {
       rates: rates,
       lastUpdated: now.toISOString(),
       cacheExpiry: new Date(now.getTime() + cacheDuration).toISOString()
     };
 
-    // Cache the result
     await User.findOneAndUpdate(
-      { discordId: req.user.id },
-      { 
-        bankRatesCache: result, 
-        bankRatesCachedAt: now 
-      }
+      { tornPlayerId: req.session.userId },
+      { bankRatesCache: result, bankRatesCachedAt: now }
     );
 
-    console.log('Bank rates fetched and cached successfully');
     res.json(result);
-
   } catch (err) {
     console.error('[/api/torn/bank-rates]', err.message);
     return res.status(500).json({ error: 'Server error fetching bank rates.' });
@@ -1541,7 +1429,6 @@ async function startServer() {
   try {
     const fixedPort = 3000;
     
-    // Check if port is available
     const net = require('net');
     const checkPort = (port) => {
       return new Promise((resolve) => {
@@ -1556,7 +1443,7 @@ async function startServer() {
           if (err.code === 'EADDRINUSE') {
             resolve(false);
           } else {
-            resolve(true); // Other errors, assume port is available
+            resolve(true);
           }
         });
       });
@@ -1564,10 +1451,9 @@ async function startServer() {
 
     const isPortAvailable = await checkPort(fixedPort);
     if (!isPortAvailable) {
-      console.log(`Port ${fixedPort} is already in use. Please stop any other server running on this port.`);
-      console.log('You can use the following command to find and kill the process:');
-      console.log(`  netstat -ano | findstr :${fixedPort}`);
-      console.log(`  taskkill /PID <PID> /F`);
+      console.log(`Port ${fixedPort} is already in use.`);
+      console.log('Use: netstat -ano | findstr :${fixedPort}');
+      console.log('Then: taskkill /PID <PID> /F');
       process.exit(1);
     }
 
@@ -1575,36 +1461,30 @@ async function startServer() {
       console.log(`SSG Server listening on http://localhost:${fixedPort}`);
     });
 
-    // Graceful shutdown handling
     process.on('SIGINT', () => {
-      console.log('\nReceived SIGINT (Ctrl+C). Shutting down gracefully...');
+      console.log('\nShutting down gracefully...');
       server.close(() => {
-        console.log('Server closed successfully.');
+        console.log('Server closed.');
         process.exit(0);
       });
     });
 
     process.on('SIGTERM', () => {
-      console.log('\nReceived SIGTERM. Shutting down gracefully...');
+      console.log('\nShutting down gracefully...');
       server.close(() => {
-        console.log('Server closed successfully.');
+        console.log('Server closed.');
         process.exit(0);
       });
     });
 
-    // Handle uncaught exceptions
     process.on('uncaughtException', (err) => {
       console.error('Uncaught Exception:', err);
-      server.close(() => {
-        process.exit(1);
-      });
+      server.close(() => process.exit(1));
     });
 
     process.on('unhandledRejection', (reason, promise) => {
-      console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-      server.close(() => {
-        process.exit(1);
-      });
+      console.error('Unhandled Rejection:', reason);
+      server.close(() => process.exit(1));
     });
 
   } catch (error) {

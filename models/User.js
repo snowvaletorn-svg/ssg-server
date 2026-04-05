@@ -1,15 +1,25 @@
 const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema({
-  discordId:        { type: String, required: true, unique: true },
+  // Torn authentication (primary method)
+  tornPlayerId:     { type: Number, required: true, unique: true },
+  tornName:         { type: String, required: true },
+  tornApiKey:       { type: String, required: true },
+  tornKeyUpdatedAt: { type: Date,   default: Date.now },
+  
+  // Discord (optional, for users who linked before)
+  discordId:        { type: String, default: null },
+  discordUsername:  { type: String, default: null },
+  
+  // Display name (defaults to Torn name)
   username:         { type: String, required: true },
-  tornApiKey:       { type: String, default: null },
-  tornPlayerId:     { type: Number, default: null },
-  tornName:         { type: String, default: null },
-  tornKeyUpdatedAt: { type: Date,   default: null },
-  lastSeen:         { type: Date,   default: null },
+  
+  // Activity tracking
+  lastSeen:         { type: Date,   default: Date.now },
   createdAt:        { type: Date,   default: Date.now },
   updatedAt:        { type: Date,   default: Date.now },
+  
+  // Cached data
   levelProgressCache: { type: Object, default: null },
   levelProgressCachedAt: { type: Date, default: null },
   bankRatesCache: { type: Object, default: null },
@@ -17,8 +27,18 @@ const userSchema = new mongoose.Schema({
 });
 
 userSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
+  try {
+    this.updatedAt = Date.now();
+    if (typeof next === 'function') {
+      next();
+    }
+  } catch (err) {
+    if (typeof next === 'function') {
+      next(err);
+    } else {
+      throw err;
+    }
+  }
 });
 
 module.exports = mongoose.model('User', userSchema);

@@ -1667,8 +1667,8 @@ function renderMemberOverview() {
       : m.lastSeen ? new Date(m.lastSeen).toLocaleDateString() : '—';
     const apiCell = `${hasKey}<br><span style="font-size:0.75rem;color:#555;">${keyUpdated}</span>`;
 
-    const removeBtn = m.discordId
-      ? `<button class="btn btn-small btn-danger" onclick="removeUser('${m.discordId}', '${escapeHtml(m.name)}')">Remove</button>`
+    const removeBtn = m.id
+      ? `<button class="btn btn-small btn-danger" onclick="removeUser(${m.id}, '${escapeHtml(m.name)}')">Remove</button>`
       : '—';
 
     return `<tr>
@@ -1850,12 +1850,12 @@ function renderMemberStats(stats) {
 }
 
 // ── Remove User ───────────────────────────────────────────────────────────────
-async function removeUser(discordId, name) {
-  if (!confirm(`Are you sure you want to remove ${name} from the dashboard?\n\nThis will delete their record and API key. They will need to log in again to re-register.`)) {
+async function removeUser(tornId, name) {
+  if (!confirm(`Are you sure you want to remove ${name} from the dashboard?\n\nThis will delete their account and API key. They will need to log in again to re-register.`)) {
     return;
   }
   try {
-    const res = await fetch(`/api/admin/user/${discordId}`, { method: 'DELETE' });
+    const res = await fetch(`/api/admin/user/${tornId}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) { alert(`❌ Error: ${data.error}`); return; }
     alert(`✅ ${data.removed} has been removed from the dashboard.`);
@@ -2254,7 +2254,9 @@ function formatRateDescription(rate) {
 async function calculateBankEarnings() {
   const container = document.getElementById('bank-calculator-results');
   const amountInput = document.getElementById('bank-amount-input');
-  const amount = parseFloat(amountInput.value);
+  // Remove any currency formatting (commas, $ signs) before parsing
+  const rawValue = amountInput.value.replace(/[$,]/g, '');
+  const amount = parseFloat(rawValue);
   
   if (!amount || amount <= 0) {
     container.innerHTML = '<div class="channel-error">⚠️ Please enter a valid amount greater than 0.</div>';

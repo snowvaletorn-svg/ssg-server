@@ -60,16 +60,15 @@
               <button class="btn btn-small btn-outline" onclick="openHelp('profile')">❓ Help</button>
             </div>
             <div class="profile-card">
-              <div class="profile-avatar">
-                <% if (user.avatar) { %>
-                  <img src="https://cdn.discordapp.com/avatars/<%= user.id %>/<%= user.avatar %>.png"
-                    alt="<%= user.username %>">
-                  <% } else { %>
-                    <div class="avatar-placeholder">
-                      <%= user.username.charAt(0).toUpperCase() %>
-                    </div>
-                    <% } %>
-              </div>
+            <div class="profile-avatar">
+              <% if (user.tornAvatar) { %>
+                <img src="<%= user.tornAvatar %>" alt="<%= user.username %>" style="width: 80px; height: 80px; border-radius: 50%;">
+              <% } else { %>
+                <div class="avatar-placeholder">
+                  <%= user.username.charAt(0).toUpperCase() %>
+                </div>
+              <% } %>
+            </div>
               <div class="profile-info">
                 <div class="profile-name">
                   <%= user.ssgNick || user.username %>
@@ -84,30 +83,15 @@
                 <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono">
                     <%= user.id %>
                   </span></div>-->
-                <% if (user.ssgRoles && user.ssgRoles.length> 0) { %>
-                  <div class="profile-detail"><span class="label">SSG Roles</span>
+                <% if (user.factionPosition) { %>
+                  <div class="profile-detail"><span class="label">Faction Position</span>
                     <span class="value">
-                      <% const roleNames = {
-                        '1433161746365026334': 'Ownership',
-                        '1462906795860295802': 'Leadership',
-                        '1489569860403855540': 'Warlord',
-                        '1435059774722015232': 'Strategy',
-                        '1435060058063896698': 'Strength',
-                        '1435060175525384303': 'Growth'
-                      };
-                      const myRoles = user.ssgRoles.filter(r => roleNames[r]).map(r => roleNames[r]); %>
-                        <% if (myRoles.length> 0) { %>
-                          <% myRoles.forEach(function(role) { %>
-                            <span class="role-badge role-<%= role.toLowerCase() %>">
-                              <%= role %>
-                            </span>
-                            <% }); %>
-                              <% } else { %>
-                                <span class="muted">No SSG roles assigned</span>
-                                <% } %>
+                      <span class="role-badge role-<%= user.positionGroup || 'member' %>">
+                        <%= user.factionPosition %>
+                      </span>
                     </span>
                   </div>
-                  <% } %>
+                <% } %>
               </div>
             </div>
 
