@@ -197,8 +197,12 @@ app.set('views', path.join(__dirname, 'views'));
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    const allowedOrigins = ['http://localhost:3000'];
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    const allowedOrigins = [
+      'http://localhost:3000',
+      'https://ssg-server.onrender.com',
+      process.env.ALLOWED_ORIGIN
+    ].filter(Boolean);
+    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.onrender.com')) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
