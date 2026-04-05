@@ -130,12 +130,14 @@ const apiLimiter = rateLimit({
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
 });
 
-// ─── OAuth Rate Limiter ─────────────────────────────────────────────────────────
+// ─── OAuth Rate Limiter with Exponential Backoff ────────────────────────────────
 // Discord has strict rate limits on token endpoint (error 1015 = rate limited)
-// This queues OAuth requests to space them out and avoid hitting Discord's rate limit
+// This queues OAuth requests and implements exponential backoff to avoid hitting limits
 const oauthQueue = [];
 let oauthProcessing = false;
-const OAUTH_DELAY_MS = 2000; // 2 seconds between OAuth token requests
+let currentDelay = 2000; // Start with 2 seconds
+const INITIAL_DELAY = 2000;
+const MAX_DELAY = 30000; // Cap at 30 seconds
 
 async function processOAuthQueue() {
   if (oauthProcessing || oauthQueue.length === 0) return;
@@ -144,13 +146,19 @@ async function processOAuthQueue() {
   
   while (oauthQueue.length > 0) {
     const item = oauthQueue.shift();
+    let rateLimited = false;
     
     try {
-      // Process the OAuth authentication
+      // Process the OAuth authentication with rate limit detection
       await new Promise((resolve, reject) => {
         passport.authenticate('discord', (err, user, info) => {
           if (err) {
             console.error('OAuth authentication error:', err);
+            // Check if this is a rate limit error
+            if (err.oauthError && err.oauthError.statusCode === 429) {
+              rateLimited = true;
+              console.warn('⚠️ Discord rate limit detected. Increasing delay to', currentDelay, 'ms');
+            }
             item.res.redirect('/?error=discord_auth_failed');
             resolve(); // Resolve to continue queue, don't reject
           } else if (!user) {
@@ -158,6 +166,11 @@ async function processOAuthQueue() {
             item.res.redirect('/?error=discord_auth_failed');
             resolve();
           } else {
+            // Success - reset delay to normal
+            if (currentDelay > INITIAL_DELAY) {
+              console.log('✅ OAuth success. Resetting delay to', INITIAL_DELAY, 'ms');
+              currentDelay = INITIAL_DELAY;
+            }
             item.req.logIn(user, (loginErr) => {
               if (loginErr) {
                 console.error('Login error:', loginErr);
@@ -179,6 +192,12 @@ async function processOAuthQueue() {
           }
         })(item.req, item.res, item.next);
       });
+      
+      // If we hit a rate limit, increase delay exponentially
+      if (rateLimited) {
+        currentDelay = Math.min(currentDelay * 2, MAX_DELAY);
+        console.log('Next request will wait', currentDelay, 'ms');
+      }
     } catch (err) {
       console.error('Error processing OAuth queue item:', err);
       try {
@@ -190,7 +209,8 @@ async function processOAuthQueue() {
     
     // Wait before processing next OAuth request
     if (oauthQueue.length > 0) {
-      await new Promise(resolve => setTimeout(resolve, OAUTH_DELAY_MS));
+      console.log(`OAuth queue: Processing next request in ${currentDelay}ms (${oauthQueue.length} waiting)`);
+      await new Promise(resolve => setTimeout(resolve, currentDelay));
     }
   }
   
@@ -200,6 +220,7 @@ async function processOAuthQueue() {
 function handleOAuthCallback(req, res, next) {
   // Add request to queue and start processing
   oauthQueue.push({ req, res, next });
+  console.log(`OAuth request queued. Queue size: ${oauthQueue.length}`);
   processOAuthQueue();
   // Don't call next() here - the queue handler will handle the response
 }
@@ -246,6 +267,9 @@ app.use('/api/', apiLimiter);
 app.use('/api/torn/bank-rates', bankRatesLimiter);
 
 // ─── SESSION ──────────────────────────────────────────────────────────────────
+// Session timeout: 72 hours (3 days) - extended to handle Discord outages
+const SESSION_MAX_AGE = 72 * 60 * 60 * 1000; // 72 hours in milliseconds
+
 app.use(session({
   store: sessionStore,
   secret: process.env.SESSION_SECRET || 'your-secret-key',
@@ -255,7 +279,7 @@ app.use(session({
   cookie: {
     secure: isProduction,
     sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000,
+    maxAge: SESSION_MAX_AGE,
     httpOnly: true
   }
 }));
