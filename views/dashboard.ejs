@@ -35,7 +35,6 @@
         <aside class="sidebar">
           <nav class="sidebar-nav">
             <a href="#profile" class="nav-item active" onclick="showSection('profile', this)">👤 Profile</a>
-            <a href="#channels" class="nav-item" onclick="showSection('channels', this)">💬 Channels</a>
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Torn Stats</a>
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
@@ -44,6 +43,7 @@
             <% if (isOwner || isLeadership || isWarlord) { %>
               <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
             <% } %>
+            <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
             <% if (isOwner || isLeadership) { %>
               <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
             <% } %>
@@ -149,39 +149,6 @@
               <% } %>
           </section>
 
-          <!-- ── CHANNELS ── -->
-          <section id="channels" class="section">
-            <div class="section-header">
-              <h3>Discord Channels</h3>
-              <button class="btn btn-small btn-outline" onclick="openHelp('channels')">❓ Help</button>
-            </div>
-            <% if (accessibleChannels && accessibleChannels.length> 0) { %>
-              <div class="channel-toolbar">
-                <label for="channel-select" class="toolbar-label">Select Channel:</label>
-                <select id="channel-select" class="channel-dropdown" onchange="loadChannel(this.value)">
-                  <option value="">— Choose a channel —</option>
-                  <% accessibleChannels.forEach(function(ch) { %>
-                    <option value="<%= ch.id %>">
-                      <%= ch.name %>
-                    </option>
-                    <% }); %>
-                </select>
-                <button class="btn btn-small btn-outline" onclick="refreshMessages()">↻ Refresh</button>
-              </div>
-              <div id="channel-feed" class="channel-feed">
-                <div class="channel-placeholder">
-                  <span class="placeholder-icon">💬</span>
-                  <p>Select a channel above to load messages</p>
-                </div>
-              </div>
-              <% } else { %>
-                <div class="empty-state">
-                  <span class="empty-icon">🔒</span>
-                  <p>You don't have any SSG channel access yet.</p>
-                  <p class="muted">Contact leadership to get your roles assigned.</p>
-                </div>
-                <% } %>
-          </section>
 
           <!-- ── TORN STATS ── -->
           <section id="torn" class="section">
@@ -509,6 +476,63 @@
             </section>
             <% } %>
 
+            <!-- ── ORGANIZED CRIME ── -->
+            <section id="oc" class="section">
+              <div class="section-header">
+                <h3>🗝️ Organized Crime Tracking</h3>
+                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                  <select id="oc-days-back" class="channel-dropdown" style="min-width:120px;">
+                    <option value="7">Last 7 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="180">Last 6 months</option>
+                    <option value="365">Last year</option>
+                    <option value="all">All time</option>
+                  </select>
+                  <button class="btn btn-primary btn-small" onclick="refreshCrimes()">↻ Refresh</button>
+                  <button class="btn btn-small btn-outline" onclick="openHelp('oc')">❓ Help</button>
+                </div>
+              </div>
+              
+              <!-- OC Crimes List -->
+              <div class="section-header" style="margin-top:0;">
+                <h3>Recent Crimes</h3>
+                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                  <button class="btn btn-small btn-outline" onclick="openParticipantHistoryWidget()">📊 Member History</button>
+                  <select id="oc-status-filter" class="channel-dropdown" onchange="filterCrimes()">
+                    <option value="all">All Status</option>
+                    <option value="pending">Pending</option>
+                    <option value="succeeded">Succeeded</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                  <select id="oc-sort" class="channel-dropdown" onchange="filterCrimes()">
+                    <option value="timeStarted-desc">Newest First</option>
+                    <option value="timeStarted-asc">Oldest First</option>
+                    <option value="moneyGain-desc">Highest Money</option>
+                    <option value="respectGain-desc">Highest Respect</option>
+                  </select>
+                </div>
+              </div>
+              <div id="oc-crimes-data">
+                <div class="empty-state">
+                  <span class="empty-icon">🗝️</span>
+                  <p>Click Refresh to load organized crime data.</p>
+                  <p class="muted">Shows recent OC attempts with participant details and checkpoint tracking.</p>
+                </div>
+              </div>
+
+              <!-- Participant Detail Modal Trigger -->
+              <div id="oc-participant-modal" class="help-modal-overlay" style="display:none;" onclick="closeParticipantModal(event)">
+                <div class="help-modal" style="max-width:800px;">
+                  <div class="help-modal-header">
+                    <span id="participant-modal-title">Participant Details</span>
+                    <button class="help-close-btn" onclick="document.getElementById('oc-participant-modal').style.display='none'">✕</button>
+                  </div>
+                  <div class="help-modal-body" id="participant-modal-body"></div>
+                </div>
+              </div>
+            </section>
+
               <!-- ── ADMIN ── -->
               <% if (isOwner || isLeadership) { %>
                 <section id="admin" class="section">
@@ -517,38 +541,103 @@
                     <button class="btn btn-small btn-outline" onclick="openHelp('admin')">❓ Help</button>
                   </div>
 
-                  <!-- Member Overview -->
-                  <div class="section-header" style="margin-top:0;">
-                    <h3>Member Overview</h3>
-                    <div style="display:flex;gap:0.75rem;">
-                      <button class="btn btn-primary btn-small" onclick="fetchMemberOverview()">↻ Refresh</button>
-                      <button class="btn btn-small btn-outline" onclick="exportOverviewCSV()">⬇️ Export CSV</button>
-                    </div>
+                  <!-- Admin Tab Navigation -->
+                  <div class="admin-tabs">
+                    <button class="admin-tab active" data-tab="member-overview" onclick="showAdminTab('member-overview', this)">👥 Member Overview</button>
+                    <button class="admin-tab" data-tab="faction-loans" onclick="showAdminTab('faction-loans', this)">📋 Faction Loans</button>
+                    <button class="admin-tab" data-tab="weapon-armor" onclick="showAdminTab('weapon-armor', this)">⚔️ Weapon & Armor</button>
+                    <button class="admin-tab" data-tab="medical-inventory" onclick="showAdminTab('medical-inventory', this)">💊 Medical Inventory</button>
+                    <button class="admin-tab" data-tab="drug-inventory" onclick="showAdminTab('drug-inventory', this)">💉 Drug Inventory</button>
                   </div>
-                  <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
-                    Enriched data shown for members with a saved API key. Click any column header to sort.
-                  </p>
-                  <div id="admin-overview-data">
-                    <div class="empty-state">
-                      <span class="empty-icon">🛡️</span>
-                      <p>Click Refresh to load member overview.</p>
+
+                  <!-- Tab Content: Member Overview -->
+                  <div id="tab-member-overview" class="admin-tab-content active">
+                    <div class="section-header" style="margin-top:0;">
+                      <h3>Member Overview</h3>
+                      <div style="display:flex;gap:0.75rem;">
+                        <button class="btn btn-primary btn-small" onclick="fetchMemberOverview()">↻ Refresh</button>
+                        <button class="btn btn-small btn-outline" onclick="exportOverviewCSV()">⬇️ Export CSV</button>
+                      </div>
+                    </div>
+                    <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                      Enriched data shown for members with a saved API key. Click any column header to sort.
+                    </p>
+                    <div id="admin-overview-data">
+                      <div class="empty-state">
+                        <span class="empty-icon">🛡️</span>
+                        <p>Click Refresh to load member overview.</p>
+                      </div>
                     </div>
                   </div>
 
-                  <!-- Member Total Stats -->
-                  <div class="section-header" style="margin-top:2rem;">
-                    <h3>Member Total Stats</h3>
-                    <button class="btn btn-primary btn-small" onclick="fetchMemberStats()">↻ Refresh</button>
-                  </div>
-                  <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">Only members who have saved their API
-                    key
-                    are shown.</p>
-                  <div id="admin-stats-data">
-                    <div class="empty-state">
-                      <span class="empty-icon">📊</span>
-                      <p>Click Refresh to load member stats.</p>
+                  <!-- Tab Content: Faction Loans -->
+                  <div id="tab-faction-loans" class="admin-tab-content">
+                    <div class="section-header" style="margin-top:0;">
+                      <h3>Faction Loans</h3>
+                      <button class="btn btn-primary btn-small" onclick="fetchFactionLoans()">↻ Refresh</button>
+                    </div>
+                    <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                      Shows which members have faction armor and weapons loaned out.
+                    </p>
+                    <div id="admin-loans-data">
+                      <div class="empty-state">
+                        <span class="empty-icon">🛡️</span>
+                        <p>Click Refresh to load faction loans data.</p>
+                      </div>
                     </div>
                   </div>
+
+                  <!-- Tab Content: Weapon & Armor Inventory -->
+                  <div id="tab-weapon-armor" class="admin-tab-content">
+                    <div class="section-header" style="margin-top:0;">
+                      <h3>Weapon & Armor Inventory</h3>
+                      <button class="btn btn-primary btn-small" onclick="fetchWeaponArmorInventory()">↻ Refresh</button>
+                    </div>
+                    <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                      Complete inventory of faction weapons and armor available in the armory.
+                    </p>
+                    <div id="admin-weapon-armor-data">
+                      <div class="empty-state">
+                        <span class="empty-icon">⚔️</span>
+                        <p>Click Refresh to load weapon and armor inventory.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Tab Content: Medical Inventory -->
+                  <div id="tab-medical-inventory" class="admin-tab-content">
+                    <div class="section-header" style="margin-top:0;">
+                      <h3>Medical Inventory</h3>
+                      <button class="btn btn-primary btn-small" onclick="fetchMedicalInventory()">↻ Refresh</button>
+                    </div>
+                    <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                      Medical supplies available in the faction armory (rope, first aid kits, etc.).
+                    </p>
+                    <div id="admin-medical-inventory-data">
+                      <div class="empty-state">
+                        <span class="empty-icon">💊</span>
+                        <p>Click Refresh to load medical inventory.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Tab Content: Drug Inventory -->
+                  <div id="tab-drug-inventory" class="admin-tab-content">
+                    <div class="section-header" style="margin-top:0;">
+                      <h3>Drug Inventory</h3>
+                      <button class="btn btn-primary btn-small" onclick="fetchDrugInventory()">↻ Refresh</button>
+                    </div>
+                    <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                      Drugs available in the faction armory (Xans, Vicodin, etc.).
+                    </p>
+                    <div id="admin-drug-inventory-data">
+                      <div class="empty-state">
+                        <span class="empty-icon">💉</span>
+                        <p>Click Refresh to load drug inventory.</p>
+                      </div>
+                    </div>
+                  </div>
+
                 </section>
                 <% } %>
 
@@ -569,6 +658,7 @@
   </div>
   <script>
     const IS_LEADERSHIP = <% if (isOwner || isLeadership) { %> true <% } else { %> false <% } %>;
+    const IS_OWNER = <% if (isOwner) { %> true <% } else { %> false <% } %>;
   </script>
   <script src="/js/dashboard.js">
   </script>

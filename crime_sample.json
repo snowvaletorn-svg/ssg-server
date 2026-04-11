@@ -1,0 +1,89 @@
+{
+  "firstCrime": {
+    "id": 1487585,
+    "previous_crime_id": null,
+    "name": "Best of the Lot",
+    "difficulty": 2,
+    "status": "Recruiting",
+    "created_at": 1775389539,
+    "planning_at": 1775421619,
+    "executed_at": null,
+    "ready_at": 1775594419,
+    "expired_at": 1775994339,
+    "slots": [
+      {
+        "position": "Picklock",
+        "position_info": {
+          "id": "P1",
+          "label": "Picklock",
+          "number": 1
+        },
+        "position_id": "P1",
+        "position_number": 1,
+        "item_requirement": {
+          "id": 1203,
+          "is_reusable": true,
+          "is_available": false
+        },
+        "user": null,
+        "checkpoint_pass_rate": 91
+      },
+      {
+        "position": "Car Thief",
+        "position_info": {
+          "id": "P2",
+          "label": "Car Thief",
+          "number": 1
+        },
+        "position_id": "P2",
+        "position_number": 1,
+        "item_requirement": null,
+        "user": {
+          "outcome": null,
+          "id": 2146080,
+          "joined_at": 1775423267,
+          "progress": 0,
+          "item_outcome": null
+        },
+        "checkpoint_pass_rate": 75
+      },
+      {
+        "position": "Muscle",
+        "position_info": {
+          "id": "P3",
+          "label": "Muscle",
+          "number": 1
+        },
+        "position_id": "P3",
+        "position_number": 1,
+        "item_requirement": null,
+        "user": {
+          "outcome": null,
+          "id": 3679686,
+          "joined_at": 1775421619,
+          "progress": 4.63,
+          "item_outcome": null
+        },
+        "checkpoint_pass_rate": 82
+      },
+      {
+        "position": "Imitator",
+        "position_info": {
+          "id": "P4",
+          "label": "Imitator",
+          "number": 1
+        },
+        "position_id": "P4",
+        "position_number": 1,
+        "item_requirement": {
+          "id": 1350,
+          "is_reusable": true,
+          "is_available": false
+        },
+        "user": null,
+        "checkpoint_pass_rate": 90
+      }
+    ],
+    "rewards": null
+  }
+}

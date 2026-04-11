@@ -9,8 +9,7 @@ function showSection(sectionId, el) {
   if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
-  if (sectionId === 'war') {fetchWarDataOverview(); fetchWarStats(); }
-  if (sectionId === 'channels' && currentChannelId) fetchMessages(currentChannelId);
+  if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); }
 }
 
 // ── Personal Torn API Key ─────────────────────────────────────────────────────
@@ -372,21 +371,21 @@ async function fetchCrimeExp() {
       fetch('/api/torn/crimeexp'),
       fetch('/api/torn/crimeskills')
     ]);
-    
+
     const recordData = await recordRes.json();
     const skillsData = await skillsRes.json();
-    
+
     if (!recordRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${recordData.error}</div>`; return; }
-    
+
     // The criminal record is directly in the response, not nested
     const criminalRecord = recordData.criminalrecord || recordData;
-    
+
     // Skills might be nested in data.skills or data.merits
     const skills = skillsData.skills || skillsData.merits || {};
-    
+
     console.log('Criminal Record:', criminalRecord);
     console.log('Skills:', skills);
-    
+
     container.innerHTML = renderCrimeExp(criminalRecord, skills);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -417,7 +416,7 @@ const CRIME_CATEGORIES = {
 };
 
 const CATEGORY_ORDER = [
-  'Vandalism', 'Theft', 'Counterfeiting', 'Fraud', 
+  'Vandalism', 'Theft', 'Counterfeiting', 'Fraud',
   'Illicit Services', 'Cybercrime', 'Extortion', 'Illegal Production'
 ];
 
@@ -440,12 +439,12 @@ async function fetchCrimeSkills() {
     const res = await fetch('/api/torn/crimeskills');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    
+
     console.log('Crime Skills API Response:', data);
     console.log('Full data object keys:', Object.keys(data));
     console.log('Skills:', data.skills);
     console.log('Skills keys:', data.skills ? Object.keys(data.skills) : 'null');
-    
+
     // The skills might be nested differently - try different paths
     const skills = data.skills || data.merits || {};
     container.innerHTML = renderCrimeSkills(skills);
@@ -520,7 +519,7 @@ function renderCrimeSkills(skills) {
     const lowerKey = key.toLowerCase();
     return SKILL_CATEGORIES[lowerKey] || SKILL_CATEGORIES[key];
   });
-  
+
   if (crimeSkillEntries.length === 0) {
     return `
       <div class="empty-state">
@@ -533,12 +532,12 @@ function renderCrimeSkills(skills) {
   // Group by category
   const grouped = {};
   let totalSkillPoints = 0;
-  
+
   crimeSkillEntries.forEach(([skill, level]) => {
     const lowerKey = skill.toLowerCase();
     const category = SKILL_CATEGORIES[lowerKey] || SKILL_CATEGORIES[skill];
     if (!category) return;
-    
+
     if (!grouped[category]) {
       grouped[category] = { skills: [], totalLevel: 0 };
     }
@@ -572,15 +571,15 @@ function renderCrimeSkills(skills) {
   // Render each category
   CATEGORY_ORDER.forEach(category => {
     if (!grouped[category]) return;
-    
+
     const catData = grouped[category];
     const icon = SKILL_CATEGORY_ICONS[category] || '📁';
-    
+
     let skillRows = catData.skills.map(skill => {
       const maxLevel = 10;
       const progress = skill.level / maxLevel;
       const color = skill.level >= maxLevel ? '#4caf50' : skill.level >= 5 ? '#f0a500' : '#4a90e2';
-      
+
       return `
         <div style="margin-bottom:0.75rem;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.25rem;">
@@ -617,7 +616,7 @@ function renderCrimeExp(criminalRecord, skills) {
       const slug = skill.slug ? skill.slug.toLowerCase() : '';
       const name = skill.name ? skill.name.toLowerCase() : '';
       const level = parseFloat(skill.level) || 0;
-      
+
       // Map by both slug and name for flexibility
       if (SKILL_CATEGORIES[slug] || SKILL_CATEGORIES[name]) {
         skillMap[slug] = Math.round(level); // Round to whole number
@@ -1112,17 +1111,70 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
         travelCell = '🌍 Abroad';
       }
 
-      return `<tr>
-        <td>${escapeHtml(m.name)}</td>
-        <td>${m.level || '—'}</td>
-        <td>${m.position || '—'}</td>
-        <td class="${statusClass}">${status}</td>
-        <td>${m.days_in_faction ?? '—'}d</td>
-        <td>${m.revive_setting || '—'}</td>
-        ${hasStats ? `<td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${totalStats}</td>` : ''}
-        <td style="font-size:0.85rem;">${travelCell}</td>
-      </tr>`;
+       const bloodTypeCell = IS_LEADERSHIP
+         ? `<td class="faction-bloodtype" data-playerid="${m.id}">${IS_OWNER ? `<input type="text" value="${m.bloodType || ''}" placeholder="A+, B-, etc." style="width:65px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:2px 4px;font-size:0.85rem;text-align:center;" disabled>` : (m.bloodType || '—')}</td>`
+         : '';
+       
+       return `<tr>
+         <td>${escapeHtml(m.name)}</td>
+         <td>${m.level || '—'}</td>
+         <td>${m.position || '—'}</td>
+         <td class="${statusClass}">${status}</td>
+         <td>${m.days_in_faction ?? '—'}d</td>
+         <td>${m.revive_setting || '—'}</td>
+         ${hasStats ? `<td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${totalStats}</td>` : ''}
+         <td style="font-size:0.85rem;">${travelCell}</td>
+         ${bloodTypeCell}
+         <td class="faction-timezone" data-playerid="${m.id}">${IS_OWNER ? `<select style="width:85px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:2px 4px;font-size:0.85rem;text-align:center;">
+  <option value="">—</option>
+  <option value="UTC-12" ${m.timeZone === 'UTC-12' ? 'selected' : ''}>UTC-12</option>
+  <option value="UTC-11" ${m.timeZone === 'UTC-11' ? 'selected' : ''}>UTC-11</option>
+  <option value="UTC-10" ${m.timeZone === 'UTC-10' ? 'selected' : ''}>UTC-10</option>
+  <option value="UTC-9.5" ${m.timeZone === 'UTC-9.5' ? 'selected' : ''}>UTC-9.5</option>
+  <option value="UTC-9" ${m.timeZone === 'UTC-9' ? 'selected' : ''}>UTC-9</option>
+  <option value="UTC-8" ${m.timeZone === 'UTC-8' ? 'selected' : ''}>UTC-8</option>
+  <option value="UTC-7" ${m.timeZone === 'UTC-7' ? 'selected' : ''}>UTC-7</option>
+  <option value="UTC-6" ${m.timeZone === 'UTC-6' ? 'selected' : ''}>UTC-6</option>
+  <option value="UTC-5" ${m.timeZone === 'UTC-5' ? 'selected' : ''}>UTC-5</option>
+  <option value="UTC-4.5" ${m.timeZone === 'UTC-4.5' ? 'selected' : ''}>UTC-4.5</option>
+  <option value="UTC-4" ${m.timeZone === 'UTC-4' ? 'selected' : ''}>UTC-4</option>
+  <option value="UTC-3.5" ${m.timeZone === 'UTC-3.5' ? 'selected' : ''}>UTC-3.5</option>
+  <option value="UTC-3" ${m.timeZone === 'UTC-3' ? 'selected' : ''}>UTC-3</option>
+  <option value="UTC-2.5" ${m.timeZone === 'UTC-2.5' ? 'selected' : ''}>UTC-2.5</option>
+  <option value="UTC-2" ${m.timeZone === 'UTC-2' ? 'selected' : ''}>UTC-2</option>
+  <option value="UTC-1" ${m.timeZone === 'UTC-1' ? 'selected' : ''}>UTC-1</option>
+  <option value="UTC±0" ${m.timeZone === 'UTC±0' ? 'selected' : ''}>UTC±0</option>
+  <option value="UTC+1" ${m.timeZone === 'UTC+1' ? 'selected' : ''}>UTC+1</option>
+  <option value="UTC+2" ${m.timeZone === 'UTC+2' ? 'selected' : ''}>UTC+2</option>
+  <option value="UTC+3" ${m.timeZone === 'UTC+3' ? 'selected' : ''}>UTC+3</option>
+  <option value="UTC+3.5" ${m.timeZone === 'UTC+3.5' ? 'selected' : ''}>UTC+3.5</option>
+  <option value="UTC+4" ${m.timeZone === 'UTC+4' ? 'selected' : ''}>UTC+4</option>
+  <option value="UTC+4.5" ${m.timeZone === 'UTC+4.5' ? 'selected' : ''}>UTC+4.5</option>
+  <option value="UTC+5" ${m.timeZone === 'UTC+5' ? 'selected' : ''}>UTC+5</option>
+  <option value="UTC+5.5" ${m.timeZone === 'UTC+5.5' ? 'selected' : ''}>UTC+5.5</option>
+  <option value="UTC+5.75" ${m.timeZone === 'UTC+5.75' ? 'selected' : ''}>UTC+5.75</option>
+  <option value="UTC+6" ${m.timeZone === 'UTC+6' ? 'selected' : ''}>UTC+6</option>
+  <option value="UTC+6.5" ${m.timeZone === 'UTC+6.5' ? 'selected' : ''}>UTC+6.5</option>
+  <option value="UTC+7" ${m.timeZone === 'UTC+7' ? 'selected' : ''}>UTC+7</option>
+  <option value="UTC+8" ${m.timeZone === 'UTC+8' ? 'selected' : ''}>UTC+8</option>
+  <option value="UTC+9" ${m.timeZone === 'UTC+9' ? 'selected' : ''}>UTC+9</option>
+  <option value="UTC+9.5" ${m.timeZone === 'UTC+9.5' ? 'selected' : ''}>UTC+9.5</option>
+  <option value="UTC+10" ${m.timeZone === 'UTC+10' ? 'selected' : ''}>UTC+10</option>
+  <option value="UTC+10.5" ${m.timeZone === 'UTC+10.5' ? 'selected' : ''}>UTC+10.5</option>
+  <option value="UTC+11" ${m.timeZone === 'UTC+11' ? 'selected' : ''}>UTC+11</option>
+  <option value="UTC+11.5" ${m.timeZone === 'UTC+11.5' ? 'selected' : ''}>UTC+11.5</option>
+  <option value="UTC+12" ${m.timeZone === 'UTC+12' ? 'selected' : ''}>UTC+12</option>
+  <option value="UTC+12.75" ${m.timeZone === 'UTC+12.75' ? 'selected' : ''}>UTC+12.75</option>
+  <option value="UTC+13" ${m.timeZone === 'UTC+13' ? 'selected' : ''}>UTC+13</option>
+  <option value="UTC+14" ${m.timeZone === 'UTC+14' ? 'selected' : ''}>UTC+14</option>
+</select>` : (m.timeZone || '—')}</td>
+       </tr>`;
     }).join('');
+
+  // Only show edit mode button if user is ownership
+  const editModeButton = IS_OWNER
+    ? `<button id="edit-faction-btn" class="btn btn-primary" onclick="toggleFactionEditMode()" style="float:right;margin:-2px 0;padding:4px 12px;font-size:0.85rem;">✏️ Edit Mode</button>`
+    : '';
 
   return `
     <div class="stats-grid" style="margin-bottom:1.5rem;">
@@ -1132,17 +1184,26 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
       ${statTile(`${basic.rank.name} D${basic.rank.division}`, 'Rank')}
     </div>
     <div class="card">
-      <div class="card-header">Member Roster</div>
+      <div class="card-header">
+        Member Roster
+        ${editModeButton}
+      </div>
       <div style="overflow-x:auto;">
-        <table class="members-table">
-          <thead><tr>
-            <th>Name</th><th>Level</th><th>Position</th><th>Status</th><th>Days</th><th>Revive</th>
-            ${hasStats ? '<th>Total Stats</th>' : ''}
-            <th>Travel</th>
-          </tr></thead>
+        <table class="members-table" id="faction-members-table">
+           <thead><tr>
+             <th>Name</th><th>Level</th><th>Position</th><th>Status</th><th>Days</th><th>Revive</th>
+             ${hasStats ? '<th>Total Stats</th>' : ''}
+             <th>Travel</th>
+             ${IS_LEADERSHIP ? '<th>Blood type</th>' : ''}
+             <th>TimeZone</th>
+           </tr></thead>
           <tbody>${memberRows || '<tr><td colspan="8" class="muted" style="padding:1rem;">No member data</td></tr>'}</tbody>
         </table>
       </div>
+      ${IS_OWNER ? `<div id="faction-save-container" style="display:none;padding:1rem;text-align:right;border-top:1px solid #2a2828;">
+        <button class="btn btn-success" onclick="saveFactionProfileChanges()" style="margin-right:0.5rem;">💾 Save Changes</button>
+        <button class="btn btn-outline" onclick="cancelFactionEditMode()">✕ Cancel</button>
+      </div>` : ''}
     </div>`;
 }
 
@@ -1607,6 +1668,10 @@ function renderMemberOverview() {
         aVal = a.lastSeen ? new Date(a.lastSeen).getTime() : 0;
         bVal = b.lastSeen ? new Date(b.lastSeen).getTime() : 0;
         break;
+      case 'totalstats':
+        aVal = a.totalstats ?? -1;
+        bVal = b.totalstats ?? -1;
+        break;
       default:
         aVal = a.name?.toLowerCase() || '';
         bVal = b.name?.toLowerCase() || '';
@@ -1622,71 +1687,86 @@ function renderMemberOverview() {
   const rows = sorted.map((m, i) => {
     const property = m.property || '—';
 
+    // Job display - position on first line, company name wraps on second line
     const job = m.job
-      ? `${escapeHtml(m.job.position)}<br><span style="color:#555;font-size:0.78rem;">${escapeHtml(m.job.company_name)}</span>`
+      ? `${escapeHtml(m.job.position)}<br><span style="color:#555;font-size:0.72rem;word-wrap:break-word;overflow-wrap:break-word;">${escapeHtml(m.job.company_name)}</span>`
       : '—';
 
+    // Compact energy display
     const energyDisplay = m.energy ? `${m.energy.current}/${m.energy.maximum}` : '—';
     const isDonator = m.energy?.maximum >= 150;
     const donatorBadge = m.energy
-      ? `<span style="font-size:0.7rem;color:${isDonator ? '#f0a500' : '#555'};margin-left:0.3rem;">${isDonator ? '★' : '○'}</span>`
+      ? `<span style="font-size:0.65rem;color:${isDonator ? '#f0a500' : '#555'};margin-left:0.2rem;">${isDonator ? '★' : '○'}</span>`
       : '';
 
     const drugCD = m.cooldowns
       ? (m.cooldowns.drug > 0
-        ? `<span title="Drug cooldown: ${formatCooldown(m.cooldowns.drug)}" style="cursor:help;color:#e74c3c;">💊 ${formatCooldown(m.cooldowns.drug)}</span>`
-        : `<span style="color:#2ecc71;">💊 Ready</span>`)
+        ? `<span title="Drug cooldown: ${formatCooldown(m.cooldowns.drug)}" style="cursor:help;color:#e74c3c;font-size:0.72rem;">💊${formatCooldown(m.cooldowns.drug)}</span>`
+        : `<span style="color:#2ecc71;font-size:0.72rem;">💊OK</span>`)
       : '—';
 
     const boosterCD = m.cooldowns
       ? (m.cooldowns.booster > 0
-        ? `<span style="color:#e67e22;">⚡ ${formatCooldown(m.cooldowns.booster)}</span>`
-        : `<span style="color:#2ecc71;">⚡ Ready</span>`)
+        ? `<span style="color:#e67e22;font-size:0.72rem;">⚡${formatCooldown(m.cooldowns.booster)}</span>`
+        : `<span style="color:#2ecc71;font-size:0.72rem;">⚡OK</span>`)
       : '—';
 
     const energyCell = m.energy || m.cooldowns ? `
-      <div>${energyDisplay}${donatorBadge}</div>
-      <div style="font-size:0.78rem;margin-top:0.2rem;">${drugCD}</div>
-      <div style="font-size:0.78rem;">${boosterCD}</div>
-    ` : '—';
+        <div style="font-size:0.8rem;">${energyDisplay}${donatorBadge}</div>
+        <div style="font-size:0.72rem;margin-top:0.15rem;">${drugCD} ${boosterCD}</div>
+      ` : '—';
 
     const medicalCell = m.cooldowns
       ? (m.cooldowns.medical > 0
-        ? `<span style="color:#e74c3c;">${formatCooldown(m.cooldowns.medical)}</span>`
-        : `<span style="color:#2ecc71;">Ready</span>`)
+        ? `<span style="color:#e74c3c;font-size:0.75rem;">${formatCooldown(m.cooldowns.medical)}</span>`
+        : `<span style="color:#2ecc71;font-size:0.75rem;">OK</span>`)
       : '—';
 
     const lastActionTs = m.tornLastAction?.timestamp ?? m.last_action?.timestamp ?? null;
     const lastActionCell = lastActionTs ? formatLastAction(lastActionTs) : '—';
     const isStale = lastActionTs && (Date.now() / 1000 - lastActionTs) > 23 * 3600;
-    const lastActionStyle = isStale ? 'color:#ff4444;font-weight:600;' : 'color:#a0a0a0;';
+    const lastActionStyle = isStale ? 'color:#ff4444;font-weight:600;font-size:0.75rem;' : 'color:#a0a0a0;font-size:0.75rem;';
 
+    // Battle stats - more compact
+    const hasStats = m.strength !== null && m.strength !== undefined;
+    const statsCell = hasStats ? `
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;line-height:1.35;white-space:nowrap;">
+          <div><span style="color:#e74c3c;font-weight:600;">STR</span> ${formatNumFull(m.strength)}</div>
+          <div><span style="color:#3498db;font-weight:600;">DEF</span> ${formatNumFull(m.defense)}</div>
+          <div><span style="color:#2ecc71;font-weight:600;">SPD</span> ${formatNumFull(m.speed)}</div>
+          <div><span style="color:#f39c12;font-weight:600;">DEX</span> ${formatNumFull(m.dexterity)}</div>
+          <div style="border-top:1px solid #333;margin-top:1px;padding-top:1px;text-align:center;font-weight:600;color:#c0bcbc;">${formatNumFull(m.totalstats)}</div>
+        </div>` : '<span style="color:#555;font-size:0.7rem;">—</span>';
+
+    // Compact API key display
     const hasKey = m.hasApiKey ? '✅' : '❌';
     const keyUpdated = m.tornKeyUpdatedAt
       ? new Date(m.tornKeyUpdatedAt).toLocaleDateString()
       : m.lastSeen ? new Date(m.lastSeen).toLocaleDateString() : '—';
-    const apiCell = `${hasKey}<br><span style="font-size:0.75rem;color:#555;">${keyUpdated}</span>`;
+    const apiCell = `${hasKey}<br><span style="font-size:0.68rem;color:#555;">${keyUpdated}</span>`;
 
     const removeBtn = m.id
-      ? `<button class="btn btn-small btn-danger" onclick="removeUser(${m.id}, '${escapeHtml(m.name)}')">Remove</button>`
+      ? `<button class="btn btn-small btn-danger" onclick="removeUser(${m.id}, '${escapeHtml(m.name)}')" style="padding:2px 6px;font-size:0.7rem;">✕</button>`
       : '—';
 
     return `<tr>
-      <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
-      <td>
-        <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" rel="noopener"
-          style="color:#a78df5;text-decoration:none;">${escapeHtml(m.name)}</a>
-        <span style="color:#555;font-size:0.75rem;"> [${m.id}]</span>
-      </td>
-      <td style="font-size:0.85rem;">${m.position || '—'}</td>
-      <td style="font-size:0.85rem;">${property}</td>
-      <td style="font-size:0.85rem;">${job}</td>
-      <td style="font-size:0.85rem;">${energyCell}</td>
-      <td style="font-size:0.85rem;text-align:center;">${medicalCell}</td>
-      <td style="font-size:0.85rem;${lastActionStyle}">${lastActionCell}</td>
-      <td style="font-size:0.85rem;text-align:center;">${apiCell}</td>
-      <td style="text-align:center;">${removeBtn}</td>
-    </tr>`;
+        <td style="color:#555;font-size:0.75rem;text-align:center;width:30px;">${i + 1}</td>
+        <td style="max-width:150px;">
+          <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" rel="noopener"
+            style="color:#a78df5;text-decoration:none;font-size:0.82rem;">${escapeHtml(m.name)}</a>
+          <span style="color:#555;font-size:0.68rem;"> [${m.id}]</span>
+        </td>
+        <td style="font-size:0.78rem;text-align:center;width:30px;">${m.level || '—'}</td>
+        <td style="font-size:0.78rem;max-width:100px;overflow:hidden;text-overflow:ellipsis;">${m.position || '—'}</td>
+        <td style="font-size:0.78rem;max-width:90px;overflow:hidden;text-overflow:ellipsis;">${property}</td>
+        <td style="font-size:0.78rem;max-width:75px;">${job}</td>
+        <td style="font-size:0.78rem;">${energyCell}</td>
+        <td style="font-size:0.75rem;text-align:center;width:60px;">${medicalCell}</td>
+        <td style="${lastActionStyle};white-space:nowrap;width:80px;">${lastActionCell}</td>
+        <td style="font-size:0.78rem;">${statsCell}</td>
+        <td style="font-size:0.75rem;text-align:center;width:50px;">${apiCell}</td>
+        <td style="text-align:center;width:40px;">${removeBtn}</td>
+      </tr>`;
   }).join('');
 
   container.innerHTML = `
@@ -1696,12 +1776,14 @@ function renderMemberOverview() {
           <tr>
             <th style="text-align:center;width:40px;">#</th>
             <th class="sortable" onclick="sortOverview('name')"       style="cursor:pointer;">Name${arrow('name')}</th>
+            <th style="text-align:center;">Lvl</th>
             <th class="sortable" onclick="sortOverview('position')"   style="cursor:pointer;">Position${arrow('position')}</th>
             <th class="sortable" onclick="sortOverview('property')"   style="cursor:pointer;">Housing${arrow('property')}</th>
             <th class="sortable" onclick="sortOverview('job')"        style="cursor:pointer;">Job${arrow('job')}</th>
             <th class="sortable" onclick="sortOverview('energy')"     style="cursor:pointer;">Energy & Cooldowns${arrow('energy')}</th>
             <th class="sortable" onclick="sortOverview('medical')"    style="cursor:pointer;">Medical CD${arrow('medical')}</th>
             <th class="sortable" onclick="sortOverview('lastaction')" style="cursor:pointer;">Last Action${arrow('lastaction')}</th>
+            <th class="sortable" onclick="sortOverview('totalstats')" style="cursor:pointer;">Battle Stats${arrow('totalstats')}</th>
             <th class="sortable" onclick="sortOverview('lastseen')"   style="cursor:pointer;">API Key${arrow('lastseen')}</th>
             <th></th>
           </tr>
@@ -1711,8 +1793,155 @@ function renderMemberOverview() {
     </div>
     <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
       ★ = Donator &nbsp;|&nbsp; 💊 = Drug cooldown &nbsp;|&nbsp; ⚡ = Booster cooldown &nbsp;|&nbsp;
-      <span style="color:#ff4444;">Red last action</span> = offline 23+ hours
+      <span style="color:#ff4444;">Red last action</span> = offline 23+ hours &nbsp;|&nbsp;
+      Stats: <span style="color:#e74c3c;">STR</span> <span style="color:#3498db;">DEF</span> <span style="color:#2ecc71;">SPD</span> <span style="color:#f39c12;">DEX</span>
     </p>`;
+}
+
+// ─── Faction Loans ────────────────────────────────────────────────────────────
+let loansData = [];
+
+async function fetchFactionLoans() {
+  const container = document.getElementById('admin-loans-data');
+  container.innerHTML = '<div class="channel-loading">LOADING FACTION LOANS...</div>';
+  try {
+    const res = await fetch('/api/admin/faction-loans');
+
+    // Check if response is JSON
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      container.innerHTML = `<div class="channel-error">⚠️ Server returned non-JSON response. Please ensure you're logged in and have leadership access.</div>`;
+      return;
+    }
+
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    loansData = data.members || [];
+    renderFactionLoans(loansData, data.totals, data.armoryItems || []);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderFactionLoans(members, totals, armoryItems) {
+  const container = document.getElementById('admin-loans-data');
+
+  if (!members.length) {
+    container.innerHTML = '<div class="empty-state"><p class="muted">No member data found.</p></div>';
+    return;
+  }
+
+  // Sort by position hierarchy then name (matching Member Overview table order)
+  const positionOrder = {
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
+    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+  };
+
+  const sorted = [...members].sort((a, b) => {
+    const aO = positionOrder[a.position] ?? 99;
+    const bO = positionOrder[b.position] ?? 99;
+    if (aO !== bO) return aO - bO;
+    return a.name.localeCompare(b.name);
+  });
+
+  const rows = sorted.map(m => {
+    // Use word-wrap and smaller font to fit all columns on screen
+    const primary = m.primary ? `<span title="${escapeHtml(m.primary)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:80px;">${escapeHtml(m.primary)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const secondary = m.secondary ? `<span title="${escapeHtml(m.secondary)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:70px;">${escapeHtml(m.secondary)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const melee = m.melee ? `<span title="${escapeHtml(m.melee)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:70px;">${escapeHtml(m.melee)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const head = m.head ? `<span title="${escapeHtml(m.head)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:70px;">${escapeHtml(m.head)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const body = m.body ? `<span title="${escapeHtml(m.body)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:70px;">${escapeHtml(m.body)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const gloves = m.gloves ? `<span title="${escapeHtml(m.gloves)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:60px;">${escapeHtml(m.gloves)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const pants = m.pants ? `<span title="${escapeHtml(m.pants)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:60px;">${escapeHtml(m.pants)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+    const boots = m.boots ? `<span title="${escapeHtml(m.boots)}" style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:60px;">${escapeHtml(m.boots)}</span>` : '<span style="color:#555;font-size:0.72rem;">✕</span>';
+
+    return `<tr style="vertical-align:top;">
+      <td style="max-width:100px;">
+        <a href="https://www.torn.com/profiles.php?XID=${m.id}" target="_blank" rel="noopener"
+          style="color:#a78df5;text-decoration:none;font-size:0.78rem;">${escapeHtml(m.name)}</a>
+      </td>
+      <td style="font-size:0.72rem;text-align:center;">${primary}</td>
+      <td style="font-size:0.72rem;text-align:center;">${secondary}</td>
+      <td style="font-size:0.72rem;text-align:center;">${melee}</td>
+      <td style="font-size:0.72rem;text-align:center;">${head}</td>
+      <td style="font-size:0.72rem;text-align:center;">${body}</td>
+      <td style="font-size:0.72rem;text-align:center;">${gloves}</td>
+      <td style="font-size:0.72rem;text-align:center;">${pants}</td>
+      <td style="font-size:0.72rem;text-align:center;">${boots}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="members-table overview-table" style="table-layout:fixed;width:100%;">
+        <thead>
+          <tr>
+            <th style="width:12%;">Member</th>
+            <th style="text-align:center;width:11%;">Primary</th>
+            <th style="text-align:center;width:11%;">Secondary</th>
+            <th style="text-align:center;width:11%;">Melee</th>
+            <th style="text-align:center;width:11%;">Head</th>
+            <th style="text-align:center;width:11%;">Body</th>
+            <th style="text-align:center;width:11%;">Gloves</th>
+            <th style="text-align:center;width:11%;">Pants</th>
+            <th style="text-align:center;width:11%;">Boots</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="margin-top:1rem;">
+      <div class="badge-label">📦 Armory Inventory</div>
+      ${renderArmoryInventory(armoryItems || [])}
+    </div>`;
+}
+
+function renderArmoryInventory(items) {
+  if (!items.length) return '<p class="muted">No armory items found.</p>';
+
+  // Sort by type then name
+  const sorted = [...items].sort((a, b) => {
+    if (a.type !== b.type) return a.type.localeCompare(b.type);
+    return a.name.localeCompare(b.name);
+  });
+
+  const rows = sorted.map(item => {
+    const loanedPct = item.total > 0 ? Math.round((item.loaned / item.total) * 100) : 0;
+    const barColor = loanedPct >= 80 ? '#e74c3c' : loanedPct >= 50 ? '#f0a500' : '#2ecc71';
+
+    return `<tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td style="text-align:center;">${item.type}</td>
+      <td style="text-align:center;">${item.slot.toUpperCase()}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.total}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#e74c3c;">${item.loaned}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#2ecc71;">${item.available}</td>
+      <td style="text-align:center;width:100px;">
+        <div style="background:#2a2828;border-radius:4px;height:8px;overflow:hidden;">
+          <div style="width:${loanedPct}%;height:100%;background:${barColor};border-radius:4px;"></div>
+        </div>
+        <span style="font-size:0.7rem;color:#555;">${loanedPct}%</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="overflow-x:auto;margin-top:0.5rem;">
+      <table class="members-table" style="font-size:0.85rem;">
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th style="text-align:center;">Type</th>
+            <th style="text-align:center;">Slot</th>
+            <th style="text-align:center;">Total</th>
+            <th style="text-align:center;">Loaned</th>
+            <th style="text-align:center;">Available</th>
+            <th style="text-align:center;">Usage</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }
 
 function formatCooldown(seconds) {
@@ -1744,10 +1973,11 @@ function exportOverviewCSV() {
   }
 
   const headers = [
-    '#', 'Name', 'Torn ID', 'Position', 'Housing', 'Job Position',
+    '#', 'Name', 'Torn ID', 'Level', 'Position', 'Housing', 'Job Position',
     'Company', 'Energy', 'Max Energy', 'Donator',
     'Drug CD (seconds)', 'Booster CD (seconds)', 'Medical CD (seconds)',
-    'Last Action', 'API Key Saved', 'Key Last Updated'
+    'Last Action', 'Strength', 'Defense', 'Speed', 'Dexterity', 'Total Stats',
+    'API Key Saved', 'Key Last Updated'
   ];
 
   const positionOrder = {
@@ -1770,6 +2000,7 @@ function exportOverviewCSV() {
       i + 1,
       m.name,
       m.id,
+      m.level || '—',
       m.position || '—',
       m.property || '—',
       m.job?.position || '—',
@@ -1781,6 +2012,11 @@ function exportOverviewCSV() {
       m.cooldowns?.booster ?? '—',
       m.cooldowns?.medical ?? '—',
       lastAction,
+      m.strength ?? '—',
+      m.defense ?? '—',
+      m.speed ?? '—',
+      m.dexterity ?? '—',
+      m.totalstats ?? '—',
       m.hasApiKey ? 'Yes' : 'No',
       keyUpdated
     ].map(val => `"${String(val).replace(/"/g, '""')}"`).join(',');
@@ -2069,9 +2305,80 @@ const HELP_CONTENT = {
       }
     ]
   },
+  war: {
+    title: '🪖 War',
+    sections: [
+      {
+        heading: 'War Panel',
+        content: `
+          <p class="help-text">The War Panel is available to Leaders, Co-leaders, and Warlords. It provides real-time war statistics and member readiness data to help coordinate faction war efforts.</p>
+          <div class="help-callout warning">⚠️ This section is only visible to Leadership and Warlord ranks.</div>
+        `
+      },
+      {
+        heading: 'War Data Overview',
+        content: `
+          <p class="help-text">Shows enriched member data specifically for war planning. Includes energy levels, medical cooldowns, drug/booster cooldowns, and last action timestamps.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to load the latest member data</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click any column header to sort members by that attribute</div></div>
+          <div class="help-callout">💡 <span style="color:#f0a500;">★</span> = Donator (150+ max energy) &nbsp;|&nbsp; 💊 = Drug cooldown &nbsp;|&nbsp; ⚡ = Booster cooldown</div>
+          <div class="help-callout">💡 Members with <span style="color:#ff4444;">red last action</span> have been offline 23+ hours and may not be war-ready.</div>
+        `
+      },
+      {
+        heading: 'War Stats',
+        content: `
+          <p class="help-text">Displays current ranked war statistics including faction scores, total hits, and individual member contributions.</p>
+          <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to update war stats from the Torn API.</div>
+          <div class="help-callout">💡 The hit list shows which members have contributed the most respect in the current war.</div>
+        `
+      }
+    ]
+  },
+  oc: {
+    title: '🗝️ OC Tracking',
+    sections: [
+      {
+        heading: 'Organized Crime Tracking',
+        content: `
+          <p class="help-text">The OC Tracking section helps you monitor organized crime attempts, participant performance, and individual member OC history.</p>
+          <div class="help-callout">💡 Data is pulled from the Torn faction API and updated when you click Refresh.</div>
+        `
+      },
+      {
+        heading: 'Recent Crimes',
+        content: `
+          <p class="help-text">Shows a list of recent organized crime attempts with details including participants, pass rates, money earned, and respect gained.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">time range dropdown</strong> to filter crimes by date (7 days to all time)</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Status</strong> filter to show pending, succeeded, or failed crimes</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Sort</strong> dropdown to order by date, money, or respect</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to pull the latest OC data from Torn</div></div>
+          <div class="help-callout">💡 Each crime card shows the crime name, status, participant count, average pass rate, and a preview of participants with their roles and checkpoint pass rates.</div>
+        `
+      },
+      {
+        heading: 'Member History',
+        content: `
+          <p class="help-text">Click the <strong style="color:#c0bcbc;">📊 Member History</strong> button to view an individual member's OC participation history.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select a member from the dropdown list</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">View History</strong> to see their OC record</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">View their role performance by crime and full participation history</div></div>
+          <div class="help-callout">💡 The role performance section shows each member's best checkpoint pass rate for each role they've performed in different crimes.</div>
+          <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">↻ Refresh</strong> in the history view to pull the latest data before viewing.</div>
+        `
+      }
+    ]
+  },
   admin: {
     title: '🛡️ Admin',
     sections: [
+      {
+        heading: 'Admin Panel',
+        content: `
+          <p class="help-text">The Admin Panel is available to Leaders and Co-leaders. It provides comprehensive faction management tools including member oversight, inventory tracking, and financial records.</p>
+          <div class="help-callout warning">⚠️ This section is only visible to Leadership ranks.</div>
+        `
+      },
       {
         heading: 'Member Overview',
         content: `
@@ -2082,10 +2389,31 @@ const HELP_CONTENT = {
         `
       },
       {
-        heading: 'Member Total Stats',
+        heading: 'Faction Loans',
         content: `
-          <p class="help-text">Shows battle stats for all members who have saved their Torn API key. Members are ranked by total stats descending.</p>
-          <div class="help-callout">💡 Only members who have saved their API key in the dashboard will appear here.</div>
+          <p class="help-text">Shows which members have faction armor and weapons loaned out. The armory inventory section displays total counts, loaned items, and available stock for each item type.</p>
+          <div class="help-callout">💡 Usage bars show what percentage of each item type is currently loaned out.</div>
+        `
+      },
+      {
+        heading: 'Weapon & Armor Inventory',
+        content: `
+          <p class="help-text">Complete inventory of faction weapons and armor available in the armory. Shows total count, loaned items, and available stock for each item.</p>
+          <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to update inventory from the Torn API.</div>
+        `
+      },
+      {
+        heading: 'Medical Inventory',
+        content: `
+          <p class="help-text">Medical supplies available in the faction armory (rope, first aid kits, etc.). Shows total count, loaned items, available stock, and usage percentage.</p>
+          <div class="help-callout">💡 Usage bars show what percentage of each item type is currently loaned out. Red = high usage (80%+), orange = moderate (50%+), green = low.</div>
+        `
+      },
+      {
+        heading: 'Drug Inventory',
+        content: `
+          <p class="help-text">Drugs available in the faction armory (Xans, Vicodin, etc.). Shows total count, loaned items, available stock, and usage percentage.</p>
+          <div class="help-callout">💡 Usage bars show what percentage of each item type is currently loaned out.</div>
         `
       }
     ]
@@ -2175,6 +2503,101 @@ function formatNumFull(n) {
   return n.toLocaleString();
 }
 
+// ── Faction Edit Mode (Ownership only) ───────────────────────────────────────
+function toggleFactionEditMode() {
+  const btn = document.getElementById('edit-faction-btn');
+  const saveContainer = document.getElementById('faction-save-container');
+  const bloodTypeInputs = document.querySelectorAll('.faction-bloodtype input');
+  const timeZoneInputs = document.querySelectorAll('.faction-timezone input');
+
+  const isEditing = !saveContainer.style.display || saveContainer.style.display === 'none';
+  
+  if (isEditing) {
+    btn.textContent = '❌ Cancel Edit';
+    btn.classList.remove('btn-primary');
+    btn.classList.add('btn-danger');
+    saveContainer.style.display = 'block';
+    
+    bloodTypeInputs.forEach(input => input.disabled = false);
+    timeZoneInputs.forEach(input => input.disabled = false);
+  // Set styling for active selects
+  document.querySelectorAll('.faction-timezone select').forEach(select => {
+    select.style.background = '#2a2828';
+    select.style.borderColor = '#444';
+  });
+  } else {
+    cancelFactionEditMode();
+  }
+}
+
+function cancelFactionEditMode() {
+  const btn = document.getElementById('edit-faction-btn');
+  const saveContainer = document.getElementById('faction-save-container');
+  const bloodTypeInputs = document.querySelectorAll('.faction-bloodtype input');
+  const timeZoneInputs = document.querySelectorAll('.faction-timezone input');
+
+  btn.textContent = '✏️ Edit Mode';
+  btn.classList.remove('btn-danger');
+  btn.classList.add('btn-primary');
+  saveContainer.style.display = 'none';
+  
+  bloodTypeInputs.forEach(input => input.disabled = true);
+  timeZoneInputs.forEach(input => input.disabled = true);
+  // Reset styling for disabled selects
+  document.querySelectorAll('.faction-timezone select').forEach(select => {
+    select.style.background = '#1a1919';
+    select.style.borderColor = '#333';
+  });
+  
+  // Refresh to revert unsaved changes
+  fetchFaction();
+}
+
+async function saveFactionProfileChanges() {
+  const bloodTypeInputs = document.querySelectorAll('.faction-bloodtype input');
+  const timeZoneInputs = document.querySelectorAll('.faction-timezone input');
+  
+  const updates = [];
+  const playerIds = new Set();
+  
+  bloodTypeInputs.forEach(input => {
+    const playerId = input.closest('[data-playerid]').dataset.playerid;
+    playerIds.add(playerId);
+  });
+  
+  playerIds.forEach(playerId => {
+    const bloodType = document.querySelector(`.faction-bloodtype[data-playerid="${playerId}"] input`)?.value?.trim() || '';
+    const timeZone = document.querySelector(`.faction-timezone[data-playerid="${playerId}"] select`)?.value?.trim() || '';
+    
+    updates.push({
+      tornPlayerId: parseInt(playerId),
+      bloodType: bloodType || null,
+      timeZone: timeZone || null
+    });
+  });
+
+  try {
+    const res = await fetch('/api/admin/members/profiles', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates })
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      alert(`❌ Save failed: ${data.error}`);
+      return;
+    }
+    
+    alert(`✅ Successfully saved ${data.modified} profile(s)!`);
+    cancelFactionEditMode();
+    
+  } catch (err) {
+    alert(`❌ Error saving changes: ${err.message}`);
+  }
+}
+
 // Examples:
 // 123456789 -> "123,456,789"
 // 1000      -> "1,000"
@@ -2189,11 +2612,11 @@ async function fetchBankRates() {
     const res = await fetch('/api/torn/bank-rates');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    
+
     // Debug: Log the raw API response
     console.log('Bank Rates API Response:', data);
     console.log('Rates object:', data.rates);
-    
+
     // Debug: Check if rates are all zero
     const rates = data.rates || {};
     const allZero = Object.values(rates).every(rate => rate === 0);
@@ -2201,7 +2624,7 @@ async function fetchBankRates() {
       console.log('⚠️ All rates are zero - this indicates an API issue');
       console.log('Full API response for debugging:', data);
     }
-    
+
     container.innerHTML = renderBankRates(data);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -2210,33 +2633,52 @@ async function fetchBankRates() {
 
 function renderBankRates(data) {
   const rates = data.rates || {};
+  const baseRates = data.baseRates || {};
+  const bankInvestmentMerit = data.bankInvestmentMerit || 0;
+  const meritBonus = data.meritBonus || 0;
   const lastUpdated = data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'Unknown';
-  
+
   const rateRows = [
-    { period: '1 Week', key: '1_week', rate: rates['1_week'] },
-    { period: '2 Weeks', key: '2_weeks', rate: rates['2_weeks'] },
-    { period: '1 Month', key: '1_month', rate: rates['1_month'] },
-    { period: '2 Months', key: '2_months', rate: rates['2_months'] },
-    { period: '3 Months', key: '3_months', rate: rates['3_months'] }
+    { period: '1 Week', key: '1_week', rate: rates['1_week'], baseRate: baseRates['1_week'] },
+    { period: '2 Weeks', key: '2_weeks', rate: rates['2_weeks'], baseRate: baseRates['2_weeks'] },
+    { period: '1 Month', key: '1_month', rate: rates['1_month'], baseRate: baseRates['1_month'] },
+    { period: '2 Months', key: '2_months', rate: rates['2_months'], baseRate: baseRates['2_months'] },
+    { period: '3 Months', key: '3_months', rate: rates['3_months'], baseRate: baseRates['3_months'] }
   ];
 
   const rows = rateRows.map(r => {
-    // API returns percentages directly, so just format them
-    const percentage = r.rate.toFixed(2);
+    const percentage = (r.rate || 0).toFixed(2);
+    const basePercentage = r.baseRate !== undefined ? (r.baseRate || 0).toFixed(2) : null;
     return `
     <tr>
       <td>${r.period}</td>
-      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${percentage}%</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">
+        ${percentage}%
+        ${bankInvestmentMerit > 0 && basePercentage !== null ? `<span style="font-size:0.7rem;color:#888;display:block;">(Base: ${basePercentage}%)</span>` : ''}
+      </td>
       <td style="text-align:right;color:#888;font-size:0.8rem;">${formatRateDescription(parseFloat(percentage))}</td>
     </tr>`;
   }).join('');
 
+  const meritInfo = bankInvestmentMerit > 0
+    ? `<span style="float:left;font-size:0.75rem;color:#4caf50;margin-right:10px;">🏆 Bank Investment Merit: Level ${bankInvestmentMerit} (+${meritBonus}%)</span>`
+    : '<span style="float:left;font-size:0.75rem;color:#888;margin-right:10px;">No Bank Investment Merit</span>';
+
   return `
     <div class="card">
-      <div class="card-header">Current Bank Interest Rates <span style="float:right;font-size:0.8rem;color:#555;">Updated: ${lastUpdated}</span></div>
-      <div style="overflow-x:auto;">
+      <div class="card-header">
+        ${meritInfo}
+        <span style="float:right;font-size:0.8rem;color:#555;">Updated: ${lastUpdated}</span>
+      </div>
+      <div style="overflow-x:auto; width:100%;">
         <table class="members-table">
-          <thead><tr><th>Time Period</th><th style="text-align:center;">Interest Rate</th><th style="text-align:right;">Description</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Time Period</th>
+              <th style="text-align:center;">Interest Rate</th>
+              <th style="text-align:center;">Description</th>
+            </tr>
+          </thead>
           <tbody>${rows || '<tr><td colspan="3" class="muted" style="padding:1rem;">No rate data available</td></tr>'}</tbody>
         </table>
       </div>
@@ -2257,7 +2699,7 @@ async function calculateBankEarnings() {
   // Remove any currency formatting (commas, $ signs) before parsing
   const rawValue = amountInput.value.replace(/[$,]/g, '');
   const amount = parseFloat(rawValue);
-  
+
   if (!amount || amount <= 0) {
     container.innerHTML = '<div class="channel-error">⚠️ Please enter a valid amount greater than 0.</div>';
     return;
@@ -2266,7 +2708,7 @@ async function calculateBankEarnings() {
   // Get cached rates from the current display or fetch fresh
   const ratesContainer = document.getElementById('bank-rates-data');
   let rates = {};
-  
+
   // Try to extract rates from the current display
   const rateCells = ratesContainer.querySelectorAll('td:nth-child(2)');
   if (rateCells.length >= 5) {
@@ -2306,7 +2748,7 @@ async function calculateBankEarnings() {
 
 function displayCalculatorResults(amount, rates, meritsBonus = 0) {
   const container = document.getElementById('bank-calculator-results');
-  
+
   const results = [
     { period: '1 Week', key: '1_week', days: 7 },
     { period: '2 Weeks', key: '2_weeks', days: 14 },
@@ -2351,15 +2793,15 @@ function calculateInterest(principal, ratePercent, meritsBonus = 0) {
   // Torn bank rate is a flat rate applied directly to principal
   // e.g. 44.13% for 1 month means you earn principal * 0.4413
   // Merit bonus adds on top: Bank Interest at level 10 adds 10% of the base rate
-  const baseInterest   = principal * (ratePercent / 100);
-  const meritInterest  = baseInterest * (meritsBonus / 100);
+  const baseInterest = principal * (ratePercent / 100);
+  const meritInterest = baseInterest * (meritsBonus / 100);
   return Math.round(baseInterest + meritInterest);
 }
 
 function clearBankCalculator() {
   const container = document.getElementById('bank-calculator-results');
   const input = document.getElementById('bank-amount-input');
-  
+
   input.value = '1000000';
   container.innerHTML = `
     <div class="empty-state">
@@ -2419,18 +2861,18 @@ function renderTravelProfits() {
 
   // Get travel method from radio buttons
   const travelMethod = document.querySelector('input[name="travelMethod"]:checked')?.value || 'standard';
-  
+
   // Get quantity from input (default 25, min 5, max 29)
   const quantityInput = document.getElementById('profit-quantity');
   let quantity = parseInt(quantityInput?.value) || 25;
   quantity = Math.max(5, Math.min(29, quantity));
-  
+
   // Get item types from checkboxes
   const typePlushie = document.getElementById('type-plushie')?.checked ?? true;
   const typeFlower = document.getElementById('type-flower')?.checked ?? true;
   const typeDrug = document.getElementById('type-drug')?.checked ?? true;
   const typeOther = document.getElementById('type-other')?.checked ?? false;
-  
+
   const sortBy = document.getElementById('profit-sort')?.value || 'profitPerRun';
 
   let profits = [...travelProfitsCache.profits];
@@ -2440,12 +2882,12 @@ function renderTravelProfits() {
     const type = p.type.toLowerCase();
     // Normalize type to singular form for comparison
     const normalizedType = type.endsWith('s') ? type.slice(0, -1) : type;
-    
+
     if (normalizedType === 'plushie' && typePlushie) return true;
     if (normalizedType === 'flower' && typeFlower) return true;
     if (normalizedType === 'drug' && typeDrug) return true;
     if (!['plushie', 'flower', 'drug'].includes(normalizedType) && typeOther) return true;
-    
+
     return false;
   });
 
@@ -2507,14 +2949,14 @@ function renderTravelProfits() {
 
     const rows = items.map(item => {
       const profitPerRun = item.profit * quantity;
-      
+
       // Format best leave time display (to arrive at restock time)
       let restockDisplay = '<span style="color:#555;">—</span>';
-      
+
       if (item.minutesUntilLeave !== null && item.minutesUntilLeave !== undefined) {
         const minsUntilLeave = item.minutesUntilLeave;
         const leaveTime = item.bestLeaveTime || '—';
-        
+
         if (minsUntilLeave <= 0) {
           // Should leave now to arrive at restock
           restockDisplay = `<span style="color:#4caf50;font-weight:600;">Leave Now!<br><small>Restock: ${leaveTime}</small></span>`;
@@ -2538,7 +2980,7 @@ function renderTravelProfits() {
           restockDisplay = `<span style="color:#ff9800;">~${h}h to restock</span>`;
         }
       }
-      
+
       return `
         <tr>
           <td>${escapeHtml(item.name)}</td>
@@ -2592,4 +3034,909 @@ function getCountryName(code) {
     uae: 'UAE', sou: 'South Africa'
   };
   return names[code] || code;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORGANIZED CRIME TRACKING
+// ═══════════════════════════════════════════════════════════════════════════════
+
+let ocCrimesCache = [];
+
+// Add OC to section navigation
+(function () {
+  const originalShowSection = showSection;
+  // Wrap showSection to add OC handling
+  if (typeof showSection === 'function') {
+    // We'll add OC handling by modifying the function behavior
+  }
+})();
+
+// Override showSection to include OC handling
+const _originalShowSection = window.showSection;
+window.showSection = function (sectionId, el) {
+  _originalShowSection(sectionId, el);
+  if (sectionId === 'oc') {
+    // Only show existing data on section switch, don't auto-refresh
+    // User must click Refresh button to get new data
+    if (ocCrimesCache.length === 0) {
+      // If no data cached yet, fetch from our API (which returns stored data)
+      fetchStoredCrimes();
+    }
+  }
+};
+
+// ─── Fetch stored crimes (without triggering API refresh) ─────────────────────
+async function fetchStoredCrimes() {
+  const container = document.getElementById('oc-crimes-data');
+  const daysSelect = document.getElementById('oc-days-back');
+  const daysValue = daysSelect ? daysSelect.value : '30';
+
+  container.innerHTML = '<div class="channel-loading">LOADING OC DATA...</div>';
+
+  try {
+    const params = new URLSearchParams();
+    if (daysValue !== 'all') {
+      params.append('daysBack', daysValue);
+    }
+
+    // Just fetch stored data, don't refresh
+    const res = await fetch('/api/oc/crimes?' + params.toString());
+    const data = await res.json();
+
+    if (!res.ok) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load OC data'}</div>`;
+      return;
+    }
+
+    ocCrimesCache = data;
+    renderCrimes();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+// ─── Refresh OC Crimes ─────────────────────────────────────────────────────────
+async function refreshCrimes() {
+  const container = document.getElementById('oc-crimes-data');
+  const daysSelect = document.getElementById('oc-days-back');
+  const daysValue = daysSelect ? daysSelect.value : '30';
+
+  container.innerHTML = '<div class="channel-loading">LOADING OC DATA...</div>';
+
+  try {
+    const params = new URLSearchParams();
+    if (daysValue !== 'all') {
+      params.append('daysBack', daysValue);
+    }
+
+    // First refresh from API
+    const refreshRes = await fetch('/api/oc/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daysBack: daysValue === 'all' ? undefined : parseInt(daysValue) })
+    });
+
+    // Then fetch the crimes list
+    const res = await fetch('/api/oc/crimes?' + params.toString());
+    const data = await res.json();
+
+    if (!res.ok) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load OC data'}</div>`;
+      return;
+    }
+
+    ocCrimesCache = data;
+    renderCrimes();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+// ─── Filter & Sort Crimes ──────────────────────────────────────────────────────
+function filterCrimes() {
+  renderCrimes();
+}
+
+function renderCrimes() {
+  const container = document.getElementById('oc-crimes-data');
+  const statusFilter = document.getElementById('oc-status-filter')?.value || 'all';
+  const sortValue = document.getElementById('oc-sort')?.value || 'timeStarted-desc';
+
+  let crimes = [...ocCrimesCache];
+
+  // Apply status filter
+  if (statusFilter !== 'all') {
+    crimes = crimes.filter(c => c.status === statusFilter);
+  }
+
+  // Apply sorting
+  const [sortKey, sortOrder] = sortValue.split('-');
+  crimes.sort((a, b) => {
+    let aVal = a[sortKey];
+    let bVal = b[sortKey];
+
+    if (sortKey === 'timeStarted') {
+      aVal = aVal ? new Date(aVal).getTime() : 0;
+      bVal = bVal ? new Date(bVal).getTime() : 0;
+    }
+
+    if (aVal == null) aVal = 0;
+    if (bVal == null) bVal = 0;
+
+    return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+  });
+
+  if (crimes.length === 0) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">🗝️</span><p>No crimes found matching your filters.</p></div>';
+    return;
+  }
+
+  container.innerHTML = crimes.map(crime => renderCrimeCard(crime)).join('');
+}
+
+// ─── Render Single Crime Card ──────────────────────────────────────────────────
+function renderCrimeCard(crime) {
+  const statusIcon = {
+    'pending': '⏳',
+    'succeeded': '✅',
+    'failed': '❌'
+  }[crime.status] || '⏳';
+
+  const statusColor = {
+    'pending': '#f0a500',
+    'succeeded': '#4caf50',
+    'failed': '#ff4444'
+  }[crime.status] || '#888';
+
+  const startDate = crime.timeStarted ? new Date(crime.timeStarted).toLocaleString() : 'N/A';
+  const completedDate = crime.timeCompleted ? new Date(crime.timeCompleted).toLocaleString() : 'N/A';
+  const timeLeft = crime.timeLeft ? formatTimeLeft(crime.timeLeft) : '';
+
+  const avgPassRate = crime.averagePassRate !== undefined ? crime.averagePassRate + '%' : 'N/A';
+  const participantCount = crime.participantCount || (crime.participants ? crime.participants.length : 0);
+
+  // Status badge
+  const statusBadge = `<span style="color:${statusColor};font-weight:600;">${statusIcon} ${crime.status.toUpperCase()}</span>`;
+
+  // Participants preview - show Member, Role, Tool, Pass Rate
+  const participantsPreview = (crime.participants || []).slice(0, 5).map(p => {
+    const name = p.playerName || `Player ${p.playerId}`;
+    const role = p.role || 'Unknown';
+    const tool = p.tool || 'N/A';
+    const passRate = p.checkpointPassRate !== null ? p.checkpointPassRate + '%' : '—';
+    const passStatus = p.checkpointStatus === 'passed' ? '✅' : p.checkpointStatus === 'failed' ? '❌' : '⏳';
+    return `<tr>
+      <td>${escapeHtml(name)}</td>
+      <td style="color:#888;font-size:0.85rem;">${escapeHtml(role)}</td>
+      <td style="color:#888;font-size:0.85rem;">${escapeHtml(tool)}</td>
+      <td style="text-align:center;">${passRate} ${passStatus}</td>
+    </tr>`;
+  }).join('');
+
+  const moreParticipants = (crime.participants || []).length > 5
+    ? `<tr><td colspan="4" class="muted" style="text-align:center;padding:0.5rem;">...and ${(crime.participants || []).length - 5} more</td></tr>`
+    : '';
+
+  return `
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+        <div>
+          ${statusBadge}
+          <span style="margin-left:0.75rem;font-size:1rem;">🗝️ ${escapeHtml(crime.crimeName)}</span>
+        </div>
+        <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+          <span style="font-size:0.8rem;color:#555;">${participantCount} participants</span>
+          <span style="font-size:0.8rem;color:#555;">Avg Pass: ${avgPassRate}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:1rem;">
+          ${infoBadge('Started', startDate)}
+          ${crime.timeReady ? infoBadge('Ready', new Date(crime.timeReady).toLocaleString()) : ''}
+          ${crime.timeCompleted ? infoBadge('Completed', completedDate) : ''}
+          ${timeLeft ? infoBadge('Time Left', timeLeft) : ''}
+          ${crime.moneyGain ? infoBadge('Money', '$' + crime.moneyGain.toLocaleString()) : ''}
+          ${crime.respectGain ? infoBadge('Respect', '+' + crime.respectGain.toLocaleString()) : ''}
+        </div>
+        
+        <div style="margin-top:1rem;">
+          <div class="badge-label">Participants</div>
+          <div style="overflow-x:auto;">
+            <table class="members-table" style="width:100%;">
+              <thead><tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>Tool</th>
+                <th style="text-align:center;">Pass Rate</th>
+              </tr></thead>
+              <tbody>${participantsPreview}
+                ${moreParticipants}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function formatTimeLeft(seconds) {
+  if (seconds <= 0) return 'Expired';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// ─── Show Crime Details Modal ──────────────────────────────────────────────────
+async function showCrimeDetails(crimeId) {
+  const modal = document.getElementById('oc-participant-modal');
+  const title = document.getElementById('participant-modal-title');
+  const body = document.getElementById('participant-modal-body');
+
+  body.innerHTML = '<div class="channel-loading">LOADING...</div>';
+  modal.style.display = 'flex';
+
+  try {
+    const res = await fetch(`/api/oc/crimes/${crimeId}`);
+    const crime = await res.json();
+
+    if (!res.ok) {
+      body.innerHTML = `<div class="channel-error">⚠️ ${crime.error}</div>`;
+      return;
+    }
+
+    title.textContent = `🗝️ ${crime.crimeName} - Participants`;
+
+    // Render full participant list with ability to update checkpoint rates
+    const participantRows = (crime.participants || []).map((p, index) => {
+      const statusColor = p.status?.color === 'green' ? '#4caf50' : p.status?.color === 'red' ? '#ff4444' : '#4a90e2';
+      const name = p.playerName || `Player ${p.playerId}`;
+      const role = p.role || 'Unknown';
+      const passRate = p.checkpointPassRate !== null ? p.checkpointPassRate : '';
+      const checkpointStatus = p.checkpointStatus || 'pending';
+
+      return `
+        <tr>
+          <td>${escapeHtml(name)}</td>
+          <td style="color:#888;font-size:0.85rem;">${escapeHtml(role)}</td>
+          <td><span style="color:${statusColor};">${p.status?.state || 'Unknown'}</span></td>
+          <td style="text-align:center;">
+            <input type="number" min="0" max="100" 
+              value="${passRate}" 
+              placeholder="—"
+              id="checkpoint-${p.playerId}"
+              style="width:60px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:2px 4px;font-size:0.85rem;text-align:center;"
+              onchange="updateCheckpointStatus(this, ${p.playerId})" />
+            <span id="status-${p.playerId}" style="margin-left:4px;font-size:0.75rem;">
+              ${checkpointStatus === 'passed' ? '✅' : checkpointStatus === 'failed' ? '❌' : '—'}
+            </span>
+          </td>
+        </tr>`;
+    }).join('');
+
+    body.innerHTML = `
+      <div style="margin-bottom:1rem;">
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-bottom:1rem;">
+          ${infoBadge('Status', crime.status.toUpperCase())}
+          ${infoBadge('Started', crime.timeStarted ? new Date(crime.timeStarted).toLocaleString() : 'N/A')}
+          ${infoBadge('Completed', crime.timeCompleted ? new Date(crime.timeCompleted).toLocaleString() : 'Pending')}
+          ${crime.moneyGain ? infoBadge('Money', '$' + crime.moneyGain.toLocaleString()) : ''}
+          ${crime.respectGain ? infoBadge('Respect', '+' + crime.respectGain.toLocaleString()) : ''}
+          ${infoBadge('Participants', crime.participants.length)}
+          ${crime.averagePassRate !== undefined ? infoBadge('Avg Pass Rate', crime.averagePassRate + '%') : ''}
+        </div>
+      </div>
+      <div class="badge-label">All Participants</div>
+      <p class="muted" style="font-size:0.75rem;margin-bottom:0.5rem;">Enter checkpoint pass rate (0-100%) for each participant. Rates ≥50% are marked as passed.</p>
+      <div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+        <table class="members-table" style="width:100%;">
+          <thead><tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th style="text-align:center;">Status</th>
+            <th style="text-align:center;">Pass Rate %</th>
+          </tr></thead>
+          <tbody>${participantRows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:1rem;text-align:right;">
+        <button class="btn btn-primary" onclick="saveAllCheckpoints(${crimeId})">💾 Save All Checkpoints</button>
+      </div>`;
+  } catch (err) {
+    body.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+// ─── Update checkpoint status visual ───────────────────────────────────────────
+function updateCheckpointStatus(input, playerId) {
+  const val = parseInt(input.value);
+  const statusEl = document.getElementById(`status-${playerId}`);
+  if (isNaN(val)) {
+    statusEl.textContent = '—';
+  } else if (val >= 50) {
+    statusEl.textContent = '✅';
+  } else {
+    statusEl.textContent = '❌';
+  }
+}
+
+// ─── Save all checkpoints ──────────────────────────────────────────────────────
+async function saveAllCheckpoints(crimeId) {
+  const crime = ocCrimesCache.find(c => c.crimeId === crimeId);
+  if (!crime) return;
+
+  const participantRates = {};
+  (crime.participants || []).forEach(p => {
+    const input = document.getElementById(`checkpoint-${p.playerId}`);
+    if (input && input.value !== '') {
+      participantRates[p.playerId] = parseInt(input.value);
+    }
+  });
+
+  if (Object.keys(participantRates).length === 0) {
+    alert('Please enter at least one checkpoint pass rate.');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/oc/crimes/${crimeId}/checkpoints`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantRates })
+    });
+
+    const result = await res.json();
+    if (res.ok) {
+      alert('✅ Checkpoint rates saved successfully!');
+      // Refresh the crime list
+      refreshCrimes();
+    } else {
+      alert('❌ ' + (result.error || 'Failed to save'));
+    }
+  } catch (err) {
+    alert('❌ Error: ' + err.message);
+  }
+}
+
+// ─── Open Participant History Widget ───────────────────────────────────────────
+async function openParticipantHistoryWidget() {
+  const modal = document.getElementById('oc-participant-modal');
+  const title = document.getElementById('participant-modal-title');
+  const body = document.getElementById('participant-modal-body');
+
+  title.textContent = '📊 Member OC History';
+
+  // Build dropdown of all unique participants from cached crimes
+  const participantMap = new Map();
+  ocCrimesCache.forEach(crime => {
+    (crime.participants || []).forEach(p => {
+      if (p.playerId && p.playerName) {
+        participantMap.set(p.playerId, p.playerName);
+      }
+    });
+  });
+
+  const participants = Array.from(participantMap.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+
+  const options = participants.map(([id, name]) =>
+    `<option value="${id}">${escapeHtml(name)}</option>`
+  ).join('');
+
+  body.innerHTML = `
+    <div style="margin-bottom:1rem;">
+      <label style="display:block;margin-bottom:0.5rem;font-size:0.9rem;">Select a member to view their OC history:</label>
+      <select id="participant-history-select" style="width:100%;padding:0.5rem;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;font-size:0.9rem;">
+        <option value="">— Select a member —</option>
+        ${options}
+      </select>
+      <button class="btn btn-primary" style="margin-top:0.75rem;" onclick="loadParticipantHistoryFromWidget()">View History</button>
+    </div>
+    <div id="participant-history-results"></div>`;
+
+  modal.style.display = 'flex';
+}
+
+// ─── Load Participant History from Widget ──────────────────────────────────────
+async function loadParticipantHistoryFromWidget() {
+  const select = document.getElementById('participant-history-select');
+  const playerId = select.value;
+  if (!playerId) {
+    alert('Please select a member.');
+    return;
+  }
+
+  const playerName = select.options[select.selectedIndex].text;
+  viewParticipantHistory(parseInt(playerId), playerName);
+}
+
+// ─── Close participant modal ───────────────────────────────────────────────────
+function closeParticipantModal(event) {
+  if (event.target === event.currentTarget) {
+    event.currentTarget.style.display = 'none';
+  }
+}
+
+// ─── Refresh Participant History ───────────────────────────────────────────────
+async function refreshParticipantHistory(playerId, playerName) {
+  // First refresh the OC crimes from API
+  const container = document.getElementById('oc-crimes-data');
+  const daysSelect = document.getElementById('oc-days-back');
+  const daysValue = daysSelect ? daysSelect.value : '30';
+
+  try {
+    const params = new URLSearchParams();
+    if (daysValue !== 'all') {
+      params.append('daysBack', daysValue);
+    }
+
+    // Refresh from API
+    await fetch('/api/oc/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ daysBack: daysValue === 'all' ? undefined : parseInt(daysValue) })
+    });
+
+    // Then fetch updated crimes
+    const res = await fetch('/api/oc/crimes?' + params.toString());
+    const data = await res.json();
+
+    if (res.ok) {
+      ocCrimesCache = data;
+      // Re-build the participant map from refreshed data
+      const participantMap = new Map();
+      ocCrimesCache.forEach(crime => {
+        (crime.participants || []).forEach(p => {
+          if (p.playerId && p.playerName) {
+            participantMap.set(p.playerId, p.playerName);
+          }
+        });
+      });
+
+      // Now view the participant history with refreshed data
+      viewParticipantHistory(playerId, playerName);
+    }
+  } catch (err) {
+    alert('❌ Error refreshing: ' + err.message);
+  }
+}
+
+// ─── View participant history ──────────────────────────────────────────────────
+async function viewParticipantHistory(playerId, playerName) {
+  try {
+    const res = await fetch(`/api/oc/participants/${playerId}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert('❌ ' + (data.error || 'Failed to load history'));
+      return;
+    }
+
+    const history = data.history || [];
+
+    // Build role-based statistics grouped by crime name
+    const crimeRoles = {};
+    const crimeOrder = [];
+
+    history.forEach(h => {
+      const crimeName = h.crimeName;
+      if (!crimeRoles[crimeName]) {
+        crimeRoles[crimeName] = {};
+        crimeOrder.push(crimeName);
+      }
+
+      // Get the role from the crime participants
+      const crime = ocCrimesCache.find(c => c.crimeId === h.crimeId);
+      if (crime) {
+        const participant = crime.participants.find(p => p.playerId === playerId);
+        if (participant && participant.role) {
+          const role = participant.role;
+          const passRate = h.checkpointPassRate;
+
+          if (!crimeRoles[crimeName][role] || (passRate !== null && passRate > (crimeRoles[crimeName][role].best || -1))) {
+            crimeRoles[crimeName][role] = {
+              best: passRate,
+              count: (crimeRoles[crimeName][role]?.count || 0) + 1
+            };
+          }
+        }
+      }
+    });
+
+    // Build role display for each crime
+    let roleStatsHtml = '';
+    crimeOrder.forEach(crimeName => {
+      const roles = crimeRoles[crimeName];
+      const roleEntries = Object.entries(roles);
+
+      if (roleEntries.length === 0) return;
+
+      const roleBoxes = roleEntries.map(([role, data]) => {
+        const displayRate = data.best !== null ? data.best + '%' : '—';
+        const countInfo = data.count > 1 ? `<br><small style="color:#555;">(${data.count}x)</small>` : '';
+        return `<div style="text-align:center;padding:0.5rem;background:#1a1919;border:1px solid #2a2828;border-radius:4px;">
+          <div style="font-size:0.75rem;color:#555;margin-bottom:0.25rem;">${escapeHtml(role)}</div>
+          <div style="font-size:1.1rem;color:#c0bcbc;font-family:'Share Tech Mono',monospace;">${displayRate}${countInfo}</div>
+        </div>`;
+      }).join('');
+
+      roleStatsHtml += `
+        <div class="card" style="margin-bottom:0.75rem;">
+          <div class="card-header" style="padding:0.5rem 0.75rem;font-size:0.85rem;">🗝️ ${escapeHtml(crimeName)}</div>
+          <div class="card-body" style="padding:0.5rem 0.75rem;">
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              ${roleBoxes}
+            </div>
+          </div>
+        </div>`;
+    });
+
+    const historyRows = history.map(h => {
+      // Get the role from the crime
+      const crime = ocCrimesCache.find(c => c.crimeId === h.crimeId);
+      let role = '—';
+      if (crime) {
+        const participant = crime.participants.find(p => p.playerId === playerId);
+        if (participant && participant.role) {
+          role = escapeHtml(participant.role);
+        }
+      }
+      const passRate = h.checkpointPassRate !== null ? h.checkpointPassRate + '%' : '—';
+      return `<tr>
+        <td style="font-family:'Share Tech Mono',monospace;font-size:0.85rem;">#${h.crimeId}</td>
+        <td>${escapeHtml(h.crimeName)}</td>
+        <td style="color:#888;font-size:0.85rem;">${role}</td>
+        <td style="text-align:center;">${passRate}</td>
+        <td style="text-align:right;">+${(h.respectGain || 0).toLocaleString()}</td>
+      </tr>`;
+    }).join('');
+
+    const modal = document.getElementById('oc-participant-modal');
+    document.getElementById('participant-modal-title').innerHTML = `
+      <span>📊 ${playerName} - OC History</span>
+      <div style="display:flex;gap:0.5rem;">
+        <button class="btn btn-small btn-outline" onclick="openParticipantHistoryWidget()" title="Choose Another Member">👥 Choose Another</button>
+        <button class="btn btn-small btn-outline" onclick="refreshParticipantHistory(${playerId}, '${playerName.replace(/'/g, "\\'")}')" title="Refresh History">↻ Refresh</button>
+      </div>`;
+    document.getElementById('participant-modal-body').innerHTML = `
+      <div class="badge-label" style="margin-top:0;">Role Performance by Crime</div>
+      <p class="muted" style="font-size:0.75rem;margin-bottom:0.75rem;">Shows each member's highest pass rate for each role they've performed.</p>
+      ${roleStatsHtml || '<div class="empty-state" style="margin-bottom:1rem;"><span class="empty-icon">📊</span><p>No role data available.</p></div>'}
+      <div class="badge-label">Crime History</div>
+      <div style="overflow-x:auto;max-height:400px;overflow-y:auto;">
+        <table class="members-table" style="width:100%;">
+          <thead><tr>
+            <th>OC #</th>
+            <th>Crime Name</th>
+            <th>Role</th>
+            <th style="text-align:center;">Pass Rate</th>
+            <th style="text-align:right;">Respect</th>
+          </tr></thead>
+          <tbody>${historyRows || '<tr><td colspan="5" class="muted" style="padding:1rem;">No history found</td></tr>'}</tbody>
+        </table>
+      </div>`;
+    modal.style.display = 'flex';
+  } catch (err) {
+    alert('❌ Error: ' + err.message);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN TAB NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function showAdminTab(tabId, el) {
+  // Deactivate all tabs
+  document.querySelectorAll('.admin-tab').forEach(tab => tab.classList.remove('active'));
+  // Hide all tab content
+  document.querySelectorAll('.admin-tab-content').forEach(content => content.classList.remove('active'));
+
+  // Activate clicked tab
+  if (el) el.classList.add('active');
+
+  // Show corresponding content
+  const contentEl = document.getElementById('tab-' + tabId);
+  if (contentEl) contentEl.classList.add('active');
+
+  // Auto-fetch data when switching tabs
+  switch (tabId) {
+    case 'member-overview':
+      if (document.getElementById('admin-overview-data').innerHTML.includes('empty-state')) {
+        fetchMemberOverview();
+      }
+      break;
+    case 'faction-loans':
+      if (document.getElementById('admin-loans-data').innerHTML.includes('empty-state')) {
+        fetchFactionLoans();
+      }
+      break;
+    case 'weapon-armor':
+      if (document.getElementById('admin-weapon-armor-data').innerHTML.includes('empty-state')) {
+        fetchWeaponArmorInventory();
+      }
+      break;
+    case 'medical-inventory':
+      if (document.getElementById('admin-medical-inventory-data').innerHTML.includes('empty-state')) {
+        fetchMedicalInventory();
+      }
+      break;
+    case 'drug-inventory':
+      if (document.getElementById('admin-drug-inventory-data').innerHTML.includes('empty-state')) {
+        fetchDrugInventory();
+      }
+      break;
+    case 'faction-register':
+      if (document.getElementById('admin-faction-register-data').innerHTML.includes('empty-state')) {
+        fetchFactionRegister();
+      }
+      break;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// INVENTORY FETCH FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Weapon & Armor Inventory ─────────────────────────────────────────────────
+async function fetchWeaponArmorInventory() {
+  const container = document.getElementById('admin-weapon-armor-data');
+  container.innerHTML = '<div class="channel-loading">LOADING WEAPON & ARMOR INVENTORY...</div>';
+  try {
+    const res = await fetch('/api/admin/weapon-armor-inventory');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderWeaponArmorInventory(data.items || []);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+function renderWeaponArmorInventory(items) {
+  if (!items.length) {
+    return '<div class="empty-state"><p class="muted">No weapon or armor items found in the armory.</p></div>';
+  }
+
+  // Separate weapons and armor
+  const weapons = items.filter(item => item.type && item.type.toLowerCase() !== 'armor');
+  const armor = items.filter(item => item.type && item.type.toLowerCase() === 'armor');
+
+  let html = '';
+
+  // Render Weapons
+  if (weapons.length > 0) {
+    const weaponRows = weapons.map(item => `
+      <tr>
+        <td>${escapeHtml(item.name)}</td>
+        <td style="text-align:center;">${escapeHtml(item.type || '—')}</td>
+        <td style="text-align:center;">${escapeHtml(item.slot || '—')}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.total || 0}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#e74c3c;">${item.loaned || 0}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#2ecc71;">${item.available || 0}</td>
+      </tr>`).join('');
+
+    html += `
+      <div class="card" style="margin-bottom:1rem;">
+        <div class="card-header">🔫 Weapons (${weapons.length} types)</div>
+        <div style="overflow-x:auto;">
+          <table class="members-table">
+            <thead><tr>
+              <th>Name</th>
+              <th style="text-align:center;">Type</th>
+              <th style="text-align:center;">Slot</th>
+              <th style="text-align:center;">Total</th>
+              <th style="text-align:center;">Loaned</th>
+              <th style="text-align:center;">Available</th>
+            </tr></thead>
+            <tbody>${weaponRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  // Render Armor
+  if (armor.length > 0) {
+    const armorRows = armor.map(item => `
+      <tr>
+        <td>${escapeHtml(item.name)}</td>
+        <td style="text-align:center;">${escapeHtml(item.slot || '—')}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.total || 0}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#e74c3c;">${item.loaned || 0}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#2ecc71;">${item.available || 0}</td>
+      </tr>`).join('');
+
+    html += `
+      <div class="card">
+        <div class="card-header">🛡️ Armor (${armor.length} types)</div>
+        <div style="overflow-x:auto;">
+          <table class="members-table">
+            <thead><tr>
+              <th>Name</th>
+              <th style="text-align:center;">Slot</th>
+              <th style="text-align:center;">Total</th>
+              <th style="text-align:center;">Loaned</th>
+              <th style="text-align:center;">Available</th>
+            </tr></thead>
+            <tbody>${armorRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  return html;
+}
+
+// ── Medical Inventory ────────────────────────────────────────────────────────
+async function fetchMedicalInventory() {
+  const container = document.getElementById('admin-medical-inventory-data');
+  container.innerHTML = '<div class="channel-loading">LOADING MEDICAL INVENTORY...</div>';
+  try {
+    const res = await fetch('/api/admin/medical-inventory');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderMedicalInventory(data.items || []);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+function renderMedicalInventory(items) {
+  if (!items.length) {
+    return '<div class="empty-state"><p class="muted">No medical supplies found in the armory.</p></div>';
+  }
+
+  const rows = items.map(item => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.quantity || 0}</td>
+    </tr>`).join('');
+
+  const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1rem;">
+      ${statTile(totalItems, 'Total Items')}
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="members-table">
+        <thead><tr>
+          <th>Name</th>
+          <th style="text-align:center;width:100px;">Quantity</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Faction Register ─────────────────────────────────────────────────────────
+async function fetchFactionRegister() {
+  const container = document.getElementById('admin-faction-register-data');
+  container.innerHTML = '<div class="channel-loading">LOADING FACTION REGISTER...</div>';
+  try {
+    const res = await fetch('/api/admin/faction-register');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderFactionRegister(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+function renderFactionRegister(data) {
+  const { entries, currentBalance, summary } = data;
+
+  if (!entries.length) {
+    return '<div class="empty-state"><p class="muted">No transactions found in the faction register.</p></div>';
+  }
+
+  // Calculate running total (reverse order for display - newest first)
+  const sortedEntries = [...entries].sort((a, b) => {
+    const dateA = new Date(a.transactionDate).getTime();
+    const dateB = new Date(b.transactionDate).getTime();
+    return dateB - dateA; // Newest first
+  });
+
+  // Calculate running totals
+  let runningTotal = currentBalance;
+  const entriesWithRunningTotal = sortedEntries.map(entry => {
+    const item = {
+      ...entry,
+      runningTotal: runningTotal,
+      date: new Date(entry.transactionDate).toLocaleString()
+    };
+    // For next (older) entry, subtract credit and add back debit
+    runningTotal = runningTotal - entry.credit + entry.debit;
+    return item;
+  });
+
+  const rows = entriesWithRunningTotal.map(entry => {
+    const categoryColor = {
+      'income': '#2ecc71',
+      'expense': '#e74c3c',
+      'transfer': '#3498db',
+      'adjustment': '#f0a500',
+      'other': '#888'
+    }[entry.category] || '#888';
+
+    const amountDisplay = entry.debit > 0
+      ? `<span style="color:#e74c3c;">-$${formatNum(entry.debit)}</span>`
+      : entry.credit > 0
+        ? `<span style="color:#2ecc71;">+$${formatNum(entry.credit)}</span>`
+        : '<span style="color:#888;">—</span>';
+
+    return `
+      <tr>
+        <td style="font-size:0.85rem;white-space:nowrap;">${entry.date}</td>
+        <td style="font-size:0.85rem;">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${categoryColor};margin-right:6px;"></span>
+          ${escapeHtml(entry.description)}
+        </td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${amountDisplay}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(entry.runningTotal)}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1rem;">
+      ${statTile('$' + formatNum(currentBalance), 'Current Balance')}
+      ${statTile('+$' + formatNum(summary.totalCredits), 'Total Credits')}
+      ${statTile('-$' + formatNum(summary.totalDebits), 'Total Debits')}
+      ${statTile('$' + formatNum(summary.balance), 'Net Change')}
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="members-table">
+        <thead><tr>
+          <th style="white-space:nowrap;">Date</th>
+          <th>Description</th>
+          <th style="text-align:center;width:120px;">Amount</th>
+          <th style="text-align:right;width:120px;">Running Total</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;">
+      💡 Data automatically synced from Torn faction funds news.
+    </p>`;
+}
+
+// ── Drug Inventory ───────────────────────────────────────────────────────────
+async function fetchDrugInventory() {
+  const container = document.getElementById('admin-drug-inventory-data');
+  container.innerHTML = '<div class="channel-loading">LOADING DRUG INVENTORY...</div>';
+  try {
+    const res = await fetch('/api/admin/drug-inventory');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderDrugInventory(data.items || []);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+function renderDrugInventory(items) {
+  if (!items.length) {
+    return '<div class="empty-state"><p class="muted">No drugs found in the armory.</p></div>';
+  }
+
+  const rows = items.map(item => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.quantity || 0}</td>
+    </tr>`).join('');
+
+  const totalItems = items.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1rem;">
+      ${statTile(totalItems, 'Total Items')}
+    </div>
+    <div style="overflow-x:auto;">
+      <table class="members-table">
+        <thead><tr>
+          <th>Name</th>
+          <th style="text-align:center;width:100px;">Quantity</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
 }

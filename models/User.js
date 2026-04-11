@@ -23,7 +23,11 @@ const userSchema = new mongoose.Schema({
   levelProgressCache: { type: Object, default: null },
   levelProgressCachedAt: { type: Date, default: null },
   bankRatesCache: { type: Object, default: null },
-  bankRatesCachedAt: { type: Date, default: null }
+  bankRatesCachedAt: { type: Date, default: null },
+
+  // Faction member profile fields
+  bloodType: { type: String, default: null },
+  timeZone: { type: String, default: null }
 });
 
 userSchema.pre('save', function(next) {

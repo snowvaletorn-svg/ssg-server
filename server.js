@@ -7,9 +7,47 @@ const axios = require('axios');
 const path = require('path');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
+const compression = require('compression');
 const factionData = require('./data/factions');
 const User = require('./models/User');
 const FactionConfig = require('./models/FactionConfig');
+
+// ==============================================
+// CACHING LAYER
+// ==============================================
+const cache = new Map();
+const pendingRequests = new Map();
+
+const CACHE_TTL = {
+  FACTION_MEMBERS: 5 * 60 * 1000,    // 5 minutes
+  USER_DATA: 2 * 60 * 1000,          // 2 minutes
+  TRAVEL_DATA: 30 * 1000,            // 30 seconds
+  STATIC_DATA: 24 * 60 * 60 * 1000   // 24 hours
+};
+
+function getCached(key) {
+  const entry = cache.get(key);
+  if (entry && Date.now() < entry.expiry) return entry.value;
+  cache.delete(key);
+  return null;
+}
+
+function setCached(key, value, ttl) {
+  cache.set(key, { value, expiry: Date.now() + ttl });
+}
+
+async function deduplicateRequest(key, fetchFn) {
+  if (pendingRequests.has(key)) return pendingRequests.get(key);
+  
+  const promise = fetchFn();
+  pendingRequests.set(key, promise);
+  
+  try {
+    return await promise;
+  } finally {
+    pendingRequests.delete(key);
+  }
+}
 
 const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
@@ -210,6 +248,7 @@ app.use(cors({
   },
   credentials: true
 }));
+app.use(compression({ level: 6 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -486,43 +525,6 @@ app.get('/api/ping', (req, res) => {
   res.json({ ok: true });
 });
 
-// ─── API: Discord channel messages ───────────────────────────────────────────
-app.get('/api/discord/channel/:channelId', isAuthenticated, async (req, res) => {
-  const { channelId } = req.params;
-  const allowed = Object.values(CHANNELS).map(c => c.id);
-  if (!allowed.includes(channelId)) {
-    return res.status(403).json({ error: 'Channel not permitted' });
-  }
-  const accessibleChannels = getAccessibleChannels(req.session.user?.positionGroup);
-  const hasAccess = accessibleChannels.some(c => c.id === channelId);
-  if (!hasAccess) {
-    return res.status(403).json({ error: 'You do not have access to this channel' });
-  }
-  try {
-    const response = await axios.get(
-      `https://discord.com/api/v10/channels/${channelId}/messages?limit=10`,
-      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
-    );
-    res.json(response.data);
-  } catch (err) {
-    console.error('Discord API error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to fetch messages', details: err.response?.data });
-  }
-});
-
-// ─── API: Discord members ─────────────────────────────────────────────────────
-app.get('/api/discord/members', isAuthenticated, async (req, res) => {
-  try {
-    const response = await axios.get(
-      `https://discord.com/api/v10/guilds/${SSG_GUILD_ID}/members?limit=1000`,
-      { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
-    );
-    res.json(response.data);
-  } catch (err) {
-    console.error('Discord members error:', err.response?.data || err.message);
-    res.status(500).json({ error: 'Failed to fetch members' });
-  }
-});
 
 // ─── API: Save personal Torn API key ─────────────────────────────────────────
 app.post('/api/torn/key', isAuthenticated, async (req, res) => {
@@ -684,6 +686,33 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
     const tornRes = await axios.get(
       `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`
     );
+    
+    // Get user profile fields from database with timeout protection
+    let profileMap = {};
+    try {
+      // Add timeout and only fetch needed fields
+      const dbUsers = await User.find({}, 'tornPlayerId bloodType timeZone').maxTimeMS(5000);
+      dbUsers.forEach(u => {
+        profileMap[u.tornPlayerId] = {
+          bloodType: u.bloodType,
+          timeZone: u.timeZone
+        };
+      });
+    } catch (dbErr) {
+      // Gracefully fall back if database is slow/unavailable - don't break entire faction page
+      console.warn('Database timeout when fetching user profiles:', dbErr.message);
+      // Continue without profile data rather than failing completely
+    }
+    
+    // Enrich response with profile data
+    if (tornRes.data.members) {
+      tornRes.data.members = tornRes.data.members.map(m => ({
+        ...m,
+        bloodType: profileMap[m.id]?.bloodType || null,
+        timeZone: profileMap[m.id]?.timeZone || null
+      }));
+    }
+    
     res.json(tornRes.data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1130,15 +1159,22 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
           job: null,
           energy: null,
           cooldowns: null,
-          tornLastAction: null
+          tornLastAction: null,
+          // Battle stats (only for members with API key)
+          strength: null,
+          defense: null,
+          speed: null,
+          dexterity: null,
+          totalstats: null
         };
 
         if (!dbUser?.tornApiKey) return base;
 
         try {
-          const [v1Res, v2Res] = await Promise.all([
+          const [v1Res, v2Res, statsRes] = await Promise.all([
             axios.get(`https://api.torn.com/user/?selections=basic,profile,bars&key=${dbUser.tornApiKey}`),
-            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${dbUser.tornApiKey}`)
+            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${dbUser.tornApiKey}`),
+            axios.get(`https://api.torn.com/user/?selections=personalstats&key=${dbUser.tornApiKey}`)
           ]);
           if (!v1Res.data.error) {
             base.property = v1Res.data.property || null;
@@ -1149,6 +1185,14 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
           if (!v2Res.data.error) {
             base.cooldowns = v2Res.data.cooldowns || null;
           }
+          if (!statsRes.data.error && statsRes.data.personalstats) {
+            const ps = statsRes.data.personalstats;
+            base.strength = ps.strength || 0;
+            base.defense = ps.defense || 0;
+            base.speed = ps.speed || 0;
+            base.dexterity = ps.dexterity || 0;
+            base.totalstats = ps.totalstats || 0;
+          }
         } catch { /* enrichment failed */ }
 
         return base;
@@ -1157,6 +1201,321 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
 
     res.json({
       members: enrichResults.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => r.value)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Weapon & Armor Inventory ──────────────────────────────────────────────
+app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Fetch armor and weapon data
+    let armorData = [];
+    let weaponsData = [];
+    
+    try {
+      const armorRes = await axios.get(`https://api.torn.com/faction/?selections=armor&key=${factionKey}`);
+      armorData = armorRes.data.armor || [];
+    } catch (err) {
+      console.error('Error fetching armor data:', err.message);
+    }
+    
+    try {
+      const weaponsRes = await axios.get(`https://api.torn.com/faction/?selections=weapons&key=${factionKey}`);
+      weaponsData = weaponsRes.data.weapons || [];
+    } catch (err) {
+      console.error('Error fetching weapon data:', err.message);
+    }
+
+    // Build inventory items
+    const items = [];
+    
+    // Add armor items
+    armorData.forEach(item => {
+      const name = (item.name || '').toLowerCase();
+      let slot = null;
+      if (name.includes('helmet') || name.includes('hood') || name.includes('hat')) slot = 'head';
+      else if (name.includes('armor') || name.includes('vest') || name.includes('suit') || name.includes('jacket') || name.includes('coat') || name.includes('poncho')) slot = 'body';
+      else if (name.includes('glove') || name.includes('gloves') || name.includes('mitts') || name.includes('hand')) slot = 'gloves';
+      else if (name.includes('pant') || name.includes('trouser') || name.includes('jean') || name.includes('leg') || name.includes('short')) slot = 'pants';
+      else if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sand') || name.includes('foot')) slot = 'boots';
+      
+      if (slot) {
+        items.push({
+          name: item.name,
+          type: 'Armor',
+          slot: slot,
+          total: item.quantity || 0,
+          loaned: item.loaned || 0,
+          available: item.available || 0
+        });
+      }
+    });
+    
+    // Add weapon items
+    weaponsData.forEach(item => {
+      const slot = (item.type || '').toLowerCase();
+      let weaponSlot = null;
+      if (slot === 'primary') weaponSlot = 'primary';
+      else if (slot === 'secondary') weaponSlot = 'secondary';
+      else if (slot === 'melee') weaponSlot = 'melee';
+      
+      if (weaponSlot) {
+        items.push({
+          name: item.name,
+          type: 'Weapon',
+          slot: weaponSlot,
+          total: item.quantity || 0,
+          loaned: item.loaned || 0,
+          available: item.available || 0
+        });
+      }
+    });
+
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Medical Inventory ─────────────────────────────────────────────────────
+app.get('/api/admin/medical-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Fetch medical data from faction API
+    let medicalData = [];
+    
+    try {
+      const medicalRes = await axios.get(`https://api.torn.com/faction/?selections=medical&key=${factionKey}`);
+      medicalData = medicalRes.data.medical || [];
+    } catch (err) {
+      console.error('Error fetching medical data:', err.message);
+    }
+
+    // Build inventory items - only show name and quantity
+    const items = medicalData.map(item => ({
+      name: item.name || 'Unknown',
+      quantity: item.quantity || 0
+    }));
+
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ─── API: Drug Inventory ────────────────────────────────────────────────────────
+app.get('/api/admin/drug-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Fetch drugs data from faction API
+    let drugData = [];
+    
+    try {
+      const drugRes = await axios.get(`https://api.torn.com/faction/?selections=drugs&key=${factionKey}`);
+      drugData = drugRes.data.drugs || [];
+    } catch (err) {
+      console.error('Error fetching drug data:', err.message);
+    }
+
+    // Build inventory items - only show name and quantity
+    const items = drugData.map(item => ({
+      name: item.name || 'Unknown',
+      quantity: item.quantity || 0
+    }));
+
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Faction Loans (Armor & Weapons) ──────────────────────────────────────
+app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Fetch faction members list
+    const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
+    const factionMembers = factionRes.data.members || [];
+
+    // Build member map with position
+    const memberMap = {};
+    factionMembers.forEach(m => {
+      memberMap[m.id] = {
+        id: m.id,
+        name: m.name,
+        position: m.position
+      };
+    });
+
+    // Initialize loan tracking for each member
+    const loansData = {};
+    Object.entries(memberMap).forEach(([id, member]) => {
+      loansData[id] = {
+        ...member,
+        primary: null,
+        secondary: null,
+        melee: null,
+        head: null,
+        body: null,
+        gloves: null,
+        pants: null,
+        boots: null
+      };
+    });
+
+    // Fetch armor and weapon data
+    let armorData = [];
+    let weaponsData = [];
+    
+    try {
+      const armorRes = await axios.get(`https://api.torn.com/faction/?selections=armor&key=${factionKey}`);
+      armorData = armorRes.data.armor || [];
+    } catch (err) {
+      console.error('Error fetching armor data:', err.message);
+    }
+    
+    try {
+      const weaponsRes = await axios.get(`https://api.torn.com/faction/?selections=weapons&key=${factionKey}`);
+      weaponsData = weaponsRes.data.weapons || [];
+    } catch (err) {
+      console.error('Error fetching weapon data:', err.message);
+    }
+    
+    // Process armor loans
+    armorData.forEach(item => {
+      if (!item.loaned_to || item.loaned === 0) return;
+      
+      const name = (item.name || '').toLowerCase();
+      let armorSlot = null;
+      
+      // Determine slot from item name since type is just "Defensive"
+      if (name.includes('helmet') || name.includes('hood') || name.includes('hat')) armorSlot = 'head';
+      else if (name.includes('armor') || name.includes('vest') || name.includes('suit') || name.includes('jacket') || name.includes('coat') || name.includes('poncho')) armorSlot = 'body';
+      else if (name.includes('glove') || name.includes('gloves') || name.includes('mitts') || name.includes('hand')) armorSlot = 'gloves';
+      else if (name.includes('pant') || name.includes('trouser') || name.includes('jean') || name.includes('leg') || name.includes('short')) armorSlot = 'pants';
+      else if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sand') || name.includes('foot')) armorSlot = 'boots';
+      
+      if (!armorSlot) return;
+      
+      // loaned_to can be a string of comma-separated IDs or a single ID
+      const ids = typeof item.loaned_to === 'string' 
+        ? item.loaned_to.split(',').map(id => id.trim())
+        : [String(item.loaned_to)];
+      
+      ids.forEach(id => {
+        if (loansData[id] && armorSlot) {
+          loansData[id][armorSlot] = item.name;
+        }
+      });
+    });
+
+    // Process weapon loans
+    weaponsData.forEach(item => {
+      if (!item.loaned_to || item.loaned === 0) return;
+      
+      const slot = (item.type || '').toLowerCase();
+      let weaponSlot = null;
+      if (slot === 'primary') weaponSlot = 'primary';
+      else if (slot === 'secondary') weaponSlot = 'secondary';
+      else if (slot === 'melee') weaponSlot = 'melee';
+      
+      if (!weaponSlot) return;
+      
+      // loaned_to can be a string of comma-separated IDs or a single ID
+      const ids = typeof item.loaned_to === 'string' 
+        ? item.loaned_to.split(',').map(id => id.trim())
+        : [String(item.loaned_to)];
+      
+      ids.forEach(id => {
+        if (loansData[id] && weaponSlot) {
+          loansData[id][weaponSlot] = item.name;
+        }
+      });
+    });
+
+    // Calculate totals
+    const totals = {
+      primary: 0,
+      secondary: 0,
+      melee: 0,
+      head: 0,
+      body: 0,
+      gloves: 0,
+      pants: 0,
+      boots: 0,
+      total: 0
+    };
+
+    Object.values(loansData).forEach(member => {
+      ['primary', 'secondary', 'melee', 'head', 'body', 'gloves', 'pants', 'boots'].forEach(slot => {
+        if (member[slot]) {
+          totals[slot]++;
+          totals.total++;
+        }
+      });
+    });
+
+    // Build armory inventory summary from the API data
+    const armoryItems = [];
+    
+    // Add armor items
+    armorData.forEach(item => {
+      const name = (item.name || '').toLowerCase();
+      let slot = null;
+      if (name.includes('helmet') || name.includes('hood') || name.includes('hat')) slot = 'head';
+      else if (name.includes('armor') || name.includes('vest') || name.includes('suit') || name.includes('jacket') || name.includes('coat') || name.includes('poncho')) slot = 'body';
+      else if (name.includes('glove') || name.includes('gloves') || name.includes('mitts') || name.includes('hand')) slot = 'gloves';
+      else if (name.includes('pant') || name.includes('trouser') || name.includes('jean') || name.includes('leg') || name.includes('short')) slot = 'pants';
+      else if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sand') || name.includes('foot')) slot = 'boots';
+      
+      if (slot) {
+        armoryItems.push({
+          name: item.name,
+          type: 'Armor',
+          slot: slot,
+          total: item.quantity || 0,
+          loaned: item.loaned || 0,
+          available: item.available || 0
+        });
+      }
+    });
+    
+    // Add weapon items
+    weaponsData.forEach(item => {
+      const slot = (item.type || '').toLowerCase();
+      let weaponSlot = null;
+      if (slot === 'primary') weaponSlot = 'primary';
+      else if (slot === 'secondary') weaponSlot = 'secondary';
+      else if (slot === 'melee') weaponSlot = 'melee';
+      
+      if (weaponSlot) {
+        armoryItems.push({
+          name: item.name,
+          type: 'Weapon',
+          slot: weaponSlot,
+          total: item.quantity || 0,
+          loaned: item.loaned || 0,
+          available: item.available || 0
+        });
+      }
+    });
+
+    res.json({
+      members: Object.values(loansData),
+      totals,
+      armoryItems
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1391,35 +1750,64 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
 
-    const tornRes = await axios.get(
-      'https://api.torn.com/torn/?selections=bank&key=' + dbUser.tornApiKey
-    );
+    // Fetch bank rates and user merits from Torn API
+    const [bankRes, userRes] = await Promise.all([
+      axios.get('https://api.torn.com/torn/?selections=bank&key=' + dbUser.tornApiKey),
+      axios.get('https://api.torn.com/user/?selections=merits&key=' + dbUser.tornApiKey)
+    ]);
 
-    if (tornRes.data.error) {
-      return res.status(400).json({ error: 'Failed to fetch bank rates: ' + tornRes.data.error.error });
+    if (bankRes.data.error) {
+      return res.status(400).json({ error: 'Failed to fetch bank rates: ' + bankRes.data.error.error });
+    }
+    if (userRes.data.error) {
+      return res.status(400).json({ error: 'Failed to fetch merits: ' + userRes.data.error.error });
     }
 
-    const bankData = tornRes.data.bank || {};
-    const rates = {
+    const bankData = bankRes.data.bank || {};
+    const meritsData = userRes.data.merits || {};
+    
+    // Debug: Log the merits data structure
+    //console.log('[/api/torn/bank-rates] Merits data:', JSON.stringify(meritsData));
+    
+    // Get Bank Investment merit level (0-10)
+    // Try different possible key formats based on API response
+    const bankInvestmentMerit = meritsData['Bank Interest'] || 
+                                 meritsData['Bank_Interest'] || 
+                                 meritsData['Bank Investment'] || 
+                                 meritsData['Bank_Investment'] || 
+                                 meritsData['bankinterest'] || 
+                                 meritsData['bankinvestment'] || 
+                                 0;
+    const meritBonus = bankInvestmentMerit * 5; // 5% per merit level
+    
+    // Calculate rates with merits applied
+    const baseRates = {
       '1_week': bankData['1w'] || 0,
       '2_weeks': bankData['2w'] || 0,
       '1_month': bankData['1m'] || 0,
       '2_months': bankData['2m'] || 0,
       '3_months': bankData['3m'] || 0
     };
-
-    const now = new Date();
-    const cacheDuration = 60 * 60 * 1000;
-    const result = {
-      rates: rates,
-      lastUpdated: now.toISOString(),
-      cacheExpiry: new Date(now.getTime() + cacheDuration).toISOString()
+    
+    // Apply merit bonus to get effective rates
+    const meritMultiplier = 1 + (bankInvestmentMerit * 0.05);
+    const ratesWithMerits = {
+      '1_week': baseRates['1_week'] * meritMultiplier,
+      '2_weeks': baseRates['2_weeks'] * meritMultiplier,
+      '1_month': baseRates['1_month'] * meritMultiplier,
+      '2_months': baseRates['2_months'] * meritMultiplier,
+      '3_months': baseRates['3_months'] * meritMultiplier
     };
-
-    await User.findOneAndUpdate(
-      { tornPlayerId: req.session.userId },
-      { bankRatesCache: result, bankRatesCachedAt: now }
-    );
+    
+    const now = new Date();
+    
+    const result = {
+      baseRates: baseRates,
+      rates: ratesWithMerits, // Return rates with merits applied
+      bankInvestmentMerit: bankInvestmentMerit,
+      meritBonus: meritBonus,
+      lastUpdated: now.toISOString()
+    };
 
     res.json(result);
   } catch (err) {
@@ -1498,5 +1886,138 @@ async function startServer() {
 }
 
 startServer();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ORGANIZED CRIME TRACKING API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const {
+  refreshFactionCrimes,
+  getCrimesForFaction,
+  getCrimeDetails,
+  updateCheckpointRates,
+  getParticipantHistory
+} = require('./services/tornCrimesService');
+
+// ─── API: Refresh OC crimes from Torn ─────────────────────────────────────────
+app.post('/api/oc/refresh', isAuthenticated, async (req, res) => {
+  try {
+    const { daysBack } = req.body;
+    const startDate = daysBack ? new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000) : null;
+    
+    const result = await refreshFactionCrimes(startDate);
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(500).json(result);
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// ─── API: Get all OC crimes ───────────────────────────────────────────────────
+app.get('/api/oc/crimes', isAuthenticated, async (req, res) => {
+  try {
+    const { status, dateFrom, dateTo, sort, order, limit } = req.query;
+    const filters = {};
+    
+    if (status && status !== 'all') filters.status = status;
+    if (dateFrom) filters.dateFrom = dateFrom;
+    if (dateTo) filters.dateTo = dateTo;
+    
+    let crimes = await getCrimesForFaction(SSG_FACTION_ID, filters);
+    
+    // Sorting
+    const sortBy = sort || 'timeStarted';
+    const sortOrder = order === 'asc' ? 1 : -1;
+    
+    crimes.sort((a, b) => {
+      const aVal = a[sortBy];
+      const bVal = b[sortBy];
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+      if (aVal < bVal) return -1 * sortOrder;
+      if (aVal > bVal) return 1 * sortOrder;
+      return 0;
+    });
+    
+    // Limit
+    if (limit) {
+      crimes = crimes.slice(0, parseInt(limit));
+    }
+    
+    res.json(crimes);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get crime details ───────────────────────────────────────────────────
+app.get('/api/oc/crimes/:crimeId', isAuthenticated, async (req, res) => {
+  try {
+    const crime = await getCrimeDetails(parseInt(req.params.crimeId));
+    res.json(crime);
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// ─── API: Update checkpoint pass rates ────────────────────────────────────────
+app.put('/api/oc/crimes/:crimeId/checkpoints', isAuthenticated, async (req, res) => {
+  try {
+    const { participantRates } = req.body;
+    const result = await updateCheckpointRates(parseInt(req.params.crimeId), participantRates);
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ─── API: Get participant history ─────────────────────────────────────────────
+app.get('/api/oc/participants/:playerId', isAuthenticated, async (req, res) => {
+  try {
+    const history = await getParticipantHistory(parseInt(req.params.playerId), SSG_FACTION_ID);
+    res.json(history);
+  } catch (err) {
+    res.status(404).json({ error: err.message });
+  }
+});
+
+// ─── API: Bulk update member profiles (Ownership only) ─────────────────────────
+app.put('/api/admin/members/profiles', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const { updates } = req.body;
+    
+    if (!updates || !Array.isArray(updates)) {
+      return res.status(400).json({ error: 'Invalid updates array' });
+    }
+
+    // Create bulk operations - only update changed fields
+    const bulkOps = updates.map(update => ({
+      updateOne: {
+        filter: { tornPlayerId: update.tornPlayerId },
+        update: { 
+          $set: {
+            ...(update.bloodType !== undefined && { bloodType: update.bloodType }),
+            ...(update.timeZone !== undefined && { timeZone: update.timeZone })
+          }
+        },
+        upsert: false
+      }
+    }));
+
+    const result = await User.bulkWrite(bulkOps);
+
+    res.json({
+      success: true,
+      modified: result.modifiedCount,
+      matched: result.matchedCount
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = app;
