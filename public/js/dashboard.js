@@ -2758,17 +2758,19 @@ function displayCalculatorResults(amount, rates, meritsBonus = 0) {
   ];
 
   const rows = results.map(r => {
-    const rate = rates[r.key] || 0;
-    const earnings = calculateInterest(amount, rate, meritsBonus);
-    const total = amount + earnings;
-    return `
-      <tr>
-        <td>${r.period}</td>
-        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${rate}%</td>
-        <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#4caf50;">+$${formatNum(earnings)}</td>
-        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(total)}</td>
-      </tr>`;
-  }).join('');
+  const rate = rates[r.key] || 0;
+  // Calculate period interest: (Amount * APR) * (Days / 365)
+  const earnings = Math.floor((amount * (rate / 100)) * (r.days / 365));
+  const total = amount + earnings;
+
+  return `
+    <tr>
+      <td>${r.period}</td>
+      <td style="text-align:center;">${rate}%</td>
+      <td style="text-align:right;color:#4caf50;">+$${formatNum(earnings)}</td>
+      <td style="text-align:right;">$${formatNum(total)}</td>
+    </tr>`;
+}).join('');
 
   container.innerHTML = `
     <div class="card">
