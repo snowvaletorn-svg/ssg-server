@@ -3044,15 +3044,6 @@ function getCountryName(code) {
 
 let ocCrimesCache = [];
 
-// Add OC to section navigation
-(function () {
-  const originalShowSection = showSection;
-  // Wrap showSection to add OC handling
-  if (typeof showSection === 'function') {
-    // We'll add OC handling by modifying the function behavior
-  }
-})();
-
 // Override showSection to include OC handling
 const _originalShowSection = window.showSection;
 window.showSection = function (sectionId, el) {
@@ -3810,96 +3801,6 @@ function renderMedicalInventory(items) {
     </div>`;
 }
 
-// ── Faction Register ─────────────────────────────────────────────────────────
-async function fetchFactionRegister() {
-  const container = document.getElementById('admin-faction-register-data');
-  container.innerHTML = '<div class="channel-loading">LOADING FACTION REGISTER...</div>';
-  try {
-    const res = await fetch('/api/admin/faction-register');
-    const data = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderFactionRegister(data);
-  } catch (err) {
-    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
-  }
-}
-
-function renderFactionRegister(data) {
-  const { entries, currentBalance, summary } = data;
-
-  if (!entries.length) {
-    return '<div class="empty-state"><p class="muted">No transactions found in the faction register.</p></div>';
-  }
-
-  // Calculate running total (reverse order for display - newest first)
-  const sortedEntries = [...entries].sort((a, b) => {
-    const dateA = new Date(a.transactionDate).getTime();
-    const dateB = new Date(b.transactionDate).getTime();
-    return dateB - dateA; // Newest first
-  });
-
-  // Calculate running totals
-  let runningTotal = currentBalance;
-  const entriesWithRunningTotal = sortedEntries.map(entry => {
-    const item = {
-      ...entry,
-      runningTotal: runningTotal,
-      date: new Date(entry.transactionDate).toLocaleString()
-    };
-    // For next (older) entry, subtract credit and add back debit
-    runningTotal = runningTotal - entry.credit + entry.debit;
-    return item;
-  });
-
-  const rows = entriesWithRunningTotal.map(entry => {
-    const categoryColor = {
-      'income': '#2ecc71',
-      'expense': '#e74c3c',
-      'transfer': '#3498db',
-      'adjustment': '#f0a500',
-      'other': '#888'
-    }[entry.category] || '#888';
-
-    const amountDisplay = entry.debit > 0
-      ? `<span style="color:#e74c3c;">-$${formatNum(entry.debit)}</span>`
-      : entry.credit > 0
-        ? `<span style="color:#2ecc71;">+$${formatNum(entry.credit)}</span>`
-        : '<span style="color:#888;">—</span>';
-
-    return `
-      <tr>
-        <td style="font-size:0.85rem;white-space:nowrap;">${entry.date}</td>
-        <td style="font-size:0.85rem;">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${categoryColor};margin-right:6px;"></span>
-          ${escapeHtml(entry.description)}
-        </td>
-        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${amountDisplay}</td>
-        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(entry.runningTotal)}</td>
-      </tr>`;
-  }).join('');
-
-  return `
-    <div class="stats-grid" style="margin-bottom:1rem;">
-      ${statTile('$' + formatNum(currentBalance), 'Current Balance')}
-      ${statTile('+$' + formatNum(summary.totalCredits), 'Total Credits')}
-      ${statTile('-$' + formatNum(summary.totalDebits), 'Total Debits')}
-      ${statTile('$' + formatNum(summary.balance), 'Net Change')}
-    </div>
-    <div style="overflow-x:auto;">
-      <table class="members-table">
-        <thead><tr>
-          <th style="white-space:nowrap;">Date</th>
-          <th>Description</th>
-          <th style="text-align:center;width:120px;">Amount</th>
-          <th style="text-align:right;width:120px;">Running Total</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;">
-      💡 Data automatically synced from Torn faction funds news.
-    </p>`;
-}
 
 // ── Drug Inventory ───────────────────────────────────────────────────────────
 async function fetchDrugInventory() {
