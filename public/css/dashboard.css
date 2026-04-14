@@ -1051,6 +1051,9 @@ input[type="checkbox"] {
   #tab-drugs table,
   #tab-members-overview table {
     font-size: 0.78rem;
+    min-width: 760px;
+    width: max-content;
+    table-layout: auto;
   }
 
   #tab-faction-loans th,
@@ -1064,7 +1067,21 @@ input[type="checkbox"] {
   #tab-members-overview th,
   #tab-members-overview td {
     padding: 0.45rem 0.5rem;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-word;
+    vertical-align: top;
+    line-height: 1.35;
+  }
+
+  #tab-faction-loans thead th,
+  #tab-weapon-armor thead th,
+  #tab-medical-items thead th,
+  #tab-drugs thead th,
+  #tab-members-overview thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #1a1919;
   }
 
   #admin-loans-data > .card,
