@@ -1034,4 +1034,45 @@ input[type="checkbox"] {
     border-radius: 8px;
     padding: 1rem;
   }
+
+  #tab-faction-loans .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  #tab-faction-loans .section-header .btn {
+    width: 100%;
+  }
+
+  #tab-faction-loans table,
+  #tab-weapon-armor table,
+  #tab-medical-items table,
+  #tab-drugs table,
+  #tab-members-overview table {
+    font-size: 0.78rem;
+  }
+
+  #tab-faction-loans th,
+  #tab-faction-loans td,
+  #tab-weapon-armor th,
+  #tab-weapon-armor td,
+  #tab-medical-items th,
+  #tab-medical-items td,
+  #tab-drugs th,
+  #tab-drugs td,
+  #tab-members-overview th,
+  #tab-members-overview td {
+    padding: 0.45rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  #admin-loans-data > .card,
+  #admin-weapon-armor-data > .card,
+  #admin-medical-items-data > .card,
+  #admin-drugs-data > .card,
+  #admin-members-data > .card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
