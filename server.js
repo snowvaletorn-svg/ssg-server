@@ -11,6 +11,14 @@ const compression = require('compression');
 const factionData = require('./data/factions');
 const User = require('./models/User');
 const FactionConfig = require('./models/FactionConfig');
+const {
+  takeSnapshot,
+  getSnapshotByDate,
+  getSnapshotDifferences,
+  getLatestSnapshot,
+  generateCSVContent,
+  importHistoricalData
+} = require('./services/snapshotService');
 
 // ==============================================
 // CACHING LAYER
@@ -2019,5 +2027,35 @@ app.put('/api/admin/members/profiles', isAuthenticated, isOwnership, async (req,
     res.status(500).json({ error: err.message });
   }
 });
+
+// Endpoints:
+app.post('/api/admin/snapshot', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  const result = await takeSnapshot(req.session.userId);
+  res.json(result);
+});
+
+app.get('/api/admin/snapshot/:date', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  const snapshot = await getSnapshotByDate(req.params.date);
+  snapshot ? res.json(snapshot) : res.status(404).json({ error: 'Not found' });
+});
+
+app.get('/api/admin/snapshot/diff/:startDate/:endDate', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  const diff = await getSnapshotDifferences(req.params.startDate, req.params.endDate);
+  diff ? res.json(diff) : res.status(404).json({ error: 'Not found' });
+});
+
+app.get('/api/admin/snapshot/latest', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  const snapshot = await getLatestSnapshot();
+  snapshot ? res.json(snapshot) : res.status(404).json({ error: 'No snapshots' });
+});
+
+app.get('/api/admin/snapshot/csv/:startDate/:endDate', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  const diff = await getSnapshotDifferences(req.params.startDate, req.params.endDate);
+  if (!diff) return res.status(404).json({ error: 'Not found' });
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename="weekly_progress_${req.params.startDate}_to_${req.params.endDate}.csv"`);
+  res.send(generateCSVContent(diff.differences));
+});
+
 
 module.exports = app;

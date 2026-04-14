@@ -42,11 +42,11 @@
             <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
             <% if (isOwner || isLeadership || isWarlord) { %>
               <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
-            <% } %>
-            <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
-            <% if (isOwner || isLeadership) { %>
-              <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
-            <% } %>
+              <% } %>
+                <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
+                <% if (isOwner || isLeadership) { %>
+                  <a href="#admin" class="nav-item" onclick="showSection('admin', this)">🛡️ Admin</a>
+                  <% } %>
           </nav>
         </aside>
 
@@ -60,15 +60,16 @@
               <button class="btn btn-small btn-outline" onclick="openHelp('profile')">❓ Help</button>
             </div>
             <div class="profile-card">
-            <div class="profile-avatar">
-              <% if (user.tornAvatar) { %>
-                <img src="<%= user.tornAvatar %>" alt="<%= user.username %>" style="width: 80px; height: 80px; border-radius: 50%;">
-              <% } else { %>
-                <div class="avatar-placeholder">
-                  <%= user.username.charAt(0).toUpperCase() %>
-                </div>
-              <% } %>
-            </div>
+              <div class="profile-avatar">
+                <% if (user.tornAvatar) { %>
+                  <img src="<%= user.tornAvatar %>" alt="<%= user.username %>"
+                    style="width: 80px; height: 80px; border-radius: 50%;">
+                  <% } else { %>
+                    <div class="avatar-placeholder">
+                      <%= user.username.charAt(0).toUpperCase() %>
+                    </div>
+                    <% } %>
+              </div>
               <div class="profile-info">
                 <div class="profile-name">
                   <%= user.ssgNick || user.username %>
@@ -91,7 +92,7 @@
                       </span>
                     </span>
                   </div>
-                <% } %>
+                  <% } %>
               </div>
             </div>
 
@@ -234,7 +235,7 @@
                 <p>Click Refresh to load faction data.</p>
               </div>
             </div>
-            
+
           </section>
 
           <!-- ── TRAVEL ── -->
@@ -464,74 +465,77 @@
                 </div>
               </div>
               <div class="section-header" style="margin-top:2rem;">
-              <h3>War Stats</h3>
-              <button class="btn btn-primary btn-small" onclick="fetchWarStats()">↻ Refresh</button>
-            </div>
-            <div id="war-stats-data">
-              <div class="empty-state">
-                <span class="empty-icon">⚔️</span>
-                <p>Click Refresh to load current war stats.</p>
+                <h3>War Stats</h3>
+                <button class="btn btn-primary btn-small" onclick="fetchWarStats()">↻ Refresh</button>
               </div>
-            </div>
+              <div id="war-stats-data">
+                <div class="empty-state">
+                  <span class="empty-icon">⚔️</span>
+                  <p>Click Refresh to load current war stats.</p>
+                </div>
+              </div>
             </section>
             <% } %>
 
-            <!-- ── ORGANIZED CRIME ── -->
-            <section id="oc" class="section">
-              <div class="section-header">
-                <h3>🗝️ Organized Crime Tracking</h3>
-                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-                  <select id="oc-days-back" class="channel-dropdown" style="min-width:120px;">
-                    <option value="7">Last 7 days</option>
-                    <option value="30" selected>Last 30 days</option>
-                    <option value="90">Last 90 days</option>
-                    <option value="180">Last 6 months</option>
-                    <option value="365">Last year</option>
-                    <option value="all">All time</option>
-                  </select>
-                  <button class="btn btn-primary btn-small" onclick="refreshCrimes()">↻ Refresh</button>
-                  <button class="btn btn-small btn-outline" onclick="openHelp('oc')">❓ Help</button>
-                </div>
-              </div>
-              
-              <!-- OC Crimes List -->
-              <div class="section-header" style="margin-top:0;">
-                <h3>Recent Crimes</h3>
-                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-                  <button class="btn btn-small btn-outline" onclick="openParticipantHistoryWidget()">📊 Member History</button>
-                  <select id="oc-status-filter" class="channel-dropdown" onchange="filterCrimes()">
-                    <option value="all">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="succeeded">Succeeded</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                  <select id="oc-sort" class="channel-dropdown" onchange="filterCrimes()">
-                    <option value="timeStarted-desc">Newest First</option>
-                    <option value="timeStarted-asc">Oldest First</option>
-                    <option value="moneyGain-desc">Highest Money</option>
-                    <option value="respectGain-desc">Highest Respect</option>
-                  </select>
-                </div>
-              </div>
-              <div id="oc-crimes-data">
-                <div class="empty-state">
-                  <span class="empty-icon">🗝️</span>
-                  <p>Click Refresh to load organized crime data.</p>
-                  <p class="muted">Shows recent OC attempts with participant details and checkpoint tracking.</p>
-                </div>
-              </div>
-
-              <!-- Participant Detail Modal Trigger -->
-              <div id="oc-participant-modal" class="help-modal-overlay" style="display:none;" onclick="closeParticipantModal(event)">
-                <div class="help-modal" style="max-width:800px;">
-                  <div class="help-modal-header">
-                    <span id="participant-modal-title">Participant Details</span>
-                    <button class="help-close-btn" onclick="document.getElementById('oc-participant-modal').style.display='none'">✕</button>
+              <!-- ── ORGANIZED CRIME ── -->
+              <section id="oc" class="section">
+                <div class="section-header">
+                  <h3>🗝️ Organized Crime Tracking</h3>
+                  <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                    <select id="oc-days-back" class="channel-dropdown" style="min-width:120px;">
+                      <option value="7">Last 7 days</option>
+                      <option value="30" selected>Last 30 days</option>
+                      <option value="90">Last 90 days</option>
+                      <option value="180">Last 6 months</option>
+                      <option value="365">Last year</option>
+                      <option value="all">All time</option>
+                    </select>
+                    <button class="btn btn-primary btn-small" onclick="refreshCrimes()">↻ Refresh</button>
+                    <button class="btn btn-small btn-outline" onclick="openHelp('oc')">❓ Help</button>
                   </div>
-                  <div class="help-modal-body" id="participant-modal-body"></div>
                 </div>
-              </div>
-            </section>
+
+                <!-- OC Crimes List -->
+                <div class="section-header" style="margin-top:0;">
+                  <h3>Recent Crimes</h3>
+                  <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                    <button class="btn btn-small btn-outline" onclick="openParticipantHistoryWidget()">📊 Member
+                      History</button>
+                    <select id="oc-status-filter" class="channel-dropdown" onchange="filterCrimes()">
+                      <option value="all">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="succeeded">Succeeded</option>
+                      <option value="failed">Failed</option>
+                    </select>
+                    <select id="oc-sort" class="channel-dropdown" onchange="filterCrimes()">
+                      <option value="timeStarted-desc">Newest First</option>
+                      <option value="timeStarted-asc">Oldest First</option>
+                      <option value="moneyGain-desc">Highest Money</option>
+                      <option value="respectGain-desc">Highest Respect</option>
+                    </select>
+                  </div>
+                </div>
+                <div id="oc-crimes-data">
+                  <div class="empty-state">
+                    <span class="empty-icon">🗝️</span>
+                    <p>Click Refresh to load organized crime data.</p>
+                    <p class="muted">Shows recent OC attempts with participant details and checkpoint tracking.</p>
+                  </div>
+                </div>
+
+                <!-- Participant Detail Modal Trigger -->
+                <div id="oc-participant-modal" class="help-modal-overlay" style="display:none;"
+                  onclick="closeParticipantModal(event)">
+                  <div class="help-modal" style="max-width:800px;">
+                    <div class="help-modal-header">
+                      <span id="participant-modal-title">Participant Details</span>
+                      <button class="help-close-btn"
+                        onclick="document.getElementById('oc-participant-modal').style.display='none'">✕</button>
+                    </div>
+                    <div class="help-modal-body" id="participant-modal-body"></div>
+                  </div>
+                </div>
+              </section>
 
               <!-- ── ADMIN ── -->
               <% if (isOwner || isLeadership) { %>
@@ -543,11 +547,18 @@
 
                   <!-- Admin Tab Navigation -->
                   <div class="admin-tabs">
-                    <button class="admin-tab active" data-tab="member-overview" onclick="showAdminTab('member-overview', this)">👥 Member Overview</button>
-                    <button class="admin-tab" data-tab="faction-loans" onclick="showAdminTab('faction-loans', this)">📋 Faction Loans</button>
-                    <button class="admin-tab" data-tab="weapon-armor" onclick="showAdminTab('weapon-armor', this)">⚔️ Weapon & Armor</button>
-                    <button class="admin-tab" data-tab="medical-inventory" onclick="showAdminTab('medical-inventory', this)">💊 Medical Inventory</button>
-                    <button class="admin-tab" data-tab="drug-inventory" onclick="showAdminTab('drug-inventory', this)">💉 Drug Inventory</button>
+                    <button class="admin-tab active" data-tab="member-overview"
+                      onclick="showAdminTab('member-overview', this)">👥 Member Overview</button>
+                    <button class="admin-tab" data-tab="faction-loans" onclick="showAdminTab('faction-loans', this)">📋
+                      Faction Loans</button>
+                    <button class="admin-tab" data-tab="weapon-armor" onclick="showAdminTab('weapon-armor', this)">⚔️
+                      Weapon & Armor</button>
+                    <button class="admin-tab" data-tab="medical-inventory"
+                      onclick="showAdminTab('medical-inventory', this)">💊 Medical Inventory</button>
+                    <button class="admin-tab" data-tab="drug-inventory"
+                      onclick="showAdminTab('drug-inventory', this)">💉 Drug Inventory</button>
+                    <button class="admin-tab" data-tab="weekly-snapshot"
+                      onclick="showAdminTab('weekly-snapshot', this)">📊 Weekly Snapshot</button>
                   </div>
 
                   <!-- Tab Content: Member Overview -->
@@ -636,6 +647,17 @@
                         <p>Click Refresh to load drug inventory.</p>
                       </div>
                     </div>
+                  </div>
+
+                  <!--Weekly Stats-->
+                  <div id="tab-weekly-snapshot" class="admin-tab-content">
+                    <div class="section-header" style="margin-top:0;">
+                      <h3>Weekly Snapshot</h3>
+                      <button class="btn btn-primary btn-small" onclick="takeWeeklySnapshot()">📸 Take Snapshot</button>
+                    </div>
+                    <p class="muted" style="margin-bottom:1rem;">Take a snapshot of all faction members' total stats.
+                    </p>
+                    <div id="snapshot-status"></div>
                   </div>
 
                 </section>

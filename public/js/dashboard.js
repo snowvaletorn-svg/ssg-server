@@ -3843,3 +3843,16 @@ function renderDrugInventory(items) {
       </table>
     </div>`;
 }
+
+async function takeWeeklySnapshot() {
+  try {
+    const res = await fetch('/api/admin/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const data = await res.json();
+    document.getElementById('snapshot-status').innerHTML = `<p class="success-text">✅ ${data.message}</p>`;
+  } catch (err) {
+    document.getElementById('snapshot-status').innerHTML = `<p class="error-text">❌ Error: ${err.message}</p>`;
+  }
+}
+
+
+
