@@ -3854,5 +3854,103 @@ async function takeWeeklySnapshot() {
   }
 }
 
+// ─── Test Run: snapshot with diff, shows table + send results ────────────────
+let _testRunCsvFull = '';
+
+async function takeSnapshotTestRun() {
+  const statusEl = document.getElementById('snapshot-test-status');
+  const csvBox = document.getElementById('snapshot-test-csv');
+  _testRunCsvFull = '';
+  csvBox.style.display = 'none';
+  statusEl.innerHTML = '<p class="muted">🧪 Running test snapshot… fetching live stats for all members. This may take up to 30 seconds.</p>';
+
+  try {
+    const res = await fetch('/api/admin/snapshot/test-run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      statusEl.innerHTML = `<p class="error-text">❌ Test run failed: ${data.message || data.error || 'Unknown error'}</p>`;
+      return;
+    }
+
+    // ── Summary ───────────────────────────────────────────────────────────────
+    const prevNote = data.hasPrevious
+      ? `Diffed against: <code style="color:#888;">${data.previousSnapshotId}</code>`
+      : `<span style="color:#f0a500;">⚠️ No previous snapshot found — showing current totals as baseline.</span>`;
+
+    // ── Send results badges ───────────────────────────────────────────────────
+    const sr = data.sendResults || {};
+    const discordBadge = sr.discord?.success
+      ? `<span style="color:#4caf50;">✅ Discord sent</span>`
+      : `<span style="color:#888;" title="${sr.discord?.error || 'not configured'}">⬜ Discord: ${sr.discord?.error ? 'failed' : 'not configured'}</span>`;
+    const emailBadge = sr.email?.success
+      ? `<span style="color:#4caf50;">✅ Email sent</span>`
+      : `<span style="color:#888;" title="${sr.email?.error || 'not configured'}">⬜ Email: ${sr.email?.error ? 'failed' : 'not configured'}</span>`;
+
+    statusEl.innerHTML = `
+      <div class="card" style="background:#1a1919;border:1px solid #2a2828;padding:0.75rem 1rem;margin-bottom:0.75rem;">
+        <p class="success-text" style="margin:0 0 0.4rem;">✅ ${data.message}</p>
+        <p class="muted" style="font-size:0.8rem;margin:0 0 0.25rem;">
+          Snapshot ID: <code style="color:#888;">${data.snapshotId}</code> &nbsp;|&nbsp;
+          Members captured: <strong>${data.membersSnapshotted}</strong> / ${data.totalMembers}
+        </p>
+        <p class="muted" style="font-size:0.8rem;margin:0 0 0.5rem;">${prevNote}</p>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:0.8rem;">${discordBadge} ${emailBadge}</div>
+      </div>`;
+
+    // ── Diff table ────────────────────────────────────────────────────────────
+    if (data.diffRows && data.diffRows.length) {
+      _testRunCsvFull = data.diffCsv || '';
+
+      const rows = data.diffRows.map(r => {
+        const diffColor = r.difference > 0 ? '#4caf50' : r.difference < 0 ? '#ff4444' : '#888';
+        const diffPrefix = r.difference > 0 ? '+' : '';
+        return `<tr>
+          <td>${escapeHtml(r.playerName)}</td>
+          <td style="text-align:center;color:#555;font-size:0.8rem;">${r.playerId}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${r.previousTotal.toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${r.currentTotal.toLocaleString()}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${diffColor};font-weight:600;">${diffPrefix}${r.difference.toLocaleString()}</td>
+        </tr>`;
+      }).join('');
+
+      csvBox.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <span style="font-size:0.85rem;color:#888;">📊 Stat Diff — ${data.diffRows.length} members (sorted by gain ↓)</span>
+          <button class="btn btn-small btn-outline" onclick="downloadTestCsv()">⬇️ Download CSV</button>
+        </div>
+        <div style="overflow-x:auto;max-height:350px;overflow-y:auto;">
+          <table class="members-table" style="font-size:0.82rem;">
+            <thead><tr>
+              <th>Name</th>
+              <th style="text-align:center;">Torn ID</th>
+              <th style="text-align:right;">Previous Total</th>
+              <th style="text-align:right;">Current Total</th>
+              <th style="text-align:right;">Difference</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      csvBox.style.display = 'block';
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<p class="error-text">❌ Error: ${err.message}</p>`;
+  }
+}
+
+function downloadTestCsv() {
+  if (!_testRunCsvFull) return;
+  const blob = new Blob([_testRunCsvFull], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `test_snapshot_diff_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 
 

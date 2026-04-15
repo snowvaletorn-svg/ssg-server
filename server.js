@@ -13,12 +13,14 @@ const User = require('./models/User');
 const FactionConfig = require('./models/FactionConfig');
 const {
   takeSnapshot,
+  takeTestSnapshot,
   getSnapshotByDate,
   getSnapshotDifferences,
   getLatestSnapshot,
   generateCSVContent,
   importHistoricalData
 } = require('./services/snapshotService');
+const { startScheduler } = require('./services/schedulerService');
 
 // ==============================================
 // CACHING LAYER
@@ -1684,27 +1686,40 @@ app.post('/api/apply', async (req, res) => {
     if (!factionKey) {
       return res.status(500).json({ error: 'No faction API key configured' });
     }
-    const factionRes = await axios.get(
-      `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
-    );
-    const factionMembers = factionRes.data.members || [];
-    const ownershipPositions = POSITIONS.ownership;
-    const ownershipMembers = factionMembers.filter(m => ownershipPositions.includes(m.position));
+const factionRes = await axios.get(
+        `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
+      );
+      const factionMembers = factionRes.data.members || [];
+      const ownershipPositions = POSITIONS.ownership;
+      const ownershipMembers = factionMembers.filter(m => ownershipPositions.includes(m.position));
 
-    await Promise.allSettled(
-      ownershipMembers.map(async member => {
-        const dmChannel = await axios.post(
-          'https://discord.com/api/v10/users/@me/channels',
-          { recipient_id: member.user.id },
-          { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
-        );
-        await axios.post(
-          `https://discord.com/api/v10/channels/${dmChannel.data.id}/messages`,
-          { content: message },
-          { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
-        );
-      })
-    );
+      // Get Discord user IDs for ownership members from database
+      const ownershipUserIds = ownershipMembers.map(m => m.id);
+      const ownershipUsers = await User.find({
+        tornPlayerId: { $in: ownershipUserIds },
+        discordId: { $ne: null }
+      }, 'discordId');
+
+      const discordUserIds = ownershipUsers.map(u => u.discordId).filter(Boolean);
+
+      await Promise.allSettled(
+        discordUserIds.map(async discordUserId => {
+          try {
+            const dmChannel = await axios.post(
+              'https://discord.com/api/v10/users/@me/channels',
+              { recipient_id: discordUserId },
+              { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+            );
+            await axios.post(
+              `https://discord.com/api/v10/channels/${dmChannel.data.id}/messages`,
+              { content: message },
+              { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
+            );
+          } catch (err) {
+            console.error(`Failed to send DM to Discord user ${discordUserId}:`, err.message);
+          }
+        })
+      );
 
     res.json({ success: true });
   } catch (err) {
@@ -1859,6 +1874,8 @@ async function startServer() {
 
     const server = app.listen(fixedPort, () => {
       console.log(`SSG Server listening on http://localhost:${fixedPort}`);
+      // Start the weekly snapshot scheduler
+      startScheduler();
     });
 
     process.on('SIGINT', () => {
@@ -2055,6 +2072,12 @@ app.get('/api/admin/snapshot/csv/:startDate/:endDate', isAuthenticated, isLeader
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', `attachment; filename="weekly_progress_${req.params.startDate}_to_${req.params.endDate}.csv"`);
   res.send(generateCSVContent(diff.differences));
+});
+
+// ─── API: Test snapshot run (unique ID, won't collide with real snapshots) ────
+app.post('/api/admin/snapshot/test-run', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  const result = await takeTestSnapshot(req.session.userId);
+  res.json(result);
 });
 
 

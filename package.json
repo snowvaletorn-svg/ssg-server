@@ -29,6 +29,8 @@
     "express-session": "^1.17.3",
     "mongodb": "^6.21.0",
     "mongoose": "^9.2.3",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.5",
     "passport": "^0.7.0",
     "passport-discord": "^0.1.4"
   },
