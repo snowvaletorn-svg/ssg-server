@@ -97,7 +97,7 @@ function buildDiffCSV(diffRows, prevDate, currDate) {
 
 // ─── Send weekly report via Discord + email fallback ──────────────────────────
 async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', testMode = false, discordUserId = null, emailTo = null) {
-  const results = { discord: null, email: null };
+  const results = { email: null };
 
   const prefix = testMode ? '🧪 [TEST RUN] ' : '📊 ';
   const title = `${prefix}${label}`;
@@ -105,78 +105,6 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
   const filename = testMode
     ? `test_snapshot_diff_${dateStr}.csv`
     : `weekly_snapshot_diff_${dateStr}.csv`;
-
-  // ── Discord send ───────────────────────────────────────────────────────────
-  const discordToken = process.env.DISCORD_BOT_TOKEN;
-
-  if (discordToken) {
-    try {
-      if (discordUserId) {
-        // Send direct message to user
-        const dmChannel = await axios.post(
-          'https://discord.com/api/v10/users/@me/channels',
-          { recipient_id: discordUserId },
-          { headers: { Authorization: `Bot ${discordToken}` } }
-        );
-        const form = new FormData();
-        form.append('payload_json', JSON.stringify({
-          content: `${title}\n\nWeekly stat progress report attached as CSV. Sorted by largest stat gain.`
-        }));
-        form.append('files[0]', Buffer.from(csvContent, 'utf-8'), {
-          filename,
-          contentType: 'text/csv'
-        });
-
-        await axios.post(
-          `https://discord.com/api/v10/channels/${dmChannel.data.id}/messages`,
-          form,
-          {
-            headers: {
-              Authorization: `Bot ${discordToken}`,
-              ...form.getHeaders()
-            },
-            timeout: 15000
-          }
-        );
-
-        results.discord = { success: true, messageId: dmChannel.data.id };
-        console.log(`[Snapshot] Discord report sent to user ${discordUserId}`);
-      } else if (process.env.SNAPSHOT_DISCORD_CHANNEL_ID) {
-        // Send to channel
-        const discordChannelId = process.env.SNAPSHOT_DISCORD_CHANNEL_ID;
-        const form = new FormData();
-        form.append('payload_json', JSON.stringify({
-          content: `${title}\n\nWeekly stat progress report attached as CSV. Sorted by largest stat gain.`
-        }));
-        form.append('files[0]', Buffer.from(csvContent, 'utf-8'), {
-          filename,
-          contentType: 'text/csv'
-        });
-
-        const discordRes = await axios.post(
-          `https://discord.com/api/v10/channels/${discordChannelId}/messages`,
-          form,
-          {
-            headers: {
-              Authorization: `Bot ${discordToken}`,
-              ...form.getHeaders()
-            },
-            timeout: 15000
-          }
-        );
-
-        results.discord = { success: true, messageId: discordRes.data.id };
-        console.log(`[Snapshot] Discord report sent to channel ${discordChannelId}`);
-      } else {
-        results.discord = { success: false, error: 'No Discord channel ID configured' };
-      }
-    } catch (err) {
-      results.discord = { success: false, error: err.message };
-      console.error('[Snapshot] Discord send failed:', err.message);
-    }
-  } else {
-    results.discord = { success: false, error: 'Discord bot token not configured' };
-  }
 
   // ── Email send ─────────────────────────────────────────────────────────────
   const smtpHost = process.env.SMTP_HOST;
@@ -221,33 +149,28 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
 // ─── Take a REAL weekly snapshot, compute diff, return CSV ────────────────────
 async function takeSnapshot(createdBy = 'system') {
   try {
-// 1. Fetch live stats (mock data for testing)
-    const validStats = [
-      { playerId: 1, playerName: 'Test User 1', totalStats: 1000 },
-      { playerId: 2, playerName: 'Test User 2', totalStats: 1200 },
-      { playerId: 3, playerName: 'Test User 3', totalStats: 950 }
-    ];
-    const totalUsers = 3;
+    // 1. Fetch actual live stats for all faction members with API keys
+    const { validStats, totalUsers } = await fetchAllMemberStats();
 
-    // 2. Save new snapshot (mock)
-    const snapshotId = `snapshot_${new Date().toISOString().split('T')[0]}`;
-    const snapshot = {
+    if (validStats.length === 0) {
+      return { success: false, message: 'No valid user stats returned from Torn API' };
+    }
+
+    // 2. Save new snapshot to database (include timestamp to avoid duplicate key errors)
+    const todayDateStr = new Date().toISOString().split('T')[0];
+    const snapshotId = `snapshot_${todayDateStr}_${Date.now()}`;
+    const snapshot = new WeeklySnapshot({
       snapshotId,
       snapshotDate: new Date(),
       memberStats: validStats,
-      createdBy: 'test'
-    };
+      createdBy
+    });
+    
+    await snapshot.save();
 
-    // 3. Find the previous real snapshot to diff against (mock)
-    const previous = {
-      snapshotId: 'previous_snapshot',
-      snapshotDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
-      memberStats: [
-        { playerId: 1, playerName: 'Test User 1', totalStats: 900 },
-        { playerId: 2, playerName: 'Test User 2', totalStats: 1100 },
-        { playerId: 3, playerName: 'Test User 3', totalStats: 800 }
-      ]
-    };
+    // 3. Find the last actual real snapshot from database
+    const snapshots = await getRealSnapshots(2);
+    const previous = snapshots.length > 1 ? snapshots[1] : null;
 
     let diffCsv = null;
     let diffRows = null;
@@ -267,11 +190,6 @@ async function takeSnapshot(createdBy = 'system') {
       diffCsv = buildDiffCSV(diffRows, null, snapshot.snapshotDate);
     }
 
-    // 4. Send report to user
-    const discordUserId = '586395842467069992'; // User's Discord ID
-    const emailTo = 'Snowvaletorn@gmail.com'; // User's email
-    const sendResults = await sendWeeklyReport(diffCsv, 'Weekly Snapshot Report', false, discordUserId, emailTo);
-
     return {
       success: true,
       snapshotId,
@@ -280,8 +198,7 @@ async function takeSnapshot(createdBy = 'system') {
       message: `Weekly snapshot saved with ${validStats.length} members`,
       diffCsv,
       diffRows,
-      hasPrevious: !!previous,
-      sendResults
+      hasPrevious: !!previous
     };
   } catch (err) {
     console.error('Error taking snapshot:', err.message);

@@ -33,7 +33,9 @@ function startScheduler() {
         const sendResults = await sendWeeklyReport(
           result.diffCsv,
           'Weekly Stat Progress Report',
-          false
+          false,
+          null,
+          'Snowvaletorn@gmail.com'
         );
         console.log('[Scheduler] Send results:', JSON.stringify(sendResults));
       } else {
