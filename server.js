@@ -8,6 +8,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
+const nodemailer = require('nodemailer');
 const factionData = require('./data/factions');
 const User = require('./models/User');
 const FactionConfig = require('./models/FactionConfig');
@@ -64,7 +65,6 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
-const SSG_GUILD_ID = '1432576178383753309';
 const SSG_FACTION_ID = 53272;
 
 const CHANNELS = {
@@ -514,6 +514,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     accessibleChannels,
     accessibleTraining,
     tornApiKey: user?.tornApiKey || null,
+    userEmail: user?.email || null,
     isOwner,
     isLeadership,
     isWarlord: isWarlordRole,
@@ -588,6 +589,32 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
     res.json({ success: true, faction: tornRes.data });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Save user email address ─────────────────────────────────────────────
+app.post('/api/user/email', isAuthenticated, async (req, res) => {
+  const { email } = req.body;
+  
+  // Basic email validation
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (email && email.trim() !== '' && !emailRegex.test(email.trim())) {
+    return res.status(400).json({ error: 'Please enter a valid email address' });
+  }
+
+  try {
+    await User.findOneAndUpdate(
+      { tornPlayerId: req.session.userId },
+      { 
+        email: email ? email.trim() : null,
+        updatedAt: new Date() 
+      },
+      { returnDocument: 'after' }
+    );
+    
+    res.json({ success: true, message: email ? 'Email saved successfully' : 'Email cleared' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save email: ' + err.message });
   }
 });
 
@@ -701,11 +728,12 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
     let profileMap = {};
     try {
       // Add timeout and only fetch needed fields
-      const dbUsers = await User.find({}, 'tornPlayerId bloodType timeZone').maxTimeMS(5000);
+      const dbUsers = await User.find({}, 'tornPlayerId bloodType timeZone email').maxTimeMS(5000);
       dbUsers.forEach(u => {
         profileMap[u.tornPlayerId] = {
           bloodType: u.bloodType,
-          timeZone: u.timeZone
+          timeZone: u.timeZone,
+          email: u.email
         };
       });
     } catch (dbErr) {
@@ -719,7 +747,8 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
       tornRes.data.members = tornRes.data.members.map(m => ({
         ...m,
         bloodType: profileMap[m.id]?.bloodType || null,
-        timeZone: profileMap[m.id]?.timeZone || null
+        timeZone: profileMap[m.id]?.timeZone || null,
+        email: profileMap[m.id]?.email || null
       }));
     }
     
@@ -1081,7 +1110,7 @@ app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res)
     const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
     const factionMembers = factionRes.data.members || [];
 
-    const dbUsers = await User.find({}, 'tornPlayerId tornName tornApiKey lastSeen tornKeyUpdatedAt discordId');
+    const dbUsers = await User.find({}, 'tornPlayerId tornName tornApiKey lastSeen tornKeyUpdatedAt');
     const dbByTornId = {};
     dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
@@ -1146,7 +1175,7 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
     const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
     const factionMembers = factionRes.data.members || [];
 
-    const dbUsers = await User.find({}, 'tornPlayerId tornName tornApiKey lastSeen tornKeyUpdatedAt discordId');
+    const dbUsers = await User.find({}, 'tornPlayerId tornName tornApiKey lastSeen tornKeyUpdatedAt');
     const dbByTornId = {};
     dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
@@ -1658,7 +1687,7 @@ app.post('/api/apply', async (req, res) => {
   const questions = [
     'Have you read our expectations, and are you comfortable agreeing to them?',
     'Do you agree to setup and apply to the faction in Torn Stats within 24 hours of acceptance?',
-    'Do you agree to join and actively participate, daily, in discord?',
+    'Do you agree to join and actively participate, daily, in team communications?',
     'Do you agree that if you\'re under level 15, you will get to level 15 within 3 weeks of acceptance?',
     'Do you agree that once you\'re over level 15, you will do atleast one stat jump (candy, happy, console, etc.) weekly?'
   ];
@@ -1693,33 +1722,47 @@ const factionRes = await axios.get(
       const ownershipPositions = POSITIONS.ownership;
       const ownershipMembers = factionMembers.filter(m => ownershipPositions.includes(m.position));
 
-      // Get Discord user IDs for ownership members from database
+      // Get email addresses for ownership members from database
       const ownershipUserIds = ownershipMembers.map(m => m.id);
       const ownershipUsers = await User.find({
         tornPlayerId: { $in: ownershipUserIds },
-        discordId: { $ne: null }
-      }, 'discordId');
+        email: { $ne: null }
+      }, 'email');
 
-      const discordUserIds = ownershipUsers.map(u => u.discordId).filter(Boolean);
-
-      await Promise.allSettled(
-        discordUserIds.map(async discordUserId => {
+      await Promise.allSettled([
+        // Send email to ownership members who have email addresses
+        ...ownershipMembers.map(async member => {
           try {
-            const dmChannel = await axios.post(
-              'https://discord.com/api/v10/users/@me/channels',
-              { recipient_id: discordUserId },
-              { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
-            );
-            await axios.post(
-              `https://discord.com/api/v10/channels/${dmChannel.data.id}/messages`,
-              { content: message },
-              { headers: { Authorization: `Bot ${process.env.DISCORD_BOT_TOKEN}` } }
-            );
+            const user = await User.findOne({
+              tornPlayerId: member.id,
+              email: { $ne: null }
+            }, 'email');
+
+            if (user && user.email) {
+              const transporter = nodemailer.createTransport({
+                host: process.env.SMTP_HOST,
+                port: parseInt(process.env.SMTP_PORT || '587'),
+                secure: process.env.SMTP_PORT === '465',
+                auth: {
+                  user: process.env.SMTP_USER,
+                  pass: process.env.SMTP_PASS
+                }
+              });
+
+              await transporter.sendMail({
+                from: process.env.SMTP_USER,
+                to: user.email,
+                subject: 'New Faction Application',
+                text: `A new faction application has been received:\n\n${message}\n\nView application details: https://www.torn.com/factions.php?step=profile&ID=53272`
+              });
+
+              console.log(`Email sent to ${user.email} for application notification`);
+            }
           } catch (err) {
-            console.error(`Failed to send DM to Discord user ${discordUserId}:`, err.message);
+            console.error(`Failed to send email to ${member.name}:`, err.message);
           }
         })
-      );
+      ]);
 
     res.json({ success: true });
   } catch (err) {

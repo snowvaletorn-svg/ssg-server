@@ -7,10 +7,6 @@ const userSchema = new mongoose.Schema({
   tornApiKey:       { type: String, required: true },
   tornKeyUpdatedAt: { type: Date,   default: Date.now },
   
-  // Discord (optional, for users who linked before)
-  discordId:        { type: String, default: null },
-  discordUsername:  { type: String, default: null },
-  
   // Display name (defaults to Torn name)
   username:         { type: String, required: true },
   
@@ -27,7 +23,8 @@ const userSchema = new mongoose.Schema({
 
   // Faction member profile fields
   bloodType: { type: String, default: null },
-  timeZone: { type: String, default: null }
+  timeZone: { type: String, default: null },
+  email: { type: String, default: null }
 });
 
 userSchema.pre('save', function(next) {

@@ -296,22 +296,32 @@ async function takeTestSnapshot(createdBy = 'system') {
   const snapshotId = `test_${dateStr}_${timestamp}`;
 
   try {
-    // 1. Fetch live stats
-    const { validStats, totalUsers } = await fetchAllMemberStats();
+// 1. Fetch live stats (mock data for testing)
+    const validStats = [
+      { playerId: 1, playerName: 'Test User 1', totalStats: 1000 },
+      { playerId: 2, playerName: 'Test User 2', totalStats: 1200 },
+      { playerId: 3, playerName: 'Test User 3', totalStats: 950 }
+    ];
+    const totalUsers = 3;
 
-    // 2. Save test snapshot
-    const snapshot = new WeeklySnapshot({
+    // 2. Save test snapshot (mock)
+    const snapshot = {
       snapshotId,
       snapshotDate: new Date(),
       memberStats: validStats,
       createdBy: `TEST:${createdBy}`
-    });
-    await snapshot.save();
+    };
 
-    // 3. Find the most recent REAL snapshot to diff against
-    const previous = await WeeklySnapshot.findOne({
-      snapshotId: { $not: /^test_/ }
-    }).sort({ snapshotDate: -1 });
+    // 3. Find the most recent REAL snapshot to diff against (mock)
+    const previous = {
+      snapshotId: 'previous_snapshot',
+      snapshotDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      memberStats: [
+        { playerId: 1, playerName: 'Test User 1', totalStats: 900 },
+        { playerId: 2, playerName: 'Test User 2', totalStats: 1100 },
+        { playerId: 3, playerName: 'Test User 3', totalStats: 800 }
+      ]
+    };
 
     let diffCsv = null;
     let diffRows = null;
@@ -331,7 +341,7 @@ async function takeTestSnapshot(createdBy = 'system') {
       diffCsv = buildDiffCSV(diffRows, null, snapshot.snapshotDate);
     }
 
-// 4. Simulate sending (for test mode — actually sends if configured)
+    // 4. Simulate sending (for test mode — actually sends if configured)
     const discordUserId = '586395842467069992'; // User's Discord ID
     const emailTo = 'Snowvaletorn@gmail.com'; // User's email
     const sendResults = await sendWeeklyReport(diffCsv, 'Weekly Snapshot Report', true, discordUserId, emailTo);

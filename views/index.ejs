@@ -10,7 +10,7 @@
 
 <body>
   <!-- Error Alert -->
-  <% if (typeof error !== 'undefined' && error) { %>
+  <% if (typeof error !=='undefined' && error) { %>
     <div class="error-alert" id="errorAlert" style="
       background: linear-gradient(135deg, #ff4444, #cc0000);
       color: white;
@@ -35,284 +35,288 @@
         font-size: 12px;
       ">Dismiss</button>
     </div>
-  <% } %>
+    <% } %>
 
-  <div class="navbar">
-    <div class="container" style="text-align: center; padding-top: 20px;">
-      <!-- Logo: Max width 100% ensures it shrinks on mobile -->
-      <img src="/images/ssg-logo.gif" alt="SSG Logo" style="width: 100%; max-width: 800px; height: auto;">
+      <div class="navbar">
+        <div class="container" style="text-align: center; padding-top: 20px;">
+          <!-- Logo: Max width 100% ensures it shrinks on mobile -->
+          <img src="/images/ssg-logo.gif" alt="SSG Logo" style="width: 100%; max-width: 800px; height: auto;">
 
 
-      <h1>S.S.G - Strategy | Strength | Growth</h1>
+          <h1>S.S.G - Strategy | Strength | Growth</h1>
 
-      <div class="nav-links">
-        <% if (user) { %>
-          <p style="color: var(--card-bg);">Hi, <strong>
-              <%= user.username %>
-            </strong>!</p>
-          <a href="/dashboard" class="btn"
-            style="background: var(--ownership-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Dashboard</a>
-          <a href="/logout" class="btn"
-            style="background: var(--strategy-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Logout</a>
-          <% } else { %>
-            <a href="/login" class="btn"
-              style="background: var(--ownership-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Login</a>
-            <a href="#apply" class="btn"
-              style="background: var(--growth-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Apply
-              Now</a>
-            <% } %>
-      </div>
-    </div>
-  </div>
-
-  <div class="container">
-    <div class="faction-description">
-      <p>Welcome to S.S.G, where strategy, strength, and growth define everything we do. We're more than just a
-        faction—we're a team built on trust, teamwork, and the drive to succeed together.</p>
-
-      <div class="desc-grid">
-        <div class="desc-card" style="border-left-color: var(--strategy-color); padding: 15px;">
-          <h4>Strategy</h4>
-          <p>Every move we make is calculated.</p>
-        </div>
-        <div class="desc-card" style="border-left-color: var(--strength-color); padding: 15px;">
-          <h4>Strength</h4>
-          <p>We train hard, fight smart, and back each other up.</p>
-        </div>
-        <div class="desc-card" style="border-left-color: var(--growth-color); padding: 15px;">
-          <h4>Growth</h4>
-          <p>We'll help you level up fast with guidance and faction perks.</p>
+          <div class="nav-links">
+            <% if (user) { %>
+              <p style="color: var(--card-bg);">Hi, <strong>
+                  <%= user.username %>
+                </strong>!</p>
+              <a href="/dashboard" class="btn"
+                style="background: var(--ownership-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Dashboard</a>
+              <a href="/logout" class="btn"
+                style="background: var(--strategy-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Logout</a>
+              <% } else { %>
+                <a href="/login" class="btn"
+                  style="background: var(--ownership-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Login</a>
+                <a href="#apply" class="btn"
+                  style="background: var(--growth-color); color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 5px;">Apply
+                  Now</a>
+                <% } %>
+          </div>
         </div>
       </div>
 
-      <h2 style="text-align: center; margin-top: 40px;">Faction Perks</h2>
-      <div class="perks-grid">
-        <div class="perks-card" style="padding: 15px;">
-          <h4>Weapons</h4>
-          <p>Provided by faction</p>
-        </div>
-        <div class="perks-card" style="padding: 15px;">
-          <h4>Armor</h4>
-          <p>Provided by faction</p>
-        </div>
-        <div class="perks-card" style="padding: 15px;">
-          <h4>Medical</h4>
-          <p>Kits, morphine, and blood</p>
-        </div>
-        <div class="perks-card" style="padding: 15px;">
-          <h4>Drugs</h4>
-          <p>Xanax & Vicodin for war</p>
-        </div>
-        <div class="perks-card" style="padding: 15px;">
-          <h4>Travel</h4>
-          <p>+7 items, 15% cost reduction</p>
-        </div>
-      </div>
+      <div class="container">
+        <div class="faction-description">
+          <p>Welcome to S.S.G, where strategy, strength, and growth define everything we do. We're more than just a
+            faction—we're a team built on trust, teamwork, and the drive to succeed together.</p>
 
-      <div class="stat-card" style="margin-top: 40px; text-align: left; border-top: 4px solid var(--growth-color);">
-        <h2 style="margin-top: 0;">What we expect from you:</h2>
-        <ul style="color: var(--black);">
-          <li>Daily activity in discord and in game
-            <ul>
-              <li>Flying for plushies/flowers/drugs</li>
-              <li>Performing Crimes, using nerve</li>
-              <li>For those under level 15, working towards level 15</li>
-              <li>For those over level 15, building stats</li>
+          <div class="desc-grid">
+            <div class="desc-card" style="border-left-color: var(--strategy-color); padding: 15px;">
+              <h4>Strategy</h4>
+              <p>Every move we make is calculated.</p>
+            </div>
+            <div class="desc-card" style="border-left-color: var(--strength-color); padding: 15px;">
+              <h4>Strength</h4>
+              <p>We train hard, fight smart, and back each other up.</p>
+            </div>
+            <div class="desc-card" style="border-left-color: var(--growth-color); padding: 15px;">
+              <h4>Growth</h4>
+              <p>We'll help you level up fast with guidance and faction perks.</p>
+            </div>
+          </div>
+
+          <h2 style="text-align: center; margin-top: 40px;">Faction Perks</h2>
+          <div class="perks-grid">
+            <div class="perks-card" style="padding: 15px;">
+              <h4>Weapons</h4>
+              <p>Provided by faction</p>
+            </div>
+            <div class="perks-card" style="padding: 15px;">
+              <h4>Armor</h4>
+              <p>Provided by faction</p>
+            </div>
+            <div class="perks-card" style="padding: 15px;">
+              <h4>Medical</h4>
+              <p>Kits, morphine, and blood</p>
+            </div>
+            <div class="perks-card" style="padding: 15px;">
+              <h4>Drugs</h4>
+              <p>Xanax & Vicodin for war</p>
+            </div>
+            <div class="perks-card" style="padding: 15px;">
+              <h4>Travel</h4>
+              <p>+7 items, 15% cost reduction</p>
+            </div>
+          </div>
+
+          <div class="stat-card" style="margin-top: 40px; text-align: left; border-top: 4px solid var(--growth-color);">
+            <h2 style="margin-top: 0;">What we expect from you:</h2>
+            <ul style="color: var(--black);">
+              <li>Daily activity in discord and in game
+                <ul>
+                  <li>Flying for plushies/flowers/drugs</li>
+                  <li>Performing Crimes, using nerve</li>
+                  <li>For those under level 15, working towards level 15</li>
+                  <li>For those over level 15, building stats</li>
+                </ul>
+              </li>
+              <li>Participate in Organized Crimes (OCs) (90% payout)</li>
+              <li>Participate in war and chains</li>
+              <li>Members are expected to respond to tagged messages</li>
+              <li>Members will not sell losses</li>
+              <li>Most Importantly, have fun!</li>
             </ul>
-          </li>
-          <li>Participate in Organized Crimes (OCs) (90% payout)</li>
-          <li>Participate in war and chains</li>
-          <li>Members are expected to respond to tagged messages</li>
-          <li>Members will not sell losses</li>
-          <li>Most Importantly, have fun!</li>
-        </ul>
-      </div>
-    </div>
-  </div>
-
-  <!-- Faction Stats -->
-  <div class="container">
-    <div class="faction-stats">
-      <div class="stat-card">
-        <h4>
-          <%= faction.memberCount %>
-        </h4>
-        <p>Total Members</p>
-      </div>
-      <div class="stat-card">
-        <h4>6</h4>
-        <p>Teams</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Groups Section -->
-  <section class="container">
-    <div class="groups-grid">
-      <% groups.forEach(function(group) { %>
-        <div
-          class="<%= group.name.toLowerCase() === 'ownership' ? 'owner-card' : group.name.toLowerCase() === 'leadership' ? 'lead-card' : group.name.toLowerCase() === 'strategy' ? 'strat-card' : group.name.toLowerCase() === 'warlord' ? 'strat-card' : group.name.toLowerCase() === 'strength' ? 'stren-card' : 'grow-card' %>">
-          <div class="group-header">
-            <h3>
-              <%= group.name %>
-            </h3>
-            <span class="group-members">
-              <%= group.members %> Members
-            </span>
           </div>
-          <p class="group-description">
-            <%= group.description %>
+        </div>
+      </div>
+
+      <!-- Faction Stats -->
+      <div class="container">
+        <div class="faction-stats">
+          <div class="stat-card">
+            <h4>
+              <%= faction.memberCount %>
+            </h4>
+            <p>Total Members</p>
+          </div>
+          <div class="stat-card">
+            <h4>6</h4>
+            <p>Teams</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Groups Section -->
+      <section class="container">
+        <div class="groups-grid">
+          <% groups.forEach(function(group) { %>
+            <div
+              class="<%= group.name.toLowerCase() === 'ownership' ? 'owner-card' : group.name.toLowerCase() === 'leadership' ? 'lead-card' : group.name.toLowerCase() === 'strategy' ? 'strat-card' : group.name.toLowerCase() === 'warlord' ? 'strat-card' : group.name.toLowerCase() === 'strength' ? 'stren-card' : 'grow-card' %>">
+              <div class="group-header">
+                <h3>
+                  <%= group.name %>
+                </h3>
+                <span class="group-members">
+                  <%= group.members %> Members
+                </span>
+              </div>
+              <p class="group-description">
+                <%= group.description %>
+              </p>
+              <div class="group-footer">
+                <p><strong>Focus:</strong>
+                  <%= group.focus %>
+                </p>
+              </div>
+            </div>
+            <% }); %>
+        </div>
+        </div>
+      </section>
+
+      <!-- Application Form -->
+      <div class="container" id="apply">
+        <div class="apply-section">
+          <h2 style="text-align:center;margin-bottom:0.5rem;">Apply to S.S.G</h2>
+          <p style="text-align:center;color:#666;margin-bottom:2rem;">Answer the questions below honestly. All must be
+            answered to before consideration can be made.
+            <br>
+            Your Torn name comes from your profile. It's under Basic Information and appears like Chedburn_Jr_Rocks
+            [1234567]
           </p>
-          <div class="group-footer">
-            <p><strong>Focus:</strong>
-              <%= group.focus %>
-            </p>
+
+          <div class="apply-card">
+            <div class="apply-field">
+              <label class="apply-label">Your Torn Name</label>
+              <input type="text" id="apply-torn-name" class="apply-input" placeholder="e.g. Chedburn_Jr_Rocks" />
+            </div>
+            <div class="apply-field">
+              <label class="apply-label">Your Torn ID</label>
+              <input type="text" id="apply-torn-id" class="apply-input" placeholder="e.g. 1234567" />
+            </div>
+
+            <div class="apply-questions">
+              <div class="apply-question">
+                <p class="apply-q-text">1. Have you read our expectations, and are you comfortable agreeing to them (see above)?</p>
+                <div class="apply-radio-group">
+                  <label class="apply-radio"><input type="radio" name="q1" value="yes"> Yes</label>
+                  <label class="apply-radio"><input type="radio" name="q1" value="no"> No</label>
+                </div>
+              </div>
+              <div class="apply-question">
+                <p class="apply-q-text">2. Do you agree to setup and apply to the faction in Torn Stats within 24 hours
+                  of
+                  acceptance?</p>
+                <div class="apply-radio-group">
+                  <label class="apply-radio"><input type="radio" name="q2" value="yes"> Yes</label>
+                  <label class="apply-radio"><input type="radio" name="q2" value="no"> No</label>
+                </div>
+              </div>
+              <div class="apply-question">
+                <p class="apply-q-text">3. Do you agree to join and actively participate, daily, in discord?</p>
+                <div class="apply-radio-group">
+                  <label class="apply-radio"><input type="radio" name="q3" value="yes"> Yes</label>
+                  <label class="apply-radio"><input type="radio" name="q3" value="no"> No</label>
+                </div>
+              </div>
+              <div class="apply-question">
+                <p class="apply-q-text">4. Do you agree that if you're under level 15, you will get to level 15 within 3
+                  weeks of acceptance?</p>
+                <div class="apply-radio-group">
+                  <label class="apply-radio"><input type="radio" name="q4" value="yes"> Yes</label>
+                  <label class="apply-radio"><input type="radio" name="q4" value="no"> No</label>
+                </div>
+              </div>
+              <div class="apply-question">
+                <p class="apply-q-text">5. Do you agree that once you're over level 15, you will do a stat jump (candy,
+                  happy, console, etc.) weekly?
+                  <br>
+                  <strong>A candy or happy jump consists of 4 Xanax, 49 candies or 5 DVDs, and an ecstasy.</strong>
+                </p>
+                <div class="apply-radio-group">
+                  <label class="apply-radio"><input type="radio" name="q5" value="yes"> Yes</label>
+                  <label class="apply-radio"><input type="radio" name="q5" value="no"> No</label>
+                </div>
+              </div>
+            </div>
+
+            <div id="apply-status" style="margin-bottom:1rem;"></div>
+
+            <button class="apply-btn" onclick="submitApplication()">Submit Application</button>
           </div>
         </div>
-        <% }); %>
-    </div>
-    </div>
-  </section>
-
-  <!-- Application Form -->
-  <div class="container" id="apply">
-    <div class="apply-section">
-      <h2 style="text-align:center;margin-bottom:0.5rem;">Apply to S.S.G</h2>
-      <p style="text-align:center;color:#666;margin-bottom:2rem;">Answer the questions below honestly. All must be
-        agreed to before applying.
-        <br>
-        Your Torn name comes from your profile. It's under Basic Information and appears like Chedburn_Jr_Rocks [1234567]</p>
-
-      <div class="apply-card">
-        <div class="apply-field">
-          <label class="apply-label">Your Torn Name</label>
-          <input type="text" id="apply-torn-name" class="apply-input" placeholder="e.g. Chedburn_Jr_Rocks" />
-        </div>
-        <div class="apply-field">
-          <label class="apply-label">Your Torn ID</label>
-          <input type="text" id="apply-torn-id" class="apply-input" placeholder="e.g. 1234567" />
-        </div>
-
-        <div class="apply-questions">
-          <div class="apply-question">
-            <p class="apply-q-text">1. Have you read our expectations, and are you comfortable agreeing to them?</p>
-            <div class="apply-radio-group">
-              <label class="apply-radio"><input type="radio" name="q1" value="yes"> Yes</label>
-              <label class="apply-radio"><input type="radio" name="q1" value="no"> No</label>
-            </div>
-          </div>
-          <div class="apply-question">
-            <p class="apply-q-text">2. Do you agree to setup and apply to the faction in Torn Stats within 24 hours of
-              acceptance?</p>
-            <div class="apply-radio-group">
-              <label class="apply-radio"><input type="radio" name="q2" value="yes"> Yes</label>
-              <label class="apply-radio"><input type="radio" name="q2" value="no"> No</label>
-            </div>
-          </div>
-          <div class="apply-question">
-            <p class="apply-q-text">3. Do you agree to join and actively participate, daily, in discord?</p>
-            <div class="apply-radio-group">
-              <label class="apply-radio"><input type="radio" name="q3" value="yes"> Yes</label>
-              <label class="apply-radio"><input type="radio" name="q3" value="no"> No</label>
-            </div>
-          </div>
-          <div class="apply-question">
-            <p class="apply-q-text">4. Do you agree that if you're under level 15, you will get to level 15 within 3
-              weeks of acceptance?</p>
-            <div class="apply-radio-group">
-              <label class="apply-radio"><input type="radio" name="q4" value="yes"> Yes</label>
-              <label class="apply-radio"><input type="radio" name="q4" value="no"> No</label>
-            </div>
-          </div>
-          <div class="apply-question">
-            <p class="apply-q-text">5. Do you agree that once you're over level 15, you will do a stat jump (candy,
-              happy, console, etc.) weekly?
-              <br>
-              <strong>A candy or happy jump consists of 4 Xanax, 49 candies or 5 DVDs, and an ecstasy.</strong></p>
-            <div class="apply-radio-group">
-              <label class="apply-radio"><input type="radio" name="q5" value="yes"> Yes</label>
-              <label class="apply-radio"><input type="radio" name="q5" value="no"> No</label>
-            </div>
-          </div>
-        </div>
-
-        <div id="apply-status" style="margin-bottom:1rem;"></div>
-
-        <button class="apply-btn" onclick="submitApplication()">Submit Application</button>
       </div>
-    </div>
-  </div>
 
-  <script>
-    // Error message handling
-    document.addEventListener('DOMContentLoaded', function() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const error = urlParams.get('error');
-      const errorEl = document.getElementById('errorMessage');
-      
-      if (error && errorEl) {
-        const messages = {
-          'discord_auth_failed': 'Discord authentication is temporarily unavailable. Please wait a few minutes and try again. If the issue persists, the server may be experiencing rate limiting from Discord.',
-          'no_access': 'You do not have access to the dashboard. Please ensure you are a member of the SSG faction and have the required Discord roles.',
-          'default': 'An unexpected error occurred. Please try again.'
-        };
-        
-        errorEl.textContent = messages[error] || messages['default'];
-      }
-    });
+      <script>
+        // Error message handling
+        document.addEventListener('DOMContentLoaded', function () {
+          const urlParams = new URLSearchParams(window.location.search);
+          const error = urlParams.get('error');
+          const errorEl = document.getElementById('errorMessage');
 
-    async function submitApplication() {
-      const tornName = document.getElementById('apply-torn-name').value.trim();
-      const tornId = document.getElementById('apply-torn-id').value.trim();
-      const statusEl = document.getElementById('apply-status');
+          if (error && errorEl) {
+            const messages = {
+              'discord_auth_failed': 'Discord authentication is temporarily unavailable. Please wait a few minutes and try again. If the issue persists, the server may be experiencing rate limiting from Discord.',
+              'no_access': 'You do not have access to the dashboard. Please ensure you are a member of the SSG faction and have the required Discord roles.',
+              'default': 'An unexpected error occurred. Please try again.'
+            };
 
-      if (!tornName || !tornId) {
-        statusEl.innerHTML = '<p style="color:#ff4444;">Please enter your Torn name and ID.</p>';
-        return;
-      }
-
-      const answers = {};
-      for (let i = 1; i <= 5; i++) {
-        const selected = document.querySelector(`input[name="q${i}"]:checked`);
-        if (!selected) {
-          statusEl.innerHTML = `<p style="color:#ff4444;">Please answer all questions.</p>`;
-          return;
-        }
-        answers[`q${i}`] = selected.value;
-      }
-
-      statusEl.innerHTML = '<p style="color:#888;">Submitting application...</p>';
-
-      const allYes = Object.values(answers).every(a => a === 'yes');
-
-      try {
-        const res = await fetch('/api/apply', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ tornName, tornId, answers, allYes })
+            errorEl.textContent = messages[error] || messages['default'];
+          }
         });
-        const data = await res.json();
 
-        if (!res.ok) {
-          statusEl.innerHTML = `<p style="color:#ff4444;">❌ ${data.error}</p>`;
-          return;
+        async function submitApplication() {
+          const tornName = document.getElementById('apply-torn-name').value.trim();
+          const tornId = document.getElementById('apply-torn-id').value.trim();
+          const statusEl = document.getElementById('apply-status');
+
+          if (!tornName || !tornId) {
+            statusEl.innerHTML = '<p style="color:#ff4444;">Please enter your Torn name and ID.</p>';
+            return;
+          }
+
+          const answers = {};
+          for (let i = 1; i <= 5; i++) {
+            const selected = document.querySelector(`input[name="q${i}"]:checked`);
+            if (!selected) {
+              statusEl.innerHTML = `<p style="color:#ff4444;">Please answer all questions.</p>`;
+              return;
+            }
+            answers[`q${i}`] = selected.value;
+          }
+
+          statusEl.innerHTML = '<p style="color:#888;">Submitting application...</p>';
+
+          const allYes = Object.values(answers).every(a => a === 'yes');
+
+          try {
+            const res = await fetch('/api/apply', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tornName, tornId, answers, allYes })
+            });
+            const data = await res.json();
+
+            if (!res.ok) {
+              statusEl.innerHTML = `<p style="color:#ff4444;">❌ ${data.error}</p>`;
+              return;
+            }
+
+            if (allYes) {
+              statusEl.innerHTML = '<p style="color:#2ecc71;">✅ Application submitted! Redirecting you to our faction page...</p>';
+            } else {
+              statusEl.innerHTML = '<p style="color:#ff0000;">A message has been sent to the faction owners. They will evaluate your application and reach out to you.</p>';
+            }
+
+            setTimeout(() => {
+              window.location.href = 'https://www.torn.com/factions.php?step=profile&ID=53272';
+            }, 3000);
+
+          } catch (err) {
+            statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;
+          }
         }
-
-        if (allYes) {
-          statusEl.innerHTML = '<p style="color:#2ecc71;">✅ Application submitted! Redirecting you to our faction page...</p>';
-        } else {
-          statusEl.innerHTML = '<p style="color:#ff0000;">A message has been sent to the faction owners. They will evaluate your application and reach out to you.</p>';
-        }
-
-        setTimeout(() => {
-          window.location.href = 'https://www.torn.com/factions.php?step=profile&ID=53272';
-        }, 3000);
-
-      } catch (err) {
-        statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;
-      }
-    }
-  </script>
+      </script>
 </body>
 
 </html>

@@ -70,101 +70,6 @@ async function saveFactionKey() {
   }
 }
 
-// ── Channel Feed ──────────────────────────────────────────────────────────────
-let currentChannelId = null;
-let memberCache = {};
-
-function loadChannel(channelId) {
-  if (!channelId) return;
-  currentChannelId = channelId;
-  fetchMessages(channelId);
-}
-
-function refreshMessages() {
-  if (currentChannelId) fetchMessages(currentChannelId);
-}
-
-async function fetchSSGMembers() {
-  if (Object.keys(memberCache).length > 0) return;
-  try {
-    const res = await fetch('/api/discord/members');
-    const data = await res.json();
-    if (res.ok) {
-      data.forEach(m => {
-        memberCache[m.user.id] = m.nick || m.user.global_name || m.user.username;
-      });
-    }
-  } catch (err) {
-    console.error('Could not fetch member list:', err);
-  }
-}
-
-async function fetchMessages(channelId) {
-  const feed = document.getElementById('channel-feed');
-  feed.innerHTML = '<div class="channel-loading">LOADING MESSAGES...</div>';
-  await fetchSSGMembers();
-  try {
-    const res = await fetch(`/api/discord/channel/${channelId}`);
-    const data = await res.json();
-    if (!res.ok) { feed.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load messages'}</div>`; return; }
-    if (!data.length) { feed.innerHTML = '<div class="channel-placeholder"><span class="placeholder-icon">💬</span><p>No messages found</p></div>'; return; }
-    feed.innerHTML = [...data].reverse().map(renderMessage).join('');
-  } catch (err) {
-    feed.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
-  }
-}
-
-function renderMessage(msg) {
-  const author = msg.author;
-  const avatarUrl = author.avatar ? `https://cdn.discordapp.com/avatars/${author.id}/${author.avatar}.png` : null;
-  const avatarHtml = avatarUrl
-    ? `<img src="${avatarUrl}" alt="${escapeHtml(author.username)}">`
-    : `<span>${escapeHtml(author.username.charAt(0).toUpperCase())}</span>`;
-  const timestamp = new Date(msg.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-  const content = formatContent(msg.content, msg.mentions);
-  const displayName = memberCache[author.id] || author.global_name || author.username;
-
-  return `
-    <div class="message-item">
-      <div class="msg-avatar">${avatarHtml}</div>
-      <div class="msg-body">
-        <div class="msg-header">
-          <span class="msg-author">${escapeHtml(displayName)}</span>
-          <span class="msg-time">${timestamp}</span>
-        </div>
-        <div class="msg-content">${content}</div>
-        ${msg.attachments?.length ? renderAttachments(msg.attachments) : ''}
-      </div>
-    </div>`;
-}
-
-function renderAttachments(attachments) {
-  return attachments.map(att => {
-    if (att.content_type?.startsWith('image/')) {
-      return `<img src="${att.url}" alt="attachment" style="max-width:300px;max-height:200px;border-radius:4px;margin-top:0.4rem;display:block;">`;
-    }
-    return `<a href="${att.url}" target="_blank" rel="noopener" style="color:#3611b0;font-size:0.85rem;">📎 ${escapeHtml(att.filename)}</a>`;
-  }).join('');
-}
-
-function formatContent(text, mentions) {
-  if (!text) return '<em style="color:#444">No text content</em>';
-  let out = escapeHtml(text);
-  out = out.replace(/&lt;@!?(\d+)&gt;/g, (match, userId) => {
-    const name = memberCache[userId] || mentions?.find(m => m.id === userId)?.global_name || userId;
-    return `<span style="background:rgba(54,17,176,0.2);color:#a78df5;border-radius:3px;padding:0.1em 0.3em;font-weight:600;">@${name}</span>`;
-  });
-  out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  out = out.replace(/`(.+?)`/g, '<code style="background:#1a1919;padding:0.1em 0.3em;border-radius:3px;font-family:\'Share Tech Mono\',monospace;font-size:0.85em;">$1</code>');
-  out = out.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
-  return out;
-}
-
-function escapeHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
 
 // ── Torn User Stats ───────────────────────────────────────────────────────────
 async function fetchTornUser() {
@@ -2109,7 +2014,7 @@ const HELP_CONTENT = {
       {
         heading: 'Your Profile',
         content: `
-          <p class="help-text">The Profile page shows your Discord identity and SSG role assignments. This is also where you manage your Torn API key.</p>
+          <p class="help-text">The Profile page shows your Torn identity and SSG role assignments. This is also where you manage your Torn API key.</p>
           <img src="/images/profileimage.png" alt="Profile page" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
         `
       },
@@ -2479,6 +2384,16 @@ document.addEventListener('keydown', e => {
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&')
+    .replace(/</g, '<')
+    .replace(/>/g, '>')
+    .replace(/"/g, '"')
+    .replace(/'/g, '&#039;');
+}
+
 function statTile(value, label) {
   return `<div class="stat-tile"><div class="stat-value">${value ?? '—'}</div><div class="stat-label">${label}</div></div>`;
 }
@@ -3844,6 +3759,8 @@ function renderDrugInventory(items) {
     </div>`;
 }
 
+
+// Weekly snapshot, records members hours from week to week and provides an email to Snowvale
 async function takeWeeklySnapshot() {
   try {
     const res = await fetch('/api/admin/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
@@ -3851,6 +3768,52 @@ async function takeWeeklySnapshot() {
     document.getElementById('snapshot-status').innerHTML = `<p class="success-text">✅ ${data.message}</p>`;
   } catch (err) {
     document.getElementById('snapshot-status').innerHTML = `<p class="error-text">❌ Error: ${err.message}</p>`;
+  }
+}
+
+// ─── Save user email address to database ──────────────────────────────────────
+async function saveUserEmail() {
+  try {
+    const email = document.getElementById('email-input').value.trim();
+    
+    const res = await fetch('/api/user/email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email })
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to save email');
+    }
+    
+    // Show success message
+    const statusEl = document.getElementById('email-status');
+    if (statusEl) {
+      statusEl.innerHTML = `<p class="success-text">✅ ${data.message}</p>`;
+      setTimeout(() => {
+        statusEl.innerHTML = '';
+      }, 3000);
+    }
+    
+    // Also update the displayed email at the top of the profile
+    const profileEmailDisplay = document.querySelector('.profile-detail .value[id="user-email"]');
+    if (profileEmailDisplay) {
+      profileEmailDisplay.textContent = email || 'Not provided';
+    }
+    
+    return { success: true, message: data.message };
+    
+  } catch (err) {
+    // Show error message
+    const statusEl = document.getElementById('email-status');
+    if (statusEl) {
+      statusEl.innerHTML = `<p class="error-text">❌ ${err.message}</p>`;
+    }
+    
+    console.error('Email save error:', err);
+    return { success: false, error: err.message };
   }
 }
 
@@ -3883,9 +3846,6 @@ async function takeSnapshotTestRun() {
 
     // ── Send results badges ───────────────────────────────────────────────────
     const sr = data.sendResults || {};
-    const discordBadge = sr.discord?.success
-      ? `<span style="color:#4caf50;">✅ Discord sent</span>`
-      : `<span style="color:#888;" title="${sr.discord?.error || 'not configured'}">⬜ Discord: ${sr.discord?.error ? 'failed' : 'not configured'}</span>`;
     const emailBadge = sr.email?.success
       ? `<span style="color:#4caf50;">✅ Email sent</span>`
       : `<span style="color:#888;" title="${sr.email?.error || 'not configured'}">⬜ Email: ${sr.email?.error ? 'failed' : 'not configured'}</span>`;
@@ -3898,7 +3858,7 @@ async function takeSnapshotTestRun() {
           Members captured: <strong>${data.membersSnapshotted}</strong> / ${data.totalMembers}
         </p>
         <p class="muted" style="font-size:0.8rem;margin:0 0 0.5rem;">${prevNote}</p>
-        <div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:0.8rem;">${discordBadge} ${emailBadge}</div>
+        <div style="display:flex;gap:1rem;flex-wrap:wrap;font-size:0.8rem;">${emailBadge}</div>
       </div>`;
 
     // ── Diff table ────────────────────────────────────────────────────────────

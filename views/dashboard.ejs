@@ -77,77 +77,95 @@
                 <div class="profile-detail"><span class="label">Username</span><span class="value">
                     <%= user.username %>
                   </span></div>
-                <!-- Removed email and discord ID for security purposes -->
-                <!--<div class="profile-detail"><span class="label">Email</span><span class="value">
-                    <%= user.email || 'Not provided' %>
-                  </span></div>
-                <div class="profile-detail"><span class="label">Discord ID</span><span class="value mono">
-                    <%= user.id %>
-                  </span></div>-->
-                <% if (user.factionPosition) { %>
-                  <div class="profile-detail"><span class="label">Faction Position</span>
-                    <span class="value">
-                      <span class="role-badge role-<%= user.positionGroup || 'member' %>">
-                        <%= user.factionPosition %>
-                      </span>
-                    </span>
-                  </div>
-                  <% } %>
-              </div>
-            </div>
-
-            <!-- Personal Torn API Key -->
-            <div class="card mt-2">
-              <div class="card-header">🔑 Torn API Key</div>
-              <div class="card-body">
-                <% if (tornApiKey) { %>
-                  <p class="success-text">✅ Torn API key is saved.</p>
-                  <button class="btn btn-small btn-outline" onclick="showKeyForm()">Update Key</button>
-                  <% } else { %>
-                    <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
-                    <% } %>
-                      <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
-                        <div class="input-group mt-1">
-                          <input type="text" id="torn-key-input" class="form-input"
-                            placeholder="Enter your Torn API key..." />
-                          <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
-                        </div>
-                        <p class="hint">
-                          Get your key at
-                          <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">
-                            torn.com → Preferences → API
-                          </a>— set access level to <strong style="color:#c0bcbc;">Full Access</strong>.
-                        </p>
-                      </div>
-                      <div id="key-status" class="mt-1"></div>
-              </div>
-            </div>
-
-            <!-- Faction API Key (Ownership only) -->
-            <% if (isOwner) { %>
-              <div class="card mt-2">
-                <div class="card-header">🏰 Faction API Key <span
-                    style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
-                <div class="card-body">
-                  <% if (hasFactionKey) { %>
-                    <p class="success-text">✅ Faction API key is configured.</p>
-                    <button class="btn btn-small btn-outline" onclick="showFactionKeyForm()">Update Key</button>
-                    <% } else { %>
-                      <p class="muted">No faction API key set. Configure one to enable faction features for all members.
-                      </p>
+                    <!-- Email -->
+                    <% if (isOwner || isLeadership) { %>
+                       <div class="profile-detail"><span class="label">Email</span><span class="value" id="user-email">
+                           <%= userEmail || 'Not provided' %>
+                         </span></div>
                       <% } %>
-                        <div id="faction-key-form" class="<%= hasFactionKey ? 'hidden' : '' %>">
-                          <div class="input-group mt-1">
-                            <input type="text" id="faction-key-input" class="form-input"
-                              placeholder="Enter faction Torn API key..." />
-                            <button class="btn btn-primary" onclick="saveFactionKey()">Save Key</button>
-                          </div>
-                          <p class="hint">Use a faction leader/co-leader's Torn API key with faction permissions.</p>
-                        </div>
-                        <div id="faction-key-status" class="mt-1"></div>
-                </div>
+                    <% if (user.factionPosition) { %>
+                      <div class="profile-detail"><span class="label">Faction Position</span>
+                        <span class="value">
+                          <span class="role-badge role-<%= user.positionGroup || 'member' %>">
+                            <%= user.factionPosition %>
+                          </span>
+                        </span>
+                      </div>
+                      <% } %>
               </div>
-              <% } %>
+            </div>
+
+            <!-- Torn Email -->
+            <div class="card mt-2">
+              <div class="card-header">📧 Torn Email Address</div>
+              <% if (isOwner || isLeadership) { %>
+                <div class="card-body">
+
+                  <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <input type="email" id="email-input" class="form-input" value="<%= userEmail || '' %>"
+                      placeholder="Enter your email address" style="flex:1;" />
+                    <button class="btn btn-primary btn-small" onclick="saveUserEmail()">Save</button>
+                  </div>
+                  <div id="email-status" style="margin-top:0.5rem;"></div>
+                </div>
+                <% } %>
+                  <div class="card-body">
+                  </div>
+
+                  <!-- Personal Torn API Key -->
+                  <div class="card mt-2">
+                    <div class="card-header">🔑 Torn API Key</div>
+                    <div class="card-body">
+                      <% if (tornApiKey) { %>
+                        <p class="success-text">✅ Torn API key is saved.</p>
+                        <button class="btn btn-small btn-outline" onclick="showKeyForm()">Update Key</button>
+                        <% } else { %>
+                          <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
+                          <% } %>
+                            <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
+                              <div class="input-group mt-1">
+                                <input type="text" id="torn-key-input" class="form-input"
+                                  placeholder="Enter your Torn API key..." />
+                                <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
+                              </div>
+                              <p class="hint">
+                                Get your key at
+                                <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">
+                                  torn.com → Preferences → API
+                                </a>— set access level to <strong style="color:#c0bcbc;">Full Access</strong>.
+                              </p>
+                            </div>
+                            <div id="key-status" class="mt-1"></div>
+                    </div>
+                  </div>
+
+                  <!-- Faction API Key (Ownership only) -->
+                  <% if (isOwner) { %>
+                    <div class="card mt-2">
+                      <div class="card-header">🏰 Faction API Key <span
+                          style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
+                      <div class="card-body">
+                        <% if (hasFactionKey) { %>
+                          <p class="success-text">✅ Faction API key is configured.</p>
+                          <button class="btn btn-small btn-outline" onclick="showFactionKeyForm()">Update Key</button>
+                          <% } else { %>
+                            <p class="muted">No faction API key set. Configure one to enable faction features for all
+                              members.
+                            </p>
+                            <% } %>
+                              <div id="faction-key-form" class="<%= hasFactionKey ? 'hidden' : '' %>">
+                                <div class="input-group mt-1">
+                                  <input type="text" id="faction-key-input" class="form-input"
+                                    placeholder="Enter faction Torn API key..." />
+                                  <button class="btn btn-primary" onclick="saveFactionKey()">Save Key</button>
+                                </div>
+                                <p class="hint">Use a faction leader/co-leader's Torn API key with faction permissions.
+                                </p>
+                              </div>
+                              <div id="faction-key-status" class="mt-1"></div>
+                      </div>
+                    </div>
+                    <% } %>
           </section>
 
 
@@ -390,6 +408,7 @@
                       <p class="training-desc">
                         <%= ch.description %>
                       </p>
+                      <!-- leave these discord instances -->
                       <a href="https://discord.com/channels/1432576178383753309/<%= ch.id %>" target="_blank"
                         rel="noopener" class="btn btn-primary">
                         Open in Discord ↗
@@ -649,37 +668,37 @@
                     </div>
                   </div>
 
-<!--Weekly Stats-->
-                    <% if (isOwner) { %>
-                      <div id="tab-weekly-snapshot" class="admin-tab-content">
-                        <div class="section-header" style="margin-top:0;">
-                          <h3>Weekly Snapshot</h3>
-                          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
-                            <button class="btn btn-primary btn-small" onclick="takeWeeklySnapshot()">📸 Take
-                              Snapshot</button>
-                            <button class="btn btn-small" style="background:#2a2828;border:1px solid #555;color:#c0bcbc;"
-                              onclick="takeSnapshotTestRun()">🧪 Test Run</button>
-                          </div>
-                        </div>
-                        <p class="muted" style="margin-bottom:1rem;">Take a snapshot of all faction members' total stats.
-                          <br><span style="font-size:0.8rem;color:#666;">Use <strong style="color:#888;">Test Run</strong>
-                            to validate output without affecting real weekly snapshots — saves with a unique test ID and
-                            shows a CSV preview.</span>
-                        </p>
-                        <div id="snapshot-status"></div>
-                        <div id="snapshot-test-status" style="margin-top:1rem;"></div>
-                        <div id="snapshot-test-csv" style="display:none;margin-top:1rem;">
-                          <div
-                            style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
-                            <span style="font-size:0.85rem;color:#888;">📄 CSV Preview (first 10 rows)</span>
-                            <button class="btn btn-small btn-outline" onclick="downloadTestCsv()">⬇️ Download Full
-                              CSV</button>
-                          </div>
-                          <pre id="snapshot-test-csv-content"
-                            style="background:#1a1919;border:1px solid #333;border-radius:6px;padding:0.75rem;font-size:0.75rem;color:#c0bcbc;overflow-x:auto;max-height:200px;overflow-y:auto;white-space:pre;"></pre>
+                  <!--Weekly Stats-->
+                  <% if (isOwner) { %>
+                    <div id="tab-weekly-snapshot" class="admin-tab-content">
+                      <div class="section-header" style="margin-top:0;">
+                        <h3>Weekly Snapshot</h3>
+                        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                          <button class="btn btn-primary btn-small" onclick="takeWeeklySnapshot()">📸 Take
+                            Snapshot</button>
+                          <button class="btn btn-small" style="background:#2a2828;border:1px solid #555;color:#c0bcbc;"
+                            onclick="takeSnapshotTestRun()">🧪 Test Run</button>
                         </div>
                       </div>
-                      <% } %>
+                      <p class="muted" style="margin-bottom:1rem;">Take a snapshot of all faction members' total stats.
+                        <br><span style="font-size:0.8rem;color:#666;">Use <strong style="color:#888;">Test Run</strong>
+                          to validate output without affecting real weekly snapshots — saves with a unique test ID and
+                          shows a CSV preview.</span>
+                      </p>
+                      <div id="snapshot-status"></div>
+                      <div id="snapshot-test-status" style="margin-top:1rem;"></div>
+                      <div id="snapshot-test-csv" style="display:none;margin-top:1rem;">
+                        <div
+                          style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+                          <span style="font-size:0.85rem;color:#888;">📄 CSV Preview (first 10 rows)</span>
+                          <button class="btn btn-small btn-outline" onclick="downloadTestCsv()">⬇️ Download Full
+                            CSV</button>
+                        </div>
+                        <pre id="snapshot-test-csv-content"
+                          style="background:#1a1919;border:1px solid #333;border-radius:6px;padding:0.75rem;font-size:0.75rem;color:#c0bcbc;overflow-x:auto;max-height:200px;overflow-y:auto;white-space:pre;"></pre>
+                      </div>
+                    </div>
+                    <% } %>
                 </section>
                 <% } %>
 
