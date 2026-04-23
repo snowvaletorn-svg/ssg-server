@@ -142,6 +142,15 @@ function renderTornUser(d) {
             ${infoBadge('Dexterity', formatNumFull(d.personalstats.dexterity))}
             ${infoBadge('Total', formatNumFull(d.personalstats.totalstats))}
           </div>
+        </div>
+        <div style="margin-top:1.25rem;">
+          <div class="badge-label">Work Stats</div>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            ${infoBadge('Manual Labor', formatNumFull(d.personalstats.manuallabor))}
+            ${infoBadge('Intelligence', formatNumFull(d.personalstats.intelligence))}
+            ${infoBadge('Endurance', formatNumFull(d.personalstats.endurance))}
+            ${infoBadge('Total Work', formatNumFull( (parseInt(d.personalstats.manuallabor) || 0) + (parseInt(d.personalstats.intelligence) || 0) + (parseInt(d.personalstats.endurance) || 0) ))}
+          </div>
         </div>` : ''}
       </div>
     </div>`;
@@ -1643,6 +1652,16 @@ function renderMemberOverview() {
           <div style="border-top:1px solid #333;margin-top:1px;padding-top:1px;text-align:center;font-weight:600;color:#c0bcbc;">${formatNumFull(m.totalstats)}</div>
         </div>` : '<span style="color:#555;font-size:0.7rem;">—</span>';
 
+    // Work stats - same layout as battle stats
+    const hasWorkStats = m.manuallabor !== null && m.manuallabor !== undefined;
+    const workStatsCell = hasWorkStats ? `
+        <div style="font-family:'Share Tech Mono',monospace;font-size:0.72rem;line-height:1.35;white-space:nowrap;">
+          <div><span style="color:#a78df5;font-weight:600;">MAN</span> ${formatNumFull(m.manuallabor)}</div>
+          <div><span style="color:#27ae60;font-weight:600;">INT</span> ${formatNumFull(m.intelligence)}</div>
+          <div><span style="color:#e67e22;font-weight:600;">END</span> ${formatNumFull(m.endurance)}</div>
+          <div style="border-top:1px solid #333;margin-top:1px;padding-top:1px;text-align:center;font-weight:600;color:#c0bcbc;">${formatNumFull( (parseInt(m.manuallabor) || 0) + (parseInt(m.intelligence) || 0) + (parseInt(m.endurance) || 0) )}</div>
+        </div>` : '<span style="color:#555;font-size:0.7rem;">—</span>';
+
     // Compact API key display
     const hasKey = m.hasApiKey ? '✅' : '❌';
     const keyUpdated = m.tornKeyUpdatedAt
@@ -1669,6 +1688,7 @@ function renderMemberOverview() {
         <td style="font-size:0.75rem;text-align:center;width:60px;">${medicalCell}</td>
         <td style="${lastActionStyle};white-space:nowrap;width:80px;">${lastActionCell}</td>
         <td style="font-size:0.78rem;">${statsCell}</td>
+        <td style="font-size:0.78rem;">${workStatsCell}</td>
         <td style="font-size:0.75rem;text-align:center;width:50px;">${apiCell}</td>
         <td style="text-align:center;width:40px;">${removeBtn}</td>
       </tr>`;
@@ -1689,6 +1709,7 @@ function renderMemberOverview() {
             <th class="sortable" onclick="sortOverview('medical')"    style="cursor:pointer;">Medical CD${arrow('medical')}</th>
             <th class="sortable" onclick="sortOverview('lastaction')" style="cursor:pointer;">Last Action${arrow('lastaction')}</th>
             <th class="sortable" onclick="sortOverview('totalstats')" style="cursor:pointer;">Battle Stats${arrow('totalstats')}</th>
+            <th>Work Stats</th>
             <th class="sortable" onclick="sortOverview('lastseen')"   style="cursor:pointer;">API Key${arrow('lastseen')}</th>
             <th></th>
           </tr>
@@ -2779,6 +2800,9 @@ function renderTravelProfits() {
   // Get travel method from radio buttons
   const travelMethod = document.querySelector('input[name="travelMethod"]:checked')?.value || 'standard';
 
+  // Get selected country from dropdown
+  const selectedCountry = document.getElementById('travel-country-select')?.value || '';
+
   // Get quantity from input (default 25, min 5, max 29)
   const quantityInput = document.getElementById('profit-quantity');
   let quantity = parseInt(quantityInput?.value) || 25;
@@ -2808,6 +2832,11 @@ function renderTravelProfits() {
     return false;
   });
 
+  // Filter by selected country if one is chosen
+  if (selectedCountry) {
+    profits = profits.filter(p => p.country === selectedCountry);
+  }
+
   // Sort
   switch (sortBy) {
     case 'profit':
@@ -2821,8 +2850,12 @@ function renderTravelProfits() {
       break;
     case 'profitPerRun':
     default:
-      // Sort by profit per run (profit per item × quantity)
-      profits.sort((a, b) => (b.profit * quantity) - (a.profit * quantity));
+      // Sort by profit per run (profit per item × quantity minus flight cost)
+      profits.sort((a, b) => {
+        const aFlightCost = getFlightCost(a.country, travelMethod);
+        const bFlightCost = getFlightCost(b.country, travelMethod);
+        return ((b.profit * quantity) - bFlightCost) - ((a.profit * quantity) - aFlightCost);
+      });
       break;
   }
 
@@ -2835,25 +2868,49 @@ function renderTravelProfits() {
 
   const summary = travelProfitsCache.summary || {};
 
-  // Find the best profit per run (highest profit × quantity)
+  // Find the best profit per run (highest profit × quantity minus flight cost)
   const bestRun = profits.length > 0 ? profits.reduce((best, current) => {
-    const bestProfit = best.profit * quantity;
-    const currentProfit = current.profit * quantity;
+    const bestFlightCost = getFlightCost(best.country, travelMethod);
+    const currentFlightCost = getFlightCost(current.country, travelMethod);
+    const bestProfit = (best.profit * quantity) - bestFlightCost;
+    const currentProfit = (current.profit * quantity) - currentFlightCost;
     return currentProfit > bestProfit ? current : best;
   }) : null;
+
+  // Calculate maximum possible profit for selected country (fill 25 slots optimally)
+  let selectedCountryTotal = 0;
+  if (selectedCountry && profits.length > 0) {
+    const flightCost = getFlightCost(selectedCountry, travelMethod);
+    let slotsRemaining = quantity;
+    let totalProfit = 0;
+
+    // Sort items descending by profit per item to fill slots optimally
+    const sortedItems = [...profits].sort((a,b) => b.profit - a.profit);
+
+    for (const item of sortedItems) {
+      if (slotsRemaining <= 0) break;
+
+      // Take as many of this item as possible (up to available quantity or remaining slots)
+      const takeAmount = Math.min(item.quantity, slotsRemaining);
+      totalProfit += item.profit * takeAmount;
+      slotsRemaining -= takeAmount;
+    }
+
+    selectedCountryTotal = totalProfit - flightCost;
+  }
 
   let html = `
     <div class="card" style="margin-bottom:1rem;">
       <div class="card-header">
         💰 Travel Profits Summary
         <span style="float:right;font-size:0.8rem;color:#555;">
-          ${profits.length} items across ${Object.keys(grouped).length} countries
+          ${profits.length} items ${selectedCountry ? `for ${getCountryName(selectedCountry)}` : `across ${Object.keys(grouped).length} countries`}
         </span>
       </div>
       <div class="card-body">
         <div class="stats-grid">
-          ${bestRun ? statTile('+' + formatNum(bestRun.profit * quantity), 'Best Profit/Run') : statTile('—', 'Best Profit/Run')}
-          ${bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country')}
+          ${selectedCountry ? statTile(getCountryName(selectedCountry), 'Selected Country') : (bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country'))}
+          ${selectedCountry ? statTile('$' + formatNum(selectedCountryTotal), 'Total Profit') : (bestRun ? statTile('+' + formatNum(bestRun.profit * quantity), 'Best Profit/Run') : statTile('—', 'Best Profit/Run'))}
           ${bestRun ? statTile(escapeHtml(bestRun.name), 'Best Item') : statTile('—', 'Best Item')}
           ${statTile(travelMethod === 'standard' ? '✈️ Standard' : travelMethod === 'airstrip' ? '🛫 Airstrip' : '🚀 Private', 'Travel Method')}
         </div>
@@ -2861,11 +2918,13 @@ function renderTravelProfits() {
     </div>`;
 
   Object.entries(grouped).forEach(([country, items]) => {
-    const countryTotal = items.reduce((sum, p) => sum + (p.profit * quantity), 0);
+    const flightCost = getFlightCost(country, travelMethod);
+    const countryTotal = items.reduce((sum, p) => sum + (p.profit * quantity), 0) - flightCost;
     const travelTime = items[0].travelTimes[travelMethod];
 
     const rows = items.map(item => {
-      const profitPerRun = item.profit * quantity;
+      const flightCost = getFlightCost(country, travelMethod);
+      const profitPerRun = (item.profit * quantity) - flightCost;
 
       // Format best leave time display (to arrive at restock time)
       let restockDisplay = '<span style="color:#555;">—</span>';
@@ -2951,6 +3010,27 @@ function getCountryName(code) {
     uae: 'UAE', sou: 'South Africa'
   };
   return names[code] || code;
+}
+
+const STANDARD_FLIGHT_COSTS = {
+  mex: 6500,
+  cay: 10000,
+  can: 9000,
+  haw: 11000,
+  uni: 18000,
+  arg: 21000,
+  swi: 27000,
+  jap: 32000,
+  chi: 35000,
+  uae: 32000,
+  sou: 40000
+};
+
+function getFlightCost(countryCode, travelMethod) {
+  if (travelMethod === 'airstrip' || travelMethod === 'private') {
+    return 0;
+  }
+  return STANDARD_FLIGHT_COSTS[countryCode] || 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════

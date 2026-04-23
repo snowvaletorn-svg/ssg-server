@@ -270,46 +270,8 @@
               </div>
             </div>
 
-            <div class="section-header" style="margin-top:2rem;">
-              <h3>Foreign Stock</h3>
-              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-                <select id="travel-country-select" class="channel-dropdown" onchange="filterStockByCountry(this.value)"
-                  style="min-width:180px;">
-                  <option value="">— All Countries —</option>
-                  <option value="mex">Mexico</option>
-                  <option value="cay">Cayman Islands</option>
-                  <option value="can">Canada</option>
-                  <option value="haw">Hawaii</option>
-                  <option value="uni">United Kingdom</option>
-                  <option value="arg">Argentina</option>
-                  <option value="swi">Switzerland</option>
-                  <option value="jap">Japan</option>
-                  <option value="chi">China</option>
-                  <option value="uae">UAE</option>
-                  <option value="sou">South Africa</option>
-                </select>
-                <select id="stock-sort" class="channel-dropdown" onchange="sortStock()">
-                  <option value="type">Sort: Type</option>
-                  <option value="name">Sort: Name</option>
-                  <option value="quantity">Sort: Quantity</option>
-                  <option value="cost">Sort: Cost</option>
-                </select>
-                <button class="btn btn-small btn-outline" onclick="fetchYataStock()">↻ Refresh Stock</button>
-              </div>
-            </div>
-            <div id="yata-stock-data">
-              <div class="empty-state">
-                <span class="empty-icon">🛍️</span>
-                <p>Select a country or click Refresh Stock to load available items.</p>
-              </div>
-            </div>
-
-            <!-- Travel Profits -->
-            <div class="section-header" style="margin-top:2rem;">
-              <h3>💰 Travel Profits</h3>
-              <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">Load</button>
-            </div>
-            <div class="card mt-1" style="background:#1a1919;border:1px solid #2a2828;">
+            <!-- Travel Configuration -->
+            <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
               <div class="card-body">
                 <div style="display:flex;flex-wrap:wrap;gap:1.5rem;align-items:flex-start;">
                   <!-- Travel Method -->
@@ -373,13 +335,36 @@
                       By</label>
                     <select id="profit-sort" class="channel-dropdown" onchange="renderTravelProfits()"
                       style="min-width:140px;">
-                      <option value="profitPerRun">Profit/Run</option>
+                      <option value="profitPerRun" selected>Profit/Run</option>
                       <option value="profit">Profit/Item</option>
                       <option value="profitPercent">Profit %</option>
                       <option value="country">Country</option>
                     </select>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- Combined Travel Profits Table -->
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>💰 Travel Profits</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <select id="travel-country-select" class="channel-dropdown" onchange="renderTravelProfits()"
+                  style="min-width:180px;">
+                  <option value="">— All Countries —</option>
+                  <option value="mex">Mexico</option>
+                  <option value="cay">Cayman Islands</option>
+                  <option value="can">Canada</option>
+                  <option value="haw">Hawaii</option>
+                  <option value="uni">United Kingdom</option>
+                  <option value="arg">Argentina</option>
+                  <option value="swi">Switzerland</option>
+                  <option value="jap">Japan</option>
+                  <option value="chi">China</option>
+                  <option value="uae">UAE</option>
+                  <option value="sou">South Africa</option>
+                </select>
+                <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">↻ Refresh</button>
               </div>
             </div>
             <div id="travel-profits-data">

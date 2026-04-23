@@ -1079,16 +1079,19 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
             `https://api.torn.com/user/?selections=basic,personalstats&key=${u.tornApiKey}`
           );
           if (tornRes.data.error) return null;
-          return {
-            name: tornRes.data.name,
-            player_id: tornRes.data.player_id,
-            level: tornRes.data.level,
-            totalstats: tornRes.data.personalstats?.totalstats || 0,
-            strength: tornRes.data.personalstats?.strength || 0,
-            defense: tornRes.data.personalstats?.defense || 0,
-            speed: tornRes.data.personalstats?.speed || 0,
-            dexterity: tornRes.data.personalstats?.dexterity || 0,
-          };
+            return {
+              name: tornRes.data.name,
+              player_id: tornRes.data.player_id,
+              level: tornRes.data.level,
+              totalstats: tornRes.data.personalstats?.totalstats || 0,
+              strength: tornRes.data.personalstats?.strength || 0,
+              defense: tornRes.data.personalstats?.defense || 0,
+              speed: tornRes.data.personalstats?.speed || 0,
+              dexterity: tornRes.data.personalstats?.dexterity || 0,
+              manuallabor: tornRes.data.personalstats?.manuallabor || 0,
+              intelligence: tornRes.data.personalstats?.intelligence || 0,
+              endurance: tornRes.data.personalstats?.endurance || 0,
+            };
         } catch { return null; }
       })
     );
@@ -1231,6 +1234,9 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
             base.speed = ps.speed || 0;
             base.dexterity = ps.dexterity || 0;
             base.totalstats = ps.totalstats || 0;
+            base.manuallabor = ps.manuallabor || 0;
+            base.intelligence = ps.intelligence || 0;
+            base.endurance = ps.endurance || 0;
           }
         } catch { /* enrichment failed */ }
 
