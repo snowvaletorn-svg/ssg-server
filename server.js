@@ -104,6 +104,12 @@ const ROLE_CHANNEL_ACCESS = {
 
 const TRAINING_CHANNELS = [
   {
+    id: '1435130329479250021',
+    name: '📖 Torn Stats Account Creation',
+    description: 'Website dedicated to Tracking Stat progress for Torn as well as a plethora of other items.',
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+  },
+  {
     id: '1435414594410512494',
     name: '📊 Stats Training',
     description: 'Advanced stat training guides and strategies.',
@@ -137,6 +143,12 @@ const TRAINING_CHANNELS = [
     id: '1435416812706857225',
     name: '🗝️ Organized Crimes Training',
     description: 'Guide for all members on Organized Crimes in Torn.',
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+  },
+  {
+    id: '1435130329479250021',
+    name: '📖 Torn Stats Guides',
+    description: 'The following are guides available in Torn Stats. These guides require access to Torn Stats. See Torn Stats Training for information on how to create your Torn Stats account.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
 ];
@@ -357,34 +369,60 @@ app.get('/', async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (factionKey) {
-      const tornRes = await axios.get(
-        `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`
-      );
-      const factionMembers = tornRes.data.members || [];
+      // Use existing cache to avoid hitting Torn API on every page load
+      const cacheKey = 'home-faction-data';
+      let cachedData = getCached(cacheKey);
+      
+      if (!cachedData) {
+        // Deduplicate simultaneous requests to prevent API flooding
+        cachedData = await deduplicateRequest(cacheKey, async () => {
+          const tornRes = await axios.get(
+            `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`,
+            { timeout: 10000 } // 10 second timeout to prevent hanging requests
+          );
+          
+          const factionMembers = tornRes.data.members || [];
+          const positionMap = {
+            'Leader': 'Ownership',
+            'Co-leader': 'Ownership',
+            'Matriarch': 'Ownership',
+            'Leadership': 'Leadership',
+            'Warlord': 'Warlord',
+            'Team Strategy': 'Strategy',
+            'Team Strength': 'Strength',
+            'Team Growth': 'Growth',
+            'Recruit': 'Growth'
+          };
 
-      const positionMap = {
-        'Leader': 'Ownership',
-        'Co-leader': 'Ownership',
-        'Matriarch': 'Ownership',
-        'Leadership': 'Leadership',
-        'Warlord': 'Warlord',
-        'Team Strategy': 'Strategy',
-        'Team Strength': 'Strength',
-        'Team Growth': 'Growth',
-        'Recruit': 'Growth'
-      };
+          const counts = {};
+          factionMembers.forEach(m => {
+            const groupName = positionMap[m.position];
+            if (groupName) counts[groupName] = (counts[groupName] || 0) + 1;
+          });
 
-      const counts = {};
-      factionMembers.forEach(m => {
-        const groupName = positionMap[m.position];
-        if (groupName) counts[groupName] = (counts[groupName] || 0) + 1;
-      });
-
-      liveGroups = factionData.groups.map(g => ({ ...g, members: counts[g.name] ?? g.members }));
-      totalMembers = factionMembers.length;
+          const result = {
+            liveGroups: factionData.groups.map(g => ({ ...g, members: counts[g.name] ?? g.members })),
+            totalMembers: factionMembers.length
+          };
+          
+          // Cache for 5 minutes (same as other faction data)
+          setCached(cacheKey, result, CACHE_TTL.FACTION_MEMBERS);
+          return result;
+        });
+      }
+      
+      liveGroups = cachedData.liveGroups;
+      totalMembers = cachedData.totalMembers;
     }
   } catch (err) {
-    console.error('Could not fetch live faction data for home page:', err.message);
+    // Only log actual errors, suppress common transient network failures which are expected occasionally
+    const transientErrors = ['timeout', '504', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'socket hang up'];
+    const isTransient = transientErrors.some(errType => err.message.includes(errType));
+    
+    if (!isTransient) {
+      console.error('Could not fetch live faction data for home page:', err.message);
+    }
+    // Fall back gracefully to static data when API fails
   }
 
   res.render('index', {
@@ -419,7 +457,13 @@ app.post('/api/login', async (req, res) => {
     return res.status(401).json({ error: 'Torn name or ID does not match the API key.' });
   }
 
-  // Step 3: Check if user exists in database
+  // Step 3: Check if user is currently in the faction (REQUIRED FOR ALL LOGINS)
+  const factionCheck = await isPlayerInFaction(tornId);
+  if (!factionCheck.inFaction) {
+    return res.status(403).json({ error: 'You are not a current member of SSG faction. Access denied.' });
+  }
+
+  // Step 4: Check if user exists in database
   let user = await User.findOne({ tornPlayerId: tornId });
 
   if (user) {
@@ -430,12 +474,6 @@ app.post('/api/login', async (req, res) => {
     user.lastSeen = new Date();
     await user.save();
   } else {
-    // New user - check if they're in the faction
-    const factionCheck = await isPlayerInFaction(tornId);
-    if (!factionCheck.inFaction) {
-      return res.status(403).json({ error: 'You are not a member of SSG faction. Please apply first.' });
-    }
-
     // Create new user
     user = new User({
       tornPlayerId: tornId,
@@ -1079,16 +1117,19 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
             `https://api.torn.com/user/?selections=basic,personalstats&key=${u.tornApiKey}`
           );
           if (tornRes.data.error) return null;
-          return {
-            name: tornRes.data.name,
-            player_id: tornRes.data.player_id,
-            level: tornRes.data.level,
-            totalstats: tornRes.data.personalstats?.totalstats || 0,
-            strength: tornRes.data.personalstats?.strength || 0,
-            defense: tornRes.data.personalstats?.defense || 0,
-            speed: tornRes.data.personalstats?.speed || 0,
-            dexterity: tornRes.data.personalstats?.dexterity || 0,
-          };
+            return {
+              name: tornRes.data.name,
+              player_id: tornRes.data.player_id,
+              level: tornRes.data.level,
+              totalstats: tornRes.data.personalstats?.totalstats || 0,
+              strength: tornRes.data.personalstats?.strength || 0,
+              defense: tornRes.data.personalstats?.defense || 0,
+              speed: tornRes.data.personalstats?.speed || 0,
+              dexterity: tornRes.data.personalstats?.dexterity || 0,
+              manuallabor: tornRes.data.personalstats?.manuallabor || 0,
+              intelligence: tornRes.data.personalstats?.intelligence || 0,
+              endurance: tornRes.data.personalstats?.endurance || 0,
+            };
         } catch { return null; }
       })
     );
@@ -1231,6 +1272,9 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
             base.speed = ps.speed || 0;
             base.dexterity = ps.dexterity || 0;
             base.totalstats = ps.totalstats || 0;
+            base.manuallabor = ps.manuallabor || 0;
+            base.intelligence = ps.intelligence || 0;
+            base.endurance = ps.endurance || 0;
           }
         } catch { /* enrichment failed */ }
 
