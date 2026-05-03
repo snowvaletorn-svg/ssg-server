@@ -411,5 +411,6 @@ module.exports = {
   importHistoricalData,
   sendWeeklyReport,
   buildDiffCSV,
-  computeDiff
+  computeDiff,
+  getRealSnapshots
 };
