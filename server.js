@@ -19,7 +19,10 @@ const {
   getSnapshotDifferences,
   getLatestSnapshot,
   generateCSVContent,
-  importHistoricalData
+  importHistoricalData,
+  getRealSnapshots,
+  computeDiff,
+  buildDiffCSV
 } = require('./services/snapshotService');
 const { startScheduler } = require('./services/schedulerService');
 
