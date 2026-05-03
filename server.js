@@ -1787,6 +1787,7 @@ const factionRes = await axios.get(
                 host: process.env.SMTP_HOST,
                 port: parseInt(process.env.SMTP_PORT || '587'),
                 secure: process.env.SMTP_PORT === '465',
+                family: 4,
                 auth: {
                   user: process.env.SMTP_USER,
                   pass: process.env.SMTP_PASS
@@ -2161,10 +2162,64 @@ app.get('/api/admin/snapshot/csv/:startDate/:endDate', isAuthenticated, isLeader
   res.send(generateCSVContent(diff.differences));
 });
 
+app.get('/api/admin/snapshot/latest/csv', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const snapshots = await getRealSnapshots(2);
+    if (snapshots.length < 2) {
+      return res.status(404).json({ error: 'Need at least 2 snapshots to generate CSV' });
+    }
+
+    const current = snapshots[0];
+    const previous = snapshots[1];
+    
+    const diffRows = computeDiff(previous.memberStats, current.memberStats);
+    const csvContent = buildDiffCSV(diffRows, previous.snapshotDate, current.snapshotDate);
+    
+    const startDate = previous.snapshotDate.toISOString().split('T')[0];
+    const endDate = current.snapshotDate.toISOString().split('T')[0];
+    
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="weekly_progress_latest_${startDate}_to_${endDate}.csv"`);
+    res.send(csvContent);
+  } catch (err) {
+    console.error('Latest CSV export error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Test snapshot run (unique ID, won't collide with real snapshots) ────
 app.post('/api/admin/snapshot/test-run', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   const result = await takeTestSnapshot(req.session.userId);
   res.json(result);
+});
+
+// ─── API: Force send existing snapshot CSV via email ─────────────────────────────
+app.post('/api/admin/snapshot/send-email', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const { startDate, endDate, emailTo } = req.body;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate and endDate parameters are required' });
+    }
+
+    const diff = await getSnapshotDifferences(startDate, endDate);
+    if (!diff) {
+      return res.status(404).json({ error: 'No snapshot data found for the specified dates' });
+    }
+
+    const csvContent = generateCSVContent(diff.differences);
+    const sendResults = await sendWeeklyReport(csvContent, `Weekly Snapshot Report ${startDate} to ${endDate}`, false, null, emailTo);
+
+    res.json({
+      success: true,
+      message: 'Email send initiated',
+      sendResults,
+      recordCount: diff.differences.length
+    });
+  } catch (err) {
+    console.error('Force email send error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 

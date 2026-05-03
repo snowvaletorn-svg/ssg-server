@@ -119,6 +119,7 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
           host: smtpHost,
           port: parseInt(process.env.SMTP_PORT || '587'),
           secure: process.env.SMTP_PORT === '465',
+          family: 4,
           auth: { user: smtpUser, pass: smtpPass }
         });
 
