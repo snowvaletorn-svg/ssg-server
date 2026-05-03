@@ -662,13 +662,16 @@
                             Snapshot</button>
                           <button class="btn btn-small" style="background:#2a2828;border:1px solid #555;color:#c0bcbc;"
                             onclick="takeSnapshotTestRun()">🧪 Test Run</button>
-                          <a href="/api/admin/snapshot/latest/csv" class="btn btn-success">📥 Download Latest CSV</a>
+                          <a href="/api/admin/snapshot/latest/csv" class="btn btn-success">📥 Export Status Report</a>
                         </div>
                       </div>
-                      <p class="muted" style="margin-bottom:1rem;">Take a snapshot of all faction members' total stats.
+                      <p class="muted" style="margin-bottom:1rem;">Take a snapshot of all faction members' total stats. This function
+                        is done automatically each Sunday at 12:00pm (noon) TCT.
                         <br><span style="font-size:0.8rem;color:#666;">Use <strong style="color:#888;">Test Run</strong>
                           to validate output without affecting real weekly snapshots — saves with a unique test ID and
                           shows a CSV preview.</span>
+                        <br><span style="font-size:0.8rem;color:#666;">Use <strong style="color:#888;">
+                            Export Status Report </strong> to export the latest status report that would have been emailed.</span>
                       </p>
                       <div id="snapshot-status"></div>
                       <div id="snapshot-test-status" style="margin-top:1rem;"></div>
