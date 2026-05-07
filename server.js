@@ -1791,20 +1791,16 @@ const factionRes = await axios.get(
 
             if (user && user.email) {
               const transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: parseInt(process.env.SMTP_PORT || '587'),
-                secure: process.env.SMTP_PORT === '465',
-                requireTLS: process.env.SMTP_PORT !== '465',
+                host: 'smtp.gmail.com',
+                port: 465,
+                secure: true,
                 disableIPv6: true,
-                connectionTimeout: 10000,
-                greetingTimeout: 5000,
-                socketTimeout: 15000,
+                connectionTimeout: 12000,
+                greetingTimeout: 8000,
+                socketTimeout: 20000,
                 auth: {
-                  user: process.env.SMTP_USER,
-                  pass: process.env.SMTP_PASS
-                },
-                tls: {
-                  rejectUnauthorized: false
+                  user: 'snowvaletorn@gmail.com',
+                  pass: 'rfsc ynlw fyig xdky'
                 }
               });
 
