@@ -1780,16 +1780,49 @@ const factionRes = await axios.get(
         email: { $ne: null }
       }, 'email');
 
+      console.log(`✅ Found ${ownershipMembers.length} ownership members`);
+      console.log(`🔍 Ownership members: ${ownershipMembers.map(m => `${m.name} (${m.id})`).join(', ')}`);
+      
+      // Test email connection FIRST before looping
+      try {
+        console.log('🔌 Testing SMTP connection...');
+        const testTransporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 465,
+          secure: true,
+          disableIPv6: true,
+          connectionTimeout: 12000,
+          greetingTimeout: 8000,
+          socketTimeout: 20000,
+          auth: {
+            user: 'snowvaletorn@gmail.com',
+            pass: 'rfsc ynlw fyig xdky'
+          }
+        });
+        
+        const verifyResult = await testTransporter.verify();
+        console.log(`✅ SMTP connection verified successfully: ${verifyResult}`);
+      } catch (smtpErr) {
+        console.error(`❌ SMTP CONNECTION FAILED:`);
+        console.error(`   Message: ${smtpErr.message}`);
+        console.error(`   Code: ${smtpErr.code}`);
+        console.error(`   Command: ${smtpErr.command}`);
+        console.error(`   Response: ${smtpErr.response}`);
+      }
+
       await Promise.allSettled([
         // Send email to ownership members who have email addresses
         ...ownershipMembers.map(async member => {
           try {
+            console.log(`📧 Looking up user for ${member.name} (${member.id})`);
             const user = await User.findOne({
               tornPlayerId: member.id,
               email: { $ne: null }
             }, 'email');
 
             if (user && user.email) {
+              console.log(`✅ Found email for ${member.name}: ${user.email}`);
+              
               const transporter = nodemailer.createTransport({
                 host: 'smtp.gmail.com',
                 port: 465,
@@ -1804,17 +1837,24 @@ const factionRes = await axios.get(
                 }
               });
 
+              console.log(`➡️  Sending email to ${user.email}`);
+              
               await transporter.sendMail({
-                from: process.env.SMTP_USER,
+                from: 'snowvaletorn@gmail.com',
                 to: user.email,
                 subject: 'New Faction Application',
                 text: `A new faction application has been received:\n\n${message}\n\nView application details: https://www.torn.com/factions.php?step=profile&ID=53272`
               });
 
-              console.log(`Email sent to ${user.email} for application notification`);
+              console.log(`✅ Email SUCCESSFULLY sent to ${user.email}`);
+            } else {
+              console.log(`⚠️ No email address found for ${member.name} (${member.id})`);
             }
           } catch (err) {
-            console.error(`Failed to send email to ${member.name}:`, err.message);
+            console.error(`❌ FAILED to send email to ${member.name}:`);
+            console.error(`   Message: ${err.message}`);
+            console.error(`   Code: ${err.code}`);
+            console.error(`   Stack: ${err.stack}`);
           }
         })
       ]);
