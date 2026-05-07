@@ -1790,6 +1790,7 @@ const factionRes = await axios.get(
                 host: process.env.SMTP_HOST,
                 port: parseInt(process.env.SMTP_PORT || '587'),
                 secure: process.env.SMTP_PORT === '465',
+                requireTLS: process.env.SMTP_PORT !== '465',
                 disableIPv6: true,
                 connectionTimeout: 10000,
                 greetingTimeout: 5000,
@@ -1797,6 +1798,9 @@ const factionRes = await axios.get(
                 auth: {
                   user: process.env.SMTP_USER,
                   pass: process.env.SMTP_PASS
+                },
+                tls: {
+                  rejectUnauthorized: false
                 }
               });
 
