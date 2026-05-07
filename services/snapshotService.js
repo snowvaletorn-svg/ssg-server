@@ -117,17 +117,13 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
       try {
         const transporter = nodemailer.createTransport({
           host: smtpHost,
-          port: parseInt(process.env.SMTP_PORT || '587'),
-          secure: process.env.SMTP_PORT === '465',
-          requireTLS: process.env.SMTP_PORT !== '465',
+          port: 465,
+          secure: true,
           disableIPv6: true,
-          connectionTimeout: 10000,
-          greetingTimeout: 5000,
-          socketTimeout: 15000,
-          auth: { user: smtpUser, pass: smtpPass },
-          tls: {
-            rejectUnauthorized: false
-          }
+          connectionTimeout: 12000,
+          greetingTimeout: 8000,
+          socketTimeout: 20000,
+          auth: { user: smtpUser, pass: smtpPass }
         });
 
         await transporter.sendMail({
