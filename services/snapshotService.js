@@ -120,6 +120,9 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
           port: parseInt(process.env.SMTP_PORT || '587'),
           secure: process.env.SMTP_PORT === '465',
           disableIPv6: true,
+          connectionTimeout: 10000,
+          greetingTimeout: 5000,
+          socketTimeout: 15000,
           auth: { user: smtpUser, pass: smtpPass }
         });
 
