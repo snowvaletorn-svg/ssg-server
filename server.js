@@ -330,6 +330,15 @@ function hasPositionGroup(user, group) {
   return POSITIONS[group]?.includes(position) || false;
 }
 
+// Helper to get effective position group (respects impersonation)
+function getEffectivePositionGroup(req) {
+  // Only ownership users can impersonate other roles
+  if (hasPositionGroup(req.session.user, 'ownership') && req.session.impersonateRole) {
+    return req.session.impersonateRole;
+  }
+  return req.session.user?.positionGroup;
+}
+
 const isOwnership = (req, res, next) => {
   if (!hasPositionGroup(req.session.user, 'ownership')) {
     return res.status(403).json({ error: 'Ownership position required (Leader, Co-leader, or Matriarch).' });
@@ -531,8 +540,9 @@ app.post('/api/login', async (req, res) => {
 
 // Dashboard
 app.get('/dashboard', isAuthenticated, async (req, res) => {
-  const positionGroup = req.session.user?.positionGroup;
+  const positionGroup = getEffectivePositionGroup(req);
   const factionPosition = req.session.user?.factionPosition;
+  const isImpersonating = hasPositionGroup(req.session.user, 'ownership') && req.session.impersonateRole;
 
   // Check if user is in faction (all faction members get basic access)
   let canAccess = !!positionGroup;
@@ -545,9 +555,12 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 
   const user = await User.findOne({ tornPlayerId: req.session.userId });
   const accessibleChannels = getAccessibleChannels(positionGroup);
-  const isOwner = hasPositionGroup(req.session.user, 'ownership');
-  const isLeadership = hasPositionGroup(req.session.user, 'leadership');
-  const isWarlordRole = hasPositionGroup(req.session.user, 'warlord');
+  
+  // Calculate permissions based on EFFECTIVE impersonated role
+  const isOwner = positionGroup === 'ownership';
+  const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
+  const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
+  
   const factionKey = await getFactionApiKey();
 
   const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
@@ -564,7 +577,10 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     isLeadership,
     isWarlord: isWarlordRole,
     hasFactionKey: !!factionKey,
-    factionPosition: factionPosition
+    factionPosition: factionPosition,
+    isImpersonating,
+    impersonatedRole: req.session.impersonateRole || null,
+    availableRoles: Object.keys(POSITIONS)
   });
 });
 
@@ -2236,6 +2252,23 @@ app.post('/api/admin/snapshot/send-email', isAuthenticated, isLeadershipOrOwners
   } catch (err) {
     console.error('Force email send error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Role Impersonation (Ownership only) ─────────────────────────────────
+app.post('/api/user/impersonate', isAuthenticated, isOwnership, async (req, res) => {
+  const { role } = req.body;
+  
+  if (role && !Object.keys(POSITIONS).includes(role)) {
+    return res.status(400).json({ error: 'Invalid role specified' });
+  }
+  
+  if (role) {
+    req.session.impersonateRole = role;
+    res.json({ success: true, message: `Now viewing as ${role} role`, impersonatedRole: role });
+  } else {
+    delete req.session.impersonateRole;
+    res.json({ success: true, message: 'Impersonation disabled', impersonatedRole: null });
   }
 });
 

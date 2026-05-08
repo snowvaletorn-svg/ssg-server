@@ -34,7 +34,7 @@ const organizedCrimeSchema = new mongoose.Schema({
   success: { type: Boolean, default: null }, // null if not yet completed
   status: { 
     type: String, 
-    enum: ['pending', 'succeeded', 'failed'],
+    enum: ['pending', 'succeeded', 'failed', 'expired'],
     default: 'pending'
   },
   

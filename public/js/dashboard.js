@@ -46,6 +46,31 @@ function showFactionKeyForm() {
   document.getElementById('faction-key-form').classList.remove('hidden');
 }
 
+// ── Role View Switching (Ownership only) ─────────────────────────────────────
+async function switchRoleView() {
+  const selector = document.getElementById('role-view-selector');
+  const role = selector.value;
+  
+  try {
+    const res = await fetch('/api/user/impersonate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: role || null })
+    });
+    
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`Error: ${data.error}`);
+      return;
+    }
+    
+    // Reload page to apply the new view
+    window.location.reload();
+  } catch (err) {
+    alert(`Error switching role view: ${err.message}`);
+  }
+}
+
 async function saveFactionKey() {
   const input = document.getElementById('faction-key-input');
   const statusEl = document.getElementById('faction-key-status');
