@@ -1783,6 +1783,18 @@ const factionRes = await axios.get(
       console.log(`✅ Application received from ${tornName} (${tornId})`);
       console.log(`✅ Found ${ownershipMembers.length} ownership members. Email notifications disabled.`);
 
+      // Send Discord notification
+      if (process.env.DISCORD_WEBHOOK_URL) {
+        try {
+          await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+            content: message
+          });
+          console.log(`✅ Application notification sent to Discord`);
+        } catch (discordErr) {
+          console.error('❌ Failed to send Discord application notification:', discordErr.message);
+        }
+      }
+
     res.json({ success: true });
   } catch (err) {
     console.error('Application error:', err.message);

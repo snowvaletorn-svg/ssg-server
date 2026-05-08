@@ -97,7 +97,7 @@ function buildDiffCSV(diffRows, prevDate, currDate) {
 
 // ─── Send weekly report via Discord + email fallback ──────────────────────────
 async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', testMode = false, discordUserId = null, emailTo = null) {
-  const results = { email: null };
+  const results = { email: null, discord: null };
 
   const prefix = testMode ? '🧪 [TEST RUN] ' : '📊 ';
   const title = `${prefix}${label}`;
@@ -106,49 +106,43 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
     ? `test_snapshot_diff_${dateStr}.csv`
     : `weekly_snapshot_diff_${dateStr}.csv`;
 
-  // ── Email send ─────────────────────────────────────────────────────────────
-  // DISABLED TEMPORARILY - SMTP ports blocked on Render
-  /*
-  const smtpHost = process.env.SMTP_HOST;
-  const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
+  // ── Discord Webhook Send ─────────────────────────────────────────────────────
+  const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  
+  if (discordWebhookUrl) {
+    try {
+      const form = new FormData();
+      
+      form.append('payload_json', JSON.stringify({
+        embeds: [{
+          title: title,
+          description: 'Weekly faction stat progress report attached below',
+          color: 0x2ecc71,
+          timestamp: new Date().toISOString()
+        }]
+      }));
+      
+      form.append('files[0]', Buffer.from(csvContent), {
+        filename: filename,
+        contentType: 'text/csv'
+      });
 
-  if (smtpHost && smtpUser && smtpPass) {
-    const toEmail = emailTo || process.env.SNAPSHOT_EMAIL_TO;
-    if (toEmail) {
-      try {
-        const transporter = nodemailer.createTransport({
-          host: smtpHost,
-          port: 465,
-          secure: true,
-          disableIPv6: true,
-          connectionTimeout: 12000,
-          greetingTimeout: 8000,
-          socketTimeout: 20000,
-          auth: { user: smtpUser, pass: smtpPass }
-        });
-
-        await transporter.sendMail({
-          from: smtpUser,
-          to: toEmail,
-          subject: title,
-          text: `${title}\n\nWeekly stat progress report attached as CSV.`,
-          attachments: [{ filename, content: csvContent, contentType: 'text/csv' }]
-        });
-
-        results.email = { success: true };
-        console.log(`[Snapshot] Email report sent to ${toEmail}`);
-      } catch (err) {
-        results.email = { success: false, error: err.message };
-        console.error('[Snapshot] Email send failed:', err.message);
-      }
-    } else {
-      results.email = { success: false, error: 'No email recipient configured' };
+      await axios.post(discordWebhookUrl, form, {
+        headers: form.getHeaders()
+      });
+      
+      results.discord = { success: true };
+      console.log(`[Snapshot] Discord report sent successfully`);
+    } catch (err) {
+      results.discord = { success: false, error: err.message };
+      console.error('[Snapshot] Discord send failed:', err.message);
     }
   } else {
-    results.email = { success: false, error: 'SMTP/email not configured' };
+    results.discord = { success: false, error: 'Discord webhook not configured' };
+    console.log(`[Snapshot] Discord webhook URL not set`);
   }
-  */
+
+  // ── Email send ─────────────────────────────────────────────────────────────
   results.email = { success: false, error: 'Email temporarily disabled' };
   console.log(`[Snapshot] Email reporting temporarily disabled`);
 
