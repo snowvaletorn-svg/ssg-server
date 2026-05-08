@@ -107,6 +107,8 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
     : `weekly_snapshot_diff_${dateStr}.csv`;
 
   // ── Email send ─────────────────────────────────────────────────────────────
+  // DISABLED TEMPORARILY - SMTP ports blocked on Render
+  /*
   const smtpHost = process.env.SMTP_HOST;
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
@@ -146,6 +148,9 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
   } else {
     results.email = { success: false, error: 'SMTP/email not configured' };
   }
+  */
+  results.email = { success: false, error: 'Email temporarily disabled' };
+  console.log(`[Snapshot] Email reporting temporarily disabled`);
 
   return results;
 }
