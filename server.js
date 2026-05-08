@@ -1783,15 +1783,38 @@ const factionRes = await axios.get(
       console.log(`✅ Application received from ${tornName} (${tornId})`);
       console.log(`✅ Found ${ownershipMembers.length} ownership members. Email notifications disabled.`);
 
-      // Send Discord notification
+      // Send Discord notification with proper rate limit handling
       if (process.env.DISCORD_WEBHOOK_URL) {
         try {
           await axios.post(process.env.DISCORD_WEBHOOK_URL, {
             content: message
+          }, {
+            timeout: 10000,
+            headers: {
+              'User-Agent': 'SSG-Faction-Bot/1.0'
+            }
           });
           console.log(`✅ Application notification sent to Discord`);
         } catch (discordErr) {
-          console.error('❌ Failed to send Discord application notification:', discordErr.message);
+          // Handle Discord rate limiting (429) automatically
+          if (discordErr.response?.status === 429) {
+            const retryAfter = discordErr.response.headers['retry-after'] || 2;
+            console.log(`⏳ Discord rate limited, retrying after ${retryAfter} seconds...`);
+            
+            // Wait the requested time and retry once
+            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+            
+            try {
+              await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+                content: message
+              }, { timeout: 10000 });
+              console.log(`✅ Application notification sent to Discord after retry`);
+            } catch (retryErr) {
+              console.error('❌ Failed after retry:', retryErr.message);
+            }
+          } else {
+            console.error('❌ Failed to send Discord application notification:', discordErr.message);
+          }
         }
       }
 
