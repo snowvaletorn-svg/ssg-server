@@ -1799,18 +1799,26 @@ const factionRes = await axios.get(
           // Handle Discord rate limiting (429) automatically
           if (discordErr.response?.status === 429) {
             const retryAfter = discordErr.response.headers['retry-after'] || 2;
-            console.log(`⏳ Discord rate limited, retrying after ${retryAfter} seconds...`);
             
-            // Wait the requested time and retry once
-            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-            
-            try {
-              await axios.post(process.env.DISCORD_WEBHOOK_URL, {
-                content: message
-              }, { timeout: 10000 });
-              console.log(`✅ Application notification sent to Discord after retry`);
-            } catch (retryErr) {
-              console.error('❌ Failed after retry:', retryErr.message);
+            // Only retry if wait time is reasonable (< 30 seconds)
+            // Discord sometimes returns hour+ ban times which we should NOT wait for
+            if (retryAfter <= 30) {
+              console.log(`⏳ Discord rate limited, retrying after ${retryAfter} seconds...`);
+              
+              // Wait the requested time and retry once
+              await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+              
+              try {
+                await axios.post(process.env.DISCORD_WEBHOOK_URL, {
+                  content: message
+                }, { timeout: 10000 });
+                console.log(`✅ Application notification sent to Discord after retry`);
+              } catch (retryErr) {
+                console.error('❌ Failed after retry:', retryErr.message);
+              }
+            } else {
+              console.error(`❌ Discord requested ${retryAfter} second retry delay - SKIPPING RETRY. This is a temporary IP ban.`);
+              console.error('   This will automatically clear up. Discord will unban you after that time passes.');
             }
           } else {
             console.error('❌ Failed to send Discord application notification:', discordErr.message);
