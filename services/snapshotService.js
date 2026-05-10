@@ -2,13 +2,22 @@
 const WeeklySnapshot = require('../models/WeeklySnapshot');
 const User = require('../models/User');
 const axios = require('axios');
-const nodemailer = require('nodemailer');
-const FormData = require('form-data');
+const { sendEmail } = require('./emailService');
+const AppNotification = require('../models/AppNotification');
+const FactionConfig = require('../models/FactionConfig');
+
+// ─── Helper: Get notification email recipients ────────────────────────────────
+function getNotifyEmails() {
+  const envEmails = process.env.NOTIFY_EMAILS;
+  if (envEmails) {
+    return envEmails.split(',').map(e => e.trim()).filter(Boolean);
+  }
+  return [];
+}
 
 // Helper function to get faction API key
 async function getFactionApiKey() {
   try {
-    const FactionConfig = require('../models/FactionConfig');
     const config = await FactionConfig.findOne({ key: 'config' });
     if (config?.tornFactionApiKey) return config.tornFactionApiKey;
   } catch (err) {
@@ -95,7 +104,7 @@ function buildDiffCSV(diffRows, prevDate, currDate) {
   return [header, ...rows].join('\n');
 }
 
-// ─── Send weekly report via Discord + email fallback ──────────────────────────
+// ─── Send weekly report via Email + save in-app notification ──────────────────
 async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', testMode = false, discordUserId = null, emailTo = null) {
   const results = { email: null, discord: null };
 
@@ -106,45 +115,50 @@ async function sendWeeklyReport(csvContent, label = 'Weekly Snapshot Report', te
     ? `test_snapshot_diff_${dateStr}.csv`
     : `weekly_snapshot_diff_${dateStr}.csv`;
 
-  // ── Discord Webhook Send ─────────────────────────────────────────────────────
-  const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
-  
-  if (discordWebhookUrl) {
-    try {
-      const form = new FormData();
-      
-      form.append('payload_json', JSON.stringify({
-        embeds: [{
-          title: title,
-          description: 'Weekly faction stat progress report attached below',
-          color: 0x2ecc71,
-          timestamp: new Date().toISOString()
-        }]
-      }));
-      
-      form.append('files[0]', Buffer.from(csvContent), {
-        filename: filename,
-        contentType: 'text/csv'
-      });
+  // ── (Commented out) Discord Webhook ─────────────────────────────────────────
+  // Discord is currently disabled due to a temporary IP ban.
+  // Uncomment this block when the ban is lifted.
+  //
+  // const discordWebhookUrl = process.env.DISCORD_WEBHOOK_URL;
+  // if (discordWebhookUrl) { ... }
 
-      await axios.post(discordWebhookUrl, form, {
-        headers: form.getHeaders()
-      });
-      
-      results.discord = { success: true };
-      console.log(`[Snapshot] Discord report sent successfully`);
-    } catch (err) {
-      results.discord = { success: false, error: err.message };
-      console.error('[Snapshot] Discord send failed:', err.message);
-    }
+  // ── Email send via Resend ────────────────────────────────────────────────────
+  const recipients = emailTo ? [emailTo] : getNotifyEmails();
+
+  if (recipients.length > 0) {
+    const emailResult = await sendEmail({
+      to: recipients,
+      subject: title,
+      text: `Faction stat progress report for ${dateStr}\n\n${testMode ? 'This was a TEST RUN — no real data was affected.\n\n' : ''}The CSV report is attached below showing stat changes for all members.`,
+      attachments: [{
+        filename: filename,
+        content: csvContent
+      }]
+    });
+    results.email = emailResult;
   } else {
-    results.discord = { success: false, error: 'Discord webhook not configured' };
-    console.log(`[Snapshot] Discord webhook URL not set`);
+    results.email = { success: false, error: 'No ownership emails configured' };
+    console.log('[Snapshot] No ownership emails found — skipping email send');
   }
 
-  // ── Email send ─────────────────────────────────────────────────────────────
-  results.email = { success: false, error: 'Email temporarily disabled' };
-  console.log(`[Snapshot] Email reporting temporarily disabled`);
+  // ── Save in-app notification ────────────────────────────────────────────────
+  try {
+    const csvLines = csvContent.trim().split('\n');
+    const memberCount = csvLines.length > 1 ? csvLines.length - 1 : 0; // subtract header
+
+    const notification = new AppNotification({
+      type: 'weekly_report',
+      title: title,
+      message: `Weekly snapshot taken on ${dateStr}. ${memberCount} members recorded.${testMode ? ' [TEST RUN]' : ''}`,
+      csvContent: csvContent,
+      snapshotLabel: label,
+      memberCount: memberCount
+    });
+    await notification.save();
+    console.log(`[Snapshot] In-app notification saved (ID: ${notification._id})`);
+  } catch (notifErr) {
+    console.error('[Snapshot] Failed to save in-app notification:', notifErr.message);
+  }
 
   return results;
 }
@@ -414,5 +428,6 @@ module.exports = {
   sendWeeklyReport,
   buildDiffCSV,
   computeDiff,
-  getRealSnapshots
+  getRealSnapshots,
+  getNotifyEmails
 };

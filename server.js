@@ -26,9 +26,18 @@ const {
   importHistoricalData,
   getRealSnapshots,
   computeDiff,
-  buildDiffCSV
+  buildDiffCSV,
+  getNotifyEmails
 } = require('./services/snapshotService');
+const { sendEmail } = require('./services/emailService');
+const AppNotification = require('./models/AppNotification');
 const { startScheduler } = require('./services/schedulerService');
+const {
+  addCompany,
+  getCompanyData,
+  listCompanies,
+  removeCompany
+} = require('./services/companyService');
 
 // ==============================================
 // CACHING LAYER
@@ -561,6 +570,11 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
   
+  // Check if user is a company director or ownership (for Companies nav item)
+  const Company = require('./models/Company');
+  const userDirectorCompanies = await Company.find({ directorPlayerId: parseInt(req.session.userId) });
+  const isDirector = isOwner || userDirectorCompanies.length > 0;
+  
   const factionKey = await getFactionApiKey();
 
   const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
@@ -580,7 +594,8 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     factionPosition: factionPosition,
     isImpersonating,
     impersonatedRole: req.session.impersonateRole || null,
-    availableRoles: Object.keys(POSITIONS)
+    availableRoles: Object.keys(POSITIONS),
+    isDirector
   });
 });
 
@@ -1778,68 +1793,42 @@ app.post('/api/apply', async (req, res) => {
   ].join('\n');
 
   try {
-    const factionKey = await getFactionApiKey();
-    if (!factionKey) {
-      return res.status(500).json({ error: 'No faction API key configured' });
-    }
-const factionRes = await axios.get(
-        `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
-      );
-      const factionMembers = factionRes.data.members || [];
-      const ownershipPositions = POSITIONS.ownership;
-      const ownershipMembers = factionMembers.filter(m => ownershipPositions.includes(m.position));
-
-      // Get email addresses for ownership members from database
-      const ownershipUserIds = ownershipMembers.map(m => m.id);
-      const ownershipUsers = await User.find({
-        tornPlayerId: { $in: ownershipUserIds },
-        email: { $ne: null }
-      }, 'email');
-
       console.log(`✅ Application received from ${tornName} (${tornId})`);
-      console.log(`✅ Found ${ownershipMembers.length} ownership members. Email notifications disabled.`);
 
-      // Send Discord notification with proper rate limit handling
-      if (process.env.DISCORD_WEBHOOK_URL) {
-        try {
-          await axios.post(process.env.DISCORD_WEBHOOK_URL, {
-            content: message
-          }, {
-            timeout: 10000,
-            headers: {
-              'User-Agent': 'SSG-Faction-Bot/1.0'
-            }
-          });
-          console.log(`✅ Application notification sent to Discord`);
-        } catch (discordErr) {
-          // Handle Discord rate limiting (429) automatically
-          if (discordErr.response?.status === 429) {
-            const retryAfter = discordErr.response.headers['retry-after'] || 2;
-            
-            // Only retry if wait time is reasonable (< 30 seconds)
-            // Discord sometimes returns hour+ ban times which we should NOT wait for
-            if (retryAfter <= 30) {
-              console.log(`⏳ Discord rate limited, retrying after ${retryAfter} seconds...`);
-              
-              // Wait the requested time and retry once
-              await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-              
-              try {
-                await axios.post(process.env.DISCORD_WEBHOOK_URL, {
-                  content: message
-                }, { timeout: 10000 });
-                console.log(`✅ Application notification sent to Discord after retry`);
-              } catch (retryErr) {
-                console.error('❌ Failed after retry:', retryErr.message);
-              }
-            } else {
-              console.error(`❌ Discord requested ${retryAfter} second retry delay - SKIPPING RETRY. This is a temporary IP ban.`);
-              console.error('   This will automatically clear up. Discord will unban you after that time passes.');
-            }
-          } else {
-            console.error('❌ Failed to send Discord application notification:', discordErr.message);
-          }
-        }
+      // ── (Commented out) Discord Webhook ───────────────────────────────────
+      // Discord is currently disabled due to a temporary IP ban.
+      // Uncomment this block when the ban is lifted.
+      //
+      // if (process.env.DISCORD_WEBHOOK_URL) { ... }
+
+      // ── Send email notification via Resend ────────────────────────────────
+      const notifyEmails = getNotifyEmails();
+      if (notifyEmails.length > 0) {
+        const emailResult = await sendEmail({
+          to: notifyEmails,
+          subject: `📋 New Faction Application: ${tornName} (${tornId})`,
+          text: message
+        });
+        console.log(`[Application] Email notification result:`, JSON.stringify(emailResult));
+      } else {
+        console.log(`[Application] No NOTIFY_EMAILS configured — skipping email send`);
+      }
+
+      // ── Save in-app notification ──────────────────────────────────────────
+      try {
+        const notification = new AppNotification({
+          type: 'application',
+          title: `📋 New Application: ${tornName}`,
+          message: `Application received from ${tornName} (${tornId})\nStatus: ${allYes ? 'All conditions agreed' : '⚠️ Some conditions not agreed'}`,
+          applicantName: tornName,
+          applicantId: parseInt(tornId),
+          allYes: allYes,
+          answers: answers
+        });
+        await notification.save();
+        console.log(`[Application] In-app notification saved (ID: ${notification._id})`);
+      } catch (notifErr) {
+        console.error('[Application] Failed to save in-app notification:', notifErr.message);
       }
 
     res.json({ success: true });
@@ -2251,6 +2240,157 @@ app.post('/api/admin/snapshot/send-email', isAuthenticated, isLeadershipOrOwners
     });
   } catch (err) {
     console.error('Force email send error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS API (Ownership only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── API: Get recent notifications (Ownership only) ──────────────────────────
+app.get('/api/notifications', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+    const type = req.query.type; // optional filter: 'application' or 'weekly_report'
+    
+    const filter = {};
+    if (type) filter.type = type;
+    
+    const notifications = await AppNotification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    // Add read status for current user
+    const userId = parseInt(req.session.userId);
+    const enriched = notifications.map(n => ({
+      ...n,
+      isRead: n.readBy.includes(userId)
+    }));
+
+    res.json(enriched);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Mark notification as read (Ownership only) ──────────────────────────
+app.post('/api/notifications/:id/read', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const userId = parseInt(req.session.userId);
+    const notification = await AppNotification.findById(req.params.id);
+    
+    if (!notification) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+
+    // Add user to readBy if not already there
+    if (!notification.readBy.includes(userId)) {
+      notification.readBy.push(userId);
+      await notification.save();
+    }
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get unread notification count (Ownership only) ──────────────────────
+app.get('/api/notifications/unread-count', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const userId = parseInt(req.session.userId);
+    const count = await AppNotification.countDocuments({ readBy: { $ne: userId } });
+    res.json({ unreadCount: count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// COMPANY TRACKING API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── API: List all companies (company directors + ownership) ──────────────────
+app.get('/api/companies', isAuthenticated, async (req, res) => {
+  try {
+    const userId = parseInt(req.session.userId);
+    const positionGroup = getEffectivePositionGroup(req);
+    const isOwner = positionGroup === 'ownership';
+
+    const companies = await listCompanies();
+
+    // Filter: ownership sees all, directors see only their own companies
+    let accessible = companies;
+    if (!isOwner) {
+      accessible = companies.filter(c => c.directorPlayerId === userId);
+    }
+
+    res.json(accessible);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get full company data ──────────────────────────────────────────────
+app.get('/api/company/:companyId', isAuthenticated, async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.companyId);
+    const userId = parseInt(req.session.userId);
+    const positionGroup = getEffectivePositionGroup(req);
+    const isOwner = positionGroup === 'ownership';
+
+    // Access check: must be owner or director of this company
+    const company = await listCompanies();
+    const targetCompany = company.find(c => c.companyId === companyId);
+    if (!targetCompany) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const isDirector = targetCompany.directorPlayerId === userId;
+    if (!isOwner && !isDirector) {
+      return res.status(403).json({ error: 'Access denied. Only the company director or Ownership can view this data.' });
+    }
+
+    const data = await getCompanyData(companyId, userId);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Add company (Ownership only) ───────────────────────────────────────
+app.post('/api/admin/companies', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const { companyId, directorPlayerId } = req.body;
+
+    if (!companyId || !directorPlayerId) {
+      return res.status(400).json({ error: 'companyId and directorPlayerId are required.' });
+    }
+
+    const result = await addCompany(parseInt(companyId), parseInt(directorPlayerId), req.session.userId);
+
+    if (result.success) {
+      res.json({ success: true, company: result.company });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Remove company (Ownership only) ────────────────────────────────────
+app.delete('/api/admin/companies/:companyId', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const removed = await removeCompany(parseInt(req.params.companyId));
+    if (removed) {
+      res.json({ success: true });
+    } else {
+      res.status(404).json({ error: 'Company not found' });
+    }
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });

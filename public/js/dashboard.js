@@ -2775,6 +2775,170 @@ function clearBankCalculator() {
     </div>`;
 }
 
+// ── Companies Section ─────────────────────────────────────────────────────────
+async function fetchCompanies() {
+  const container = document.getElementById('companies-data');
+  container.innerHTML = '<div class="channel-loading">LOADING COMPANY DATA...</div>';
+  try {
+    const res = await fetch('/api/companies');
+    const companies = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${companies.error}</div>`; return; }
+    if (!companies.length) {
+      container.innerHTML = `<div class="empty-state"><span class="empty-icon">🏢</span><p>No companies found.</p></div>`;
+      return;
+    }
+    container.innerHTML = renderCompanyCards(companies);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderCompanyCards(companies) {
+  const cards = companies.map(c => {
+    const starStr = '★'.repeat(Math.min(c.stars, 10)) || 'No stars';
+    const incomeFormatted = formatNumFull(c.dailyIncome);
+    return `
+      <div class="card" style="margin-bottom:1rem;cursor:pointer;" onclick="openCompanyDetail(${c.companyId})">
+        <div class="card-header">
+          🏢 ${escapeHtml(c.companyName)}
+          <span style="float:right;font-size:0.85rem;color:#f0a500;">${starStr}</span>
+        </div>
+        <div class="card-body" style="padding:0.85rem 1.25rem;">
+          <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;">
+            ${infoBadge('Type', escapeHtml(c.companyType || 'N/A'))}
+            ${infoBadge('Director', escapeHtml(c.directorName || 'Unknown'))}
+            ${infoBadge('Daily Income', `$${incomeFormatted}`)}
+            ${c.lastFetchedAt ? infoBadge('Last Updated', new Date(c.lastFetchedAt).toLocaleDateString()) : ''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+  return cards;
+}
+
+async function openCompanyDetail(companyId) {
+  const modal = document.getElementById('company-detail-modal');
+  const titleEl = document.getElementById('company-detail-title');
+  const bodyEl = document.getElementById('company-detail-body');
+  
+  titleEl.textContent = 'Loading company data...';
+  bodyEl.innerHTML = '<div class="channel-loading">LOADING COMPANY DETAILS...</div>';
+  modal.style.display = 'flex';
+  
+  try {
+    const res = await fetch(`/api/company/${companyId}`);
+    const data = await res.json();
+    if (!res.ok) { bodyEl.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    
+    titleEl.textContent = `🏢 ${escapeHtml(data.company.name)} (${data.company.stars}★)`;
+    
+    const company = data.company;
+    const employees = data.employees || [];
+    
+    let employeeRows = '';
+    if (employees.length > 0) {
+      employeeRows = employees.map(emp => `
+        <tr>
+          <td>${escapeHtml(emp.name)}</td>
+          <td>${escapeHtml(emp.position)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.manualLabor)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.intelligence)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.endurance)}</td>
+          <td style="text-align:center;">${emp.addiction}%</td>
+        </tr>`).join('');
+    }
+
+    bodyEl.innerHTML = `
+      <div class="stats-grid" style="margin-bottom:1.5rem;">
+        ${statTile(escapeHtml(company.type || 'N/A'), 'Company Type')}
+        ${statTile(escapeHtml(company.director), 'Director')}
+        ${statTile(company.stars + '★', 'Star Level')}
+        ${statTile('$' + formatNumFull(company.dailyIncome), 'Daily Income')}
+      </div>
+      
+      <div class="card">
+        <div class="card-header">
+          👥 Employees (${employees.length})
+          <span style="float:right;font-size:0.8rem;color:#555;">Sorted by position</span>
+        </div>
+        ${employees.length > 0 ? `
+        <div style="overflow-x:auto;">
+          <table class="members-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Position</th>
+                <th style="text-align:right;">Manual</th>
+                <th style="text-align:right;">Intelligence</th>
+                <th style="text-align:right;">Endurance</th>
+                <th style="text-align:center;">Addiction</th>
+              </tr>
+            </thead>
+            <tbody>${employeeRows}</tbody>
+          </table>
+        </div>` : '<div class="card-body"><p class="muted">No employee data available.</p></div>'}
+      </div>
+      
+      <p style="font-size:0.75rem;color:#444;margin-top:1rem;">
+        Last fetched: ${company.lastFetchedAt ? new Date(company.lastFetchedAt).toLocaleString() : 'Never'}
+      </p>`;
+  } catch (err) {
+    bodyEl.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function closeCompanyDetail(event) {
+  if (event.target === document.getElementById('company-detail-modal')) {
+    document.getElementById('company-detail-modal').style.display = 'none';
+  }
+}
+
+function showAddCompanyForm() {
+  document.getElementById('add-company-form').style.display = 'block';
+}
+
+function hideAddCompanyForm() {
+  document.getElementById('add-company-form').style.display = 'none';
+  document.getElementById('add-company-status').innerHTML = '';
+}
+
+async function addCompany() {
+  const companyId = document.getElementById('new-company-id').value.trim();
+  const directorPlayerId = document.getElementById('new-company-director').value.trim();
+  const statusEl = document.getElementById('add-company-status');
+  
+  if (!companyId || !directorPlayerId) {
+    statusEl.innerHTML = '<p style="color:#ff4444;">Please enter both Company ID and Director Torn ID.</p>';
+    return;
+  }
+  
+  statusEl.innerHTML = '<p class="muted">Validating and adding company...</p>';
+  
+  try {
+    const res = await fetch('/api/admin/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ companyId: parseInt(companyId), directorPlayerId: parseInt(directorPlayerId) })
+    });
+    const data = await res.json();
+    
+    if (!res.ok) {
+      statusEl.innerHTML = `<p style="color:#ff4444;">❌ ${data.error}</p>`;
+      return;
+    }
+    
+    statusEl.innerHTML = `<p class="success-text">✅ Company "${escapeHtml(data.company.companyName)}" added successfully!</p>`;
+    document.getElementById('new-company-id').value = '';
+    document.getElementById('new-company-director').value = '';
+    setTimeout(() => {
+      hideAddCompanyForm();
+      fetchCompanies();
+    }, 2000);
+  } catch (err) {
+    statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;
+  }
+}
+
 // ── Keep-alive ping ───────────────────────────────────────────────────────────
 setInterval(() => {
   fetch('/api/ping').catch(() => { });
@@ -3636,6 +3800,146 @@ async function viewParticipantHistory(playerId, playerName) {
     alert('❌ Error: ' + err.message);
   }
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS (Ownership only)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function fetchNotifications() {
+  const notifCard = document.getElementById('notification-card');
+  const notifList = document.getElementById('notification-list');
+  const notifLoading = document.getElementById('notification-loading');
+  const notifEmpty = document.getElementById('notification-empty');
+  const notifBadge = document.getElementById('notification-badge');
+
+  if (!notifCard) return; // Not ownership, no notification card
+
+  try {
+    notifCard.style.display = 'block';
+    notifLoading.style.display = 'block';
+    notifList.style.display = 'none';
+    notifEmpty.style.display = 'none';
+
+    const res = await fetch('/api/notifications?limit=20');
+    if (!res.ok) {
+      notifCard.style.display = 'none';
+      return;
+    }
+
+    const notifications = await res.json();
+    
+    notifLoading.style.display = 'none';
+
+    if (notifications.length === 0) {
+      notifEmpty.style.display = 'block';
+      notifBadge.style.display = 'none';
+      return;
+    }
+
+    // Count unread
+    const unread = notifications.filter(n => !n.isRead);
+    if (unread.length > 0) {
+      notifBadge.style.display = 'inline';
+      notifBadge.textContent = unread.length;
+    } else {
+      notifBadge.style.display = 'none';
+    }
+
+    // Render list
+    notifList.style.display = 'block';
+    notifList.innerHTML = notifications.map(n => {
+      const time = new Date(n.createdAt).toLocaleString();
+      let details = '';
+
+      if (n.type === 'application') {
+        const status = n.allYes ? '✅ All agreed' : '⚠️ Not all agreed';
+        details = `<div style="font-size:0.8rem;color:#888;margin-top:0.25rem;">
+          <span>${n.applicantName} [${n.applicantId}]</span> &middot; 
+          <span>${status}</span>
+          <a href="https://www.torn.com/profiles.php?XID=${n.applicantId}" target="_blank" style="color:#3498db;margin-left:0.5rem;">View Profile ↗</a>
+        </div>`;
+      } else if (n.type === 'weekly_report') {
+        const membersText = n.memberCount ? `${n.memberCount} members` : '';
+        details = `<div style="font-size:0.8rem;color:#888;margin-top:0.25rem;">
+          <span>${membersText}</span>
+          ${n.csvContent ? `<button class="btn btn-small btn-outline" style="font-size:0.7rem;padding:2px 6px;margin-left:0.5rem;" onclick="downloadNotificationCsv('${n._id}')">⬇️ Download CSV</button>` : ''}
+        </div>`;
+      }
+
+      const readStyle = n.isRead ? 'opacity:0.6;' : 'font-weight:600;';
+
+      return `<div style="padding:0.5rem 0;border-bottom:1px solid #2a2828;${readStyle}" onclick="markNotificationRead('${n._id}', this)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+          <div>
+            <div style="font-size:0.85rem;">${n.title}</div>
+            ${details}
+          </div>
+          <div style="font-size:0.7rem;color:#666;white-space:nowrap;margin-left:1rem;">${time}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    const card = document.getElementById('notification-card');
+    if (card) card.style.display = 'none';
+  }
+}
+
+async function markNotificationRead(id, element) {
+  try {
+    await fetch(`/api/notifications/${id}/read`, { method: 'POST' });
+    if (element) {
+      element.style.opacity = '0.6';
+      element.style.fontWeight = '400';
+    }
+    // Refresh badge count
+    const badge = document.getElementById('notification-badge');
+    if (badge) {
+      const current = parseInt(badge.textContent) || 0;
+      if (current > 1) {
+        badge.textContent = current - 1;
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+  } catch (err) {
+    console.error('Error marking notification read:', err);
+  }
+}
+
+function downloadNotificationCsv(notificationId) {
+  fetch(`/api/notifications?limit=50`)
+    .then(res => res.json())
+    .then(notifications => {
+      const notif = notifications.find(n => n._id === notificationId);
+      if (notif && notif.csvContent) {
+        const blob = new Blob([notif.csvContent], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `weekly_report_${new Date(notif.createdAt).toISOString().split('T')[0]}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    })
+    .catch(err => console.error('Error downloading CSV:', err));
+}
+
+// Auto-fetch notifications when profile section is shown
+(function() {
+  const origShowSection = window.showSection;
+  window.showSection = function(sectionId, el) {
+    if (sectionId === 'profile') {
+      setTimeout(fetchNotifications, 100);
+    }
+    if (origShowSection) origShowSection(sectionId, el);
+  };
+  
+  // Also call on page load
+  if (document.getElementById('notification-card')) {
+    setTimeout(fetchNotifications, 500);
+  }
+})();
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ADMIN TAB NAVIGATION
