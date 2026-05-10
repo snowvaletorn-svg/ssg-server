@@ -2308,6 +2308,19 @@ app.get('/api/notifications/unread-count', isAuthenticated, isOwnership, async (
   }
 });
 
+// ─── API: Delete a notification (Ownership only) ─────────────────────────────
+app.delete('/api/notifications/:id', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const result = await AppNotification.findByIdAndDelete(req.params.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // COMPANY TRACKING API
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -3868,13 +3868,16 @@ async function fetchNotifications() {
 
       const readStyle = n.isRead ? 'opacity:0.6;' : 'font-weight:600;';
 
-      return `<div style="padding:0.5rem 0;border-bottom:1px solid #2a2828;${readStyle}" onclick="markNotificationRead('${n._id}', this)">
+      return `<div style="padding:0.5rem 0;border-bottom:1px solid #2a2828;${readStyle}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-          <div>
+          <div style="flex:1;cursor:pointer;" onclick="markNotificationRead('${n._id}', this.parentElement.parentElement)">
             <div style="font-size:0.85rem;">${n.title}</div>
             ${details}
           </div>
-          <div style="font-size:0.7rem;color:#666;white-space:nowrap;margin-left:1rem;">${time}</div>
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-left:1rem;flex-shrink:0;">
+            <span style="font-size:0.7rem;color:#666;white-space:nowrap;">${time}</span>
+            <button onclick="event.stopPropagation();deleteNotification('${n._id}')" style="background:none;border:none;color:#ff4444;cursor:pointer;font-size:0.85rem;padding:2px 4px;" title="Delete notification">✕</button>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -3904,6 +3907,22 @@ async function markNotificationRead(id, element) {
     }
   } catch (err) {
     console.error('Error marking notification read:', err);
+  }
+}
+
+async function deleteNotification(id) {
+  if (!confirm('Delete this notification?')) return;
+  try {
+    const res = await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const data = await res.json();
+      console.error('Error deleting notification:', data.error);
+      return;
+    }
+    // Re-fetch the notification list
+    fetchNotifications();
+  } catch (err) {
+    console.error('Error deleting notification:', err);
   }
 }
 

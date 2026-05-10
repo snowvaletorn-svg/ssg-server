@@ -63,24 +63,6 @@
               <button class="btn btn-small btn-outline" onclick="openHelp('profile')">❓ Help</button>
             </div>
 
-            <!-- Ownership Notification Card -->
-            <% if (isOwner) { %>
-              <div id="notification-card" class="card mt-2" style="border-left: 4px solid var(--ownership-color, #e67e22); display:none;">
-                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-                  <span id="notification-title">📬 Notifications</span>
-                  <span id="notification-badge" style="background:#e74c3c;color:white;border-radius:12px;padding:2px 8px;font-size:0.75rem;display:none;">0</span>
-                </div>
-                <div class="card-body" id="notification-body">
-                  <div id="notification-loading" class="empty-state" style="padding:0.5rem;">
-                    <p class="muted" style="font-size:0.85rem;">Loading notifications...</p>
-                  </div>
-                  <div id="notification-list" style="display:none;"></div>
-                  <div id="notification-empty" class="empty-state" style="display:none;padding:0.5rem;">
-                    <p class="muted" style="font-size:0.85rem;">No recent notifications.</p>
-                  </div>
-                </div>
-              </div>
-            <% } %>
             <div class="profile-card">
               <div class="profile-avatar">
                 <% if (user.tornAvatar) { %>
@@ -209,6 +191,25 @@
                        </div>
                      </div>
                      <% } %>
+
+            <!-- Ownership Notification Card (bottom of profile) -->
+            <% if (isOwner) { %>
+              <div id="notification-card" class="card mt-2" style="border-left: 4px solid var(--ownership-color, #e67e22); display:none;">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                  <span id="notification-title">📬 Notifications</span>
+                  <span id="notification-badge" style="background:#e74c3c;color:white;border-radius:12px;padding:2px 8px;font-size:0.75rem;display:none;">0</span>
+                </div>
+                <div class="card-body" id="notification-body">
+                  <div id="notification-loading" class="empty-state" style="padding:0.5rem;">
+                    <p class="muted" style="font-size:0.85rem;">Loading notifications...</p>
+                  </div>
+                  <div id="notification-list" style="display:none;"></div>
+                  <div id="notification-empty" class="empty-state" style="display:none;padding:0.5rem;">
+                    <p class="muted" style="font-size:0.85rem;">No recent notifications.</p>
+                  </div>
+                </div>
+              </div>
+            <% } %>
           </section>
 
 
