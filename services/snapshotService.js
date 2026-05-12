@@ -277,7 +277,7 @@ async function takeTestSnapshot(createdBy = 'system') {
 
     // 4. Simulate sending (for test mode — actually sends if configured)
     const discordUserId = '586395842467069992'; // User's Discord ID
-    const emailTo = 'Snowvaletorn@gmail.com'; // User's email
+    const emailTo = process.env.NOTIFY_EMAILS ? process.env.NOTIFY_EMAILS.split(',')[0].trim() : 'snowvaletorn@gmail.com'; // User's email
     const sendResults = await sendWeeklyReport(diffCsv, 'Weekly Snapshot Report', true, discordUserId, emailTo);
 
     return {
