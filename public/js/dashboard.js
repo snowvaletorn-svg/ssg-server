@@ -188,7 +188,8 @@ async function fetchHonors() {
     const res = await fetch('/api/torn/honors');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderHonors(data);
+    container.innerHTML = '';
+    renderHonors(data);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }

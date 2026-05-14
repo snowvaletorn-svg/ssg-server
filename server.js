@@ -83,20 +83,12 @@ const PORT = process.env.PORT || 3000;
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const SSG_FACTION_ID = 53272;
 
-const CHANNELS = {
-  announcements: { id: '1466403384038002844', name: '📢 Announcements' },
-  growth: { id: '1435061563118850199', name: '🌱 Growth Training' },
-  strength: { id: '1454519260960391494', name: '💪 Strength Training' },
-  strategy: { id: '1454519584445960234', name: '♟️ Strategy' },
-  war: { id: '1435065561494196254', name: '⚔️ War Chat' },
-};
-
 // Torn faction positions mapped to permission groups
 const POSITIONS = {
   ownership: ['Leader', 'Co-leader', 'Matriarch'],
   leadership: ['Leadership'],
   warlord: ['Warlord'],
-  strategy: ['Team Strategy'],
+  strategy: ['Team Strategy', 'Banker'],
   strength: ['Team Strength'],
   growth: ['Team Growth', 'Recruit'],
 };
@@ -109,63 +101,54 @@ function getPositionGroup(position) {
   return null;
 }
 
-const ROLE_CHANNEL_ACCESS = {
-  ownership: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  leadership: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  warlord: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  strategy: ['announcements', 'growth', 'strength', 'strategy', 'war'],
-  strength: ['announcements', 'strength', 'war'],
-  growth: ['announcements', 'growth', 'war'],
-};
-
 const TRAINING_CHANNELS = [
   {
     id: '1435130329479250021',
     name: '📖 Torn Stats Account Creation',
     description: 'Website dedicated to Tracking Stat progress for Torn as well as a plethora of other items.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414594410512494',
     name: '📊 Stats Training',
     description: 'Advanced stat training guides and strategies.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'warlord']
   },
   {
     id: '1435416169946415194',
     name: '💰 Money Making Training',
     description: 'Guides on making money to fund your stats growth.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'warlord']
   },
   {
     id: '1435413325725958165',
     name: '⬆️ Level Training',
     description: 'Everything you need to know about leveling up fast.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414982316654746',
     name: '🔗 Chains',
     description: 'Detailed walkthrough on what chains are.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416378709508138',
     name: '🫆 Crimes Training',
     description: 'Guide for all members on Crimes in Torn.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416812706857225',
     name: '🗝️ Organized Crimes Training',
     description: 'Guide for all members on Organized Crimes in Torn.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435130329479250021',
     name: '📖 Torn Stats Guides',
     description: 'The following are guides available in Torn Stats. These guides require access to Torn Stats. See Torn Stats Training for information on how to create your Torn Stats account.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
   },
 ];
 
@@ -371,19 +354,6 @@ const isWarlord = (req, res, next) => {
   next();
 };
 
-// ─── HELPER: Get accessible channels based on position group ──────────────────
-function getAccessibleChannels(positionGroup) {
-  if (!positionGroup) return [{ key: 'announcements', ...CHANNELS.announcements }];
-  const channels = ROLE_CHANNEL_ACCESS[positionGroup];
-  if (!channels) return [{ key: 'announcements', ...CHANNELS.announcements }];
-  return channels.map(key => ({ key, ...CHANNELS[key] }));
-}
-
-// ─── HELPER: Check if position group has access to training channel ──────────
-function hasTrainingAccess(positionGroup, trainingChannel) {
-  return trainingChannel.positionGroups.includes(positionGroup);
-}
-
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
 // Home page
@@ -414,6 +384,7 @@ app.get('/', async (req, res) => {
             'Leadership': 'Leadership',
             'Warlord': 'Warlord',
             'Team Strategy': 'Strategy',
+            'Banker': 'Strategy',
             'Team Strength': 'Strength',
             'Team Growth': 'Growth',
             'Recruit': 'Growth'
@@ -563,8 +534,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   if (!canAccess) return res.redirect('/?error=no_access');
 
   const user = await User.findOne({ tornPlayerId: req.session.userId });
-  const accessibleChannels = getAccessibleChannels(positionGroup);
-  
+
   // Calculate permissions based on EFFECTIVE impersonated role
   const isOwner = positionGroup === 'ownership';
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
@@ -583,7 +553,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 
   res.render('dashboard', {
     user: req.session.user,
-    accessibleChannels,
     accessibleTraining,
     tornApiKey: user?.tornApiKey || null,
     userEmail: user?.email || null,
