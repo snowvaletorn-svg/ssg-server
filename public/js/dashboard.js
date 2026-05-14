@@ -1017,7 +1017,7 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const memberRows = members
@@ -1423,7 +1423,7 @@ function renderWarOverview() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...warDataOverview].sort((a, b) => {
@@ -1570,7 +1570,7 @@ function renderMemberOverview() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...overviewData].sort((a, b) => {
@@ -1786,7 +1786,7 @@ function renderFactionLoans(members, totals, armoryItems) {
   // Sort by position hierarchy then name (matching Member Overview table order)
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...members].sort((a, b) => {
@@ -1934,7 +1934,7 @@ function exportOverviewCSV() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team Strategy': 5, 'Team Strength': 6, 'Team Growth': 7, 'Recruit': 8
+    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...overviewData].sort((a, b) => {
