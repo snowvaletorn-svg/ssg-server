@@ -1150,7 +1150,7 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
 });
 
 // ─── API: War member overview ─────────────────────────────────────────────────
-app.get('/api/war/member-overview', isAuthenticated, isWarlord, async (req, res) => {
+app.get('/api/war/member-overview', isAuthenticated, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });

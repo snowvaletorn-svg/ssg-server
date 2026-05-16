@@ -40,9 +40,7 @@
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
             <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
-            <% if (isOwner || isLeadership || isWarlord) { %>
-              <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
-              <% } %>
+            <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
                 <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
                 <% if (isOwner || isDirector) { %>
                   <a href="#companies" class="nav-item" onclick="showSection('companies', this)">🏢 Companies</a>
@@ -489,7 +487,6 @@
           </section>
 
           <!-- War Section -->
-          <% if (isOwner || isLeadership || isWarlord) { %>
             <section id="war" class="section">
               <div class="section-header">
                 <h3>War Panel</h3>
@@ -523,7 +520,6 @@
                 </div>
               </div>
             </section>
-            <% } %>
 
               <!-- ── ORGANIZED CRIME ── -->
               <section id="oc" class="section">
