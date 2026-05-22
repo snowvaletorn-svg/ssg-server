@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.2.1
+// @version      1.3.0
 // @description  Monitors and submits foreign stock data dynamically using MutationObservers on page changes. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
