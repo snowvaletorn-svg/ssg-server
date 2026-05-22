@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.1.1
-// @description  Automatically submits foreign stock data to SSG Dashboard when you visit torn.com/travel.php while abroad. PC + Torn PDA friendly.
+// @version      1.2.0
+// @description  Monitors and submits foreign stock data dynamically using MutationObservers on page changes. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
 // @match        *://*.torn.com/page.php?sid=travel*
@@ -28,16 +28,14 @@
     const DEFAULT_SERVER = IS_LOCAL ? 'http://localhost:3000' : 'https://ssg-server.onrender.com';
     const SSG_SERVER = GM_getValue('ssg_server_url', DEFAULT_SERVER);
     const ENABLED = GM_getValue('ssg_enabled', true);
-    const SUBMIT_INTERVAL_MS = 60000; 
-    const PING_INTERVAL_MS = 2000; 
+    const MIN_SUBMIT_INTERVAL_MS = 10000; // 10s anti-spam protection rule
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
     let playerId = null;
     let playerName = null;
     let currentCountry = null;
-    let pingInterval = null;
-    let recheckInterval = null;
+    let pageMutationObserver = null;
 
     // ─── UI HELPERS ─────────────────────────────────────────────────────────
 
@@ -63,12 +61,12 @@
         badge.onclick = () => {
             const status = badge.dataset.status || 'unknown';
             const statusText = {
-                'idle': '🟡 Waiting for stock data...',
-                'submitted': '🟢 Stock data submitted',
-                'error': '🔴 Error submitting data',
-                'disabled': '⚫ Observer disabled',
-                'unknown': '⚪ Initializing...'
-            }[status] || '⚪ Checking...';
+                'idle': '🟡 Scanning page contents...',
+                'submitted': '🟢 Stock data submitted successfully',
+                'error': '🔴 Server rejected payload or offline',
+                'disabled': '⚫ Observer module disabled',
+                'unknown': '⚪ Initializing environment...'
+            }[status] || '⚪ Processing...';
             alert(`SSG Stock Observer\nStatus: ${statusText}\nUser: ${playerName || 'Detecting...'} (${playerId || '???'})\nServer: ${SSG_SERVER}`);
         };
         document.body.appendChild(badge);
@@ -88,7 +86,7 @@
         statusIndicator.style.background = colors[status] || '#888888';
     }
 
-    // ─── DETECT USER ───────────────────────────────────────────────────────
+    // ─── DETECT DATA LOOKUPS ────────────────────────────────────────────────
 
     function detectUser() {
         try {
@@ -98,13 +96,9 @@
                 playerName = win.user.name;
                 return true;
             }
-        } catch (e) {
-            console.log('[SSG Stock Observer] Window hooks restricted, bypassing user detection profile.');
-        }
+        } catch (e) {}
         return false;
     }
-
-    // ─── DETECT COUNTRY ────────────────────────────────────────────────────
 
     function detectCountry() {
         const countries = [
@@ -114,24 +108,14 @@
         ];
         
         const entireText = document.body.textContent || '';
-        const travelHeader = document.querySelector('.travel-agency-header, .travel-header, .title-container');
         
-        // Updated regex pattern to catch "flight to Country Name" or "traveling to Country Name"
+        // Broad capture matching array items inside modern ajax panels
         for (const country of countries) {
-            const regex = new RegExp(`(currently in|welcome to|landed in|stock in|flight to|travelling to|traveling to)\\s*${country}`, 'i');
-            if (regex.test(entireText) || (travelHeader && travelHeader.textContent.toLowerCase().includes(country.toLowerCase()))) {
+            const regex = new RegExp(`(currently in|welcome to|landed in|stock in|flight to|travelling to|traveling to|you are in)\\s*${country}`, 'i');
+            if (regex.test(entireText)) {
                 return country;
             }
         }
-
-        const titleEl = document.querySelector('.travel-title, .destination-title, h2, h3');
-        if (titleEl) {
-            const text = titleEl.textContent || '';
-            for (const country of countries) {
-                if (text.toLowerCase().includes(country.toLowerCase())) return country;
-            }
-        }
-
         return null;
     }
 
@@ -144,15 +128,13 @@
         return map[(countryName || '').toLowerCase().trim()] || null;
     }
 
-    // ─── SCRAPE STOCK TABLE ────────────────────────────────────────────────
-
     function scrapeStocks() {
         const stocks = [];
-        
         const stockRows = document.querySelectorAll(
             '.travel-agency-market .users-list > li, ' +
             '.travel-market-list .item-row, ' +
             '.stock-item, ' +
+            '[class*="travel-"] li, ' +
             'table.travel-stock tr'
         );
 
@@ -160,9 +142,9 @@
             stockRows.forEach(row => {
                 if (row.classList.contains('clear') || row.querySelector('.title')) return;
 
-                const nameEl = row.querySelector('.name, .item-name, .title');
-                const qtyEl = row.querySelector('.stkmkt-qty, .quantity, .stock, .count');
-                const costEl = row.querySelector('.stkmkt-value, .cost, .price, .value');
+                const nameEl = row.querySelector('.name, .item-name, .title, [class*="name"]');
+                const qtyEl = row.querySelector('.stkmkt-qty, .quantity, .stock, .count, [class*="quantity"], [class*="stock"]');
+                const costEl = row.querySelector('.stkmkt-value, .cost, .price, .value, [class*="cost"], [class*="price"]');
 
                 if (nameEl && qtyEl && costEl) {
                     const name = nameEl.textContent.trim().split('\n')[0].trim();
@@ -182,11 +164,10 @@
         if (stocks.length > 0) {
             stocks.forEach((s, i) => { s.id = -1 - i; });
         }
-
         return stocks;
     }
 
-    // ─── SUBMIT DATA ───────────────────────────────────────────────────────
+    // ─── TRANSMIT DATA ──────────────────────────────────────────────────────
 
     function submitStocks(stocks) {
         if (!ENABLED) {
@@ -195,7 +176,7 @@
         }
 
         const now = Date.now();
-        if (now - lastSubmitTime < 5000) return; 
+        if (now - lastSubmitTime < MIN_SUBMIT_INTERVAL_MS) return; 
         lastSubmitTime = now;
 
         if (!playerId) detectUser();
@@ -220,7 +201,7 @@
                 onload: function(response) {
                     if (response.status === 200) {
                         setStatus('submitted');
-                        console.log('[SSG Stock Observer] API Response Accepted');
+                        console.log('[SSG Stock Observer] Data successfully transferred to dashboard pipeline.');
                     } else {
                         setStatus('error');
                     }
@@ -238,25 +219,28 @@
         }
     }
 
-    // ─── MAIN CHECK FUNCTION ───────────────────────────────────────────────
+    // ─── RUN ENGINE PROCESSING ──────────────────────────────────────────────
 
-    function checkAndSubmit() {
+    function processPageParsing() {
         if (!ENABLED) return;
 
-        const stocks = scrapeStocks();
         const countryName = detectCountry();
-        const country = countryName ? countryToCode(countryName) : null;
+        const countryCode = countryName ? countryToCode(countryName) : null;
 
-        if (country) {
-            currentCountry = country;
-            // Send payload even if empty list during flights so backend can see heartbeat/location tracker logs
-            submitStocks(stocks);
+        if (countryCode) {
+            currentCountry = countryCode;
+            const stocks = scrapeStocks();
+            
+            // If we have either found data OR location text explicitly matched, sync with server
+            if (stocks.length > 0 || countryName) {
+                submitStocks(stocks);
+            }
         } else {
             setStatus('idle');
         }
     }
 
-    // ─── INIT ───────────────────────────────────────────────────────────────
+    // ─── INITIALIZATION ─────────────────────────────────────────────────────
 
     function init() {
         if (!ENABLED) return;
@@ -265,26 +249,24 @@
         statusIndicator = createStatusBadge();
         setStatus('idle');
 
-        pingInterval = setInterval(() => {
-            const stocks = scrapeStocks();
-            const countryName = detectCountry();
-            const countryCode = countryName ? countryToCode(countryName) : null;
-            
-            if (countryCode) {
-                currentCountry = countryCode;
-                submitStocks(stocks);
-                
-                // If we found actual physical stock items, chill out the aggressive loops
-                if (stocks.length > 0) {
-                    clearInterval(pingInterval);
-                    pingInterval = null;
-                }
-            }
-            
-            if (!recheckInterval) {
-                recheckInterval = setInterval(checkAndSubmit, SUBMIT_INTERVAL_MS);
-            }
-        }, PING_INTERVAL_MS);
+        // Run an immediate baseline capture run
+        processPageParsing();
+
+        // Attach MutationObserver to handle Torn's dynamic content swaps smoothly
+        const targetNode = document.body;
+        const observerConfig = { childList: true, subtree: true };
+
+        // Debounce tracking parameters so execution doesn't lock up computing frames
+        let searchTimeout = null;
+        pageMutationObserver = new MutationObserver(() => {
+            if (searchTimeout) clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                processPageParsing();
+            }, 800); 
+        });
+
+        pageMutationObserver.observe(targetNode, observerConfig);
+        console.log('[SSG Stock Observer] Dynamic DOM tracking initialized.');
     }
 
     if (document.readyState === 'loading') {
@@ -294,7 +276,6 @@
     }
 
     window.addEventListener('beforeunload', () => {
-        if (pingInterval) clearInterval(pingInterval);
-        if (recheckInterval) clearInterval(recheckInterval);
+        if (pageMutationObserver) pageMutationObserver.disconnect();
     });
 })();
