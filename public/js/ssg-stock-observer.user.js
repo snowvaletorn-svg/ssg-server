@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.3.1
+// @version      1.3.2
 // @description  Monitors and submits foreign stock data dynamically using MutationObservers on page changes. Includes persistent UI overlay logs.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -78,7 +78,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.3.1 - System Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.3.2 - System Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -221,7 +221,6 @@
                         stocks.push({ name, quantity, cost });
                     }
                 } else {
-                    // Log out specific DOM structural failures if layout changes
                     if (idx === 0) {
                         logTrace(`Row layout pattern evaluation failed. Element structural map:`, {
                             hasName: !!nameEl, hasQty: !!qtyEl, hasCost: !!costEl
@@ -314,8 +313,8 @@
             .catch((fetchErr) => {
                 setStatus('error');
                 logTrace(`CRITICAL ERROR: Native fetch context execution thrown. Network might be offline or blocked by CORS rules.`, {
-                    message: fetchErr.message
-                    style: fetchErr.stack ? 'Check browser cross-origin policy exceptions' : 'Unknown'
+                    message: fetchErr.message,
+                    context: 'Check browser cross-origin policy exceptions'
                 });
             });
         }
