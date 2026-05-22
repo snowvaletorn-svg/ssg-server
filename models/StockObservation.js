@@ -11,7 +11,7 @@ const stockObservationSchema = new mongoose.Schema({
   
   // What was observed
   stocks: [{
-    id: { type: Number, required: true },
+    id: { type: Number }, // Made optional to prevent validation blocks during processing anomalies
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
     cost: { type: Number, required: true }
@@ -21,8 +21,12 @@ const stockObservationSchema = new mongoose.Schema({
   receivedAt: { type: Date, default: Date.now, index: true }
 });
 
-// Compound index for efficient queries
+// Compound index for efficient dashboard queries (fetching latest records by country)
 stockObservationSchema.index({ country: 1, receivedAt: -1 });
 stockObservationSchema.index({ 'stocks.id': 1, country: 1 });
+
+// OPTIONAL OPTIMIZATION: Automatically deletes records older than 7 days (604800 seconds) 
+// to keep your free database tier running cleanly.
+stockObservationSchema.index({ receivedAt: 1 }, { expireAfterSeconds: 604800 });
 
 module.exports = mongoose.model('StockObservation', stockObservationSchema);

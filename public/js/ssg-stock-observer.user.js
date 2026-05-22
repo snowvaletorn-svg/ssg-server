@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.1.0
+// @version      1.1.1
 // @description  Automatically submits foreign stock data to SSG Dashboard when you visit torn.com/travel.php while abroad. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -29,7 +29,7 @@
     const SSG_SERVER = GM_getValue('ssg_server_url', DEFAULT_SERVER);
     const ENABLED = GM_getValue('ssg_enabled', true);
     const SUBMIT_INTERVAL_MS = 60000; 
-    const PING_INTERVAL_MS = 2000; // Checked slightly faster for snappier loading
+    const PING_INTERVAL_MS = 2000; 
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
@@ -93,13 +93,13 @@
     function detectUser() {
         try {
             const win = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
-            if (win.user) {
+            if (win && win.user) {
                 playerId = win.user.id;
                 playerName = win.user.name;
                 return true;
             }
         } catch (e) {
-            // Context/cross-origin handling
+            console.log('[SSG Stock Observer] Window hooks restricted, bypassing user detection profile.');
         }
         return false;
     }
@@ -113,19 +113,17 @@
             'Japan', 'China', 'UAE', 'South Africa'
         ];
         
-        // Method 1: Look at Torn's native travel header container text
-        const travelHeader = document.querySelector('.travel-agency-header, .travel-header, .title-container');
         const entireText = document.body.textContent || '';
+        const travelHeader = document.querySelector('.travel-agency-header, .travel-header, .title-container');
         
-        // Fallback checks on the container element or body text
+        // Updated regex pattern to catch "flight to Country Name" or "traveling to Country Name"
         for (const country of countries) {
-            const regex = new RegExp(`(currently in|welcome to|landed in|stock in)\\s*${country}`, 'i');
+            const regex = new RegExp(`(currently in|welcome to|landed in|stock in|flight to|travelling to|traveling to)\\s*${country}`, 'i');
             if (regex.test(entireText) || (travelHeader && travelHeader.textContent.toLowerCase().includes(country.toLowerCase()))) {
                 return country;
             }
         }
 
-        // Method 2: Fallback selector patterns
         const titleEl = document.querySelector('.travel-title, .destination-title, h2, h3');
         if (titleEl) {
             const text = titleEl.textContent || '';
@@ -151,7 +149,6 @@
     function scrapeStocks() {
         const stocks = [];
         
-        // Targeted selectors targeting modern Torn travel list structures 
         const stockRows = document.querySelectorAll(
             '.travel-agency-market .users-list > li, ' +
             '.travel-market-list .item-row, ' +
@@ -161,7 +158,6 @@
 
         if (stockRows.length > 0) {
             stockRows.forEach(row => {
-                // Ignore headers if applicable
                 if (row.classList.contains('clear') || row.querySelector('.title')) return;
 
                 const nameEl = row.querySelector('.name, .item-name, .title');
@@ -183,7 +179,6 @@
             });
         }
 
-        // Pass explicit sequential IDs if server expects it
         if (stocks.length > 0) {
             stocks.forEach((s, i) => { s.id = -1 - i; });
         }
@@ -200,14 +195,13 @@
         }
 
         const now = Date.now();
-        if (now - lastSubmitTime < 5000) return; // Drop safety window slightly to 5s
+        if (now - lastSubmitTime < 5000) return; 
         lastSubmitTime = now;
 
-        // Try user detection right before submitting if it wasn't caught at init
         if (!playerId) detectUser();
 
         const payload = {
-            playerId: playerId || 0, // Fallback to 0 if Torn window hook is being stubborn
+            playerId: playerId || 0, 
             playerName: playerName || 'Unknown Observer',
             country: currentCountry,
             observedAt: Math.floor(now / 1000),
@@ -250,23 +244,15 @@
         if (!ENABLED) return;
 
         const stocks = scrapeStocks();
-        if (stocks.length > 0) {
-            const countryName = detectCountry();
-            const country = countryName ? countryToCode(countryName) : null;
-            if (country) {
-                currentCountry = country;
-                submitStocks(stocks);
-            } else {
-                setStatus('idle');
-                console.log('[SSG Stock Observer] Items found but country matching delayed.');
-            }
+        const countryName = detectCountry();
+        const country = countryName ? countryToCode(countryName) : null;
+
+        if (country) {
+            currentCountry = country;
+            // Send payload even if empty list during flights so backend can see heartbeat/location tracker logs
+            submitStocks(stocks);
         } else {
-            // Keep status badging active if user is explicitly on a travel view
-            if (document.querySelector('.travel-agency-market, .travel-agency-header, #travel-main')) {
-                setStatus('idle');
-            } else if (statusIndicator) {
-                statusIndicator.style.display = 'none';
-            }
+            setStatus('idle');
         }
     }
 
@@ -279,19 +265,17 @@
         statusIndicator = createStatusBadge();
         setStatus('idle');
 
-        // Setup dynamic interval loops
         pingInterval = setInterval(() => {
             const stocks = scrapeStocks();
+            const countryName = detectCountry();
+            const countryCode = countryName ? countryToCode(countryName) : null;
             
-            if (stocks.length > 0) {
-                const countryName = detectCountry();
-                const countryCode = countryName ? countryToCode(countryName) : null;
+            if (countryCode) {
+                currentCountry = countryCode;
+                submitStocks(stocks);
                 
-                if (countryCode) {
-                    currentCountry = countryCode;
-                    submitStocks(stocks);
-                    
-                    // Kill aggressive pinging cycle once we've successfully dropped our load
+                // If we found actual physical stock items, chill out the aggressive loops
+                if (stocks.length > 0) {
                     clearInterval(pingInterval);
                     pingInterval = null;
                 }

@@ -66,10 +66,10 @@ function setCached(key, value, ttl) {
 
 async function deduplicateRequest(key, fetchFn) {
   if (pendingRequests.has(key)) return pendingRequests.get(key);
-  
+
   const promise = fetchFn();
   pendingRequests.set(key, promise);
-  
+
   try {
     return await promise;
   } finally {
@@ -347,9 +347,9 @@ const isLeadershipOrOwnership = (req, res, next) => {
 };
 
 const isWarlord = (req, res, next) => {
-  if (!hasPositionGroup(req.session.user, 'ownership') && 
-      !hasPositionGroup(req.session.user, 'leadership') && 
-      !hasPositionGroup(req.session.user, 'warlord')) {
+  if (!hasPositionGroup(req.session.user, 'ownership') &&
+    !hasPositionGroup(req.session.user, 'leadership') &&
+    !hasPositionGroup(req.session.user, 'warlord')) {
     return res.status(403).json({ error: 'Ownership, Leadership, or Warlord position required.' });
   }
   next();
@@ -368,7 +368,7 @@ app.get('/', async (req, res) => {
       // Use existing cache to avoid hitting Torn API on every page load
       const cacheKey = 'home-faction-data';
       let cachedData = getCached(cacheKey);
-      
+
       if (!cachedData) {
         // Deduplicate simultaneous requests to prevent API flooding
         cachedData = await deduplicateRequest(cacheKey, async () => {
@@ -376,7 +376,7 @@ app.get('/', async (req, res) => {
             `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`,
             { timeout: 10000 } // 10 second timeout to prevent hanging requests
           );
-          
+
           const factionMembers = tornRes.data.members || [];
           const positionMap = {
             'Leader': 'Ownership',
@@ -401,13 +401,13 @@ app.get('/', async (req, res) => {
             liveGroups: factionData.groups.map(g => ({ ...g, members: counts[g.name] ?? g.members })),
             totalMembers: factionMembers.length
           };
-          
+
           // Cache for 5 minutes (same as other faction data)
           setCached(cacheKey, result, CACHE_TTL.FACTION_MEMBERS);
           return result;
         });
       }
-      
+
       liveGroups = cachedData.liveGroups;
       totalMembers = cachedData.totalMembers;
     }
@@ -415,7 +415,7 @@ app.get('/', async (req, res) => {
     // Only log actual errors, suppress common transient network failures which are expected occasionally
     const transientErrors = ['timeout', '504', 'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'socket hang up'];
     const isTransient = transientErrors.some(errType => err.message.includes(errType));
-    
+
     if (!isTransient) {
       console.error('Could not fetch live faction data for home page:', err.message);
     }
@@ -507,7 +507,7 @@ app.post('/api/login', async (req, res) => {
     // Avatar is in profile_image field
     tornAvatar: validation.data?.profile_image ?? null
   };
-  
+
   console.log('Session tornAvatar:', req.session.user.tornAvatar);
 
   // Step 6: Handle "Stay logged in" option
@@ -540,12 +540,12 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const isOwner = positionGroup === 'ownership';
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
-  
+
   // Check if user is a company director or ownership (for Companies nav item)
   const Company = require('./models/Company');
   const userDirectorCompanies = await Company.find({ directorPlayerId: parseInt(req.session.userId) });
   const isDirector = isOwner || userDirectorCompanies.length > 0;
-  
+
   const factionKey = await getFactionApiKey();
 
   const accessibleTraining = TRAINING_CHANNELS.filter(ch =>
@@ -641,7 +641,7 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
 // ─── API: Save user email address ─────────────────────────────────────────────
 app.post('/api/user/email', isAuthenticated, async (req, res) => {
   const { email } = req.body;
-  
+
   // Basic email validation
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (email && email.trim() !== '' && !emailRegex.test(email.trim())) {
@@ -651,13 +651,13 @@ app.post('/api/user/email', isAuthenticated, async (req, res) => {
   try {
     await User.findOneAndUpdate(
       { tornPlayerId: req.session.userId },
-      { 
+      {
         email: email ? email.trim() : null,
-        updatedAt: new Date() 
+        updatedAt: new Date()
       },
       { returnDocument: 'after' }
     );
-    
+
     res.json({ success: true, message: email ? 'Email saved successfully' : 'Email cleared' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to save email: ' + err.message });
@@ -769,7 +769,7 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
     const tornRes = await axios.get(
       `https://api.torn.com/v2/faction/?selections=basic,members&key=${factionKey}`
     );
-    
+
     // Get user profile fields from database with timeout protection
     let profileMap = {};
     try {
@@ -787,7 +787,7 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
       console.warn('Database timeout when fetching user profiles:', dbErr.message);
       // Continue without profile data rather than failing completely
     }
-    
+
     // Enrich response with profile data
     if (tornRes.data.members) {
       tornRes.data.members = tornRes.data.members.map(m => ({
@@ -797,7 +797,7 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
         email: profileMap[m.id]?.email || null
       }));
     }
-    
+
     res.json(tornRes.data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -895,7 +895,7 @@ app.get('/js/ssg-stock-observer.user.js', (req, res) => {
   const fs = require('fs');
   const path = require('path');
   const scriptPath = path.join(__dirname, 'public', 'js', 'ssg-stock-observer.user.js');
-  
+
   fs.readFile(scriptPath, 'utf8', (err, data) => {
     if (err) {
       return res.status(404).send('Userscript not found');
@@ -910,7 +910,7 @@ app.get('/js/ssg-stock-observer.user.js', (req, res) => {
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
     const yataRes = await axios.get('https://yata.yt/api/v1/travel/export/', {
-      headers: { 
+      headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
         'Accept-Language': 'en-US,en;q=0.9'
@@ -1018,7 +1018,7 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
         if (!catalogItem || catalogItem.marketValue <= 0) return;
 
         const profit = catalogItem.marketValue - stockItem.cost;
-        
+
         // Skip items that wouldn't be profitable even if in stock
         if (profit <= 0 && !outOfStock) return;
 
@@ -1145,19 +1145,19 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
             `https://api.torn.com/user/?selections=basic,personalstats&key=${u.tornApiKey}`
           );
           if (tornRes.data.error) return null;
-            return {
-              name: tornRes.data.name,
-              player_id: tornRes.data.player_id,
-              level: tornRes.data.level,
-              totalstats: tornRes.data.personalstats?.totalstats || 0,
-              strength: tornRes.data.personalstats?.strength || 0,
-              defense: tornRes.data.personalstats?.defense || 0,
-              speed: tornRes.data.personalstats?.speed || 0,
-              dexterity: tornRes.data.personalstats?.dexterity || 0,
-              manuallabor: tornRes.data.personalstats?.manuallabor || 0,
-              intelligence: tornRes.data.personalstats?.intelligence || 0,
-              endurance: tornRes.data.personalstats?.endurance || 0,
-            };
+          return {
+            name: tornRes.data.name,
+            player_id: tornRes.data.player_id,
+            level: tornRes.data.level,
+            totalstats: tornRes.data.personalstats?.totalstats || 0,
+            strength: tornRes.data.personalstats?.strength || 0,
+            defense: tornRes.data.personalstats?.defense || 0,
+            speed: tornRes.data.personalstats?.speed || 0,
+            dexterity: tornRes.data.personalstats?.dexterity || 0,
+            manuallabor: tornRes.data.personalstats?.manuallabor || 0,
+            intelligence: tornRes.data.personalstats?.intelligence || 0,
+            endurance: tornRes.data.personalstats?.endurance || 0,
+          };
         } catch { return null; }
       })
     );
@@ -1327,14 +1327,14 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
     // Fetch armor and weapon data
     let armorData = [];
     let weaponsData = [];
-    
+
     try {
       const armorRes = await axios.get(`https://api.torn.com/faction/?selections=armor&key=${factionKey}`);
       armorData = armorRes.data.armor || [];
     } catch (err) {
       console.error('Error fetching armor data:', err.message);
     }
-    
+
     try {
       const weaponsRes = await axios.get(`https://api.torn.com/faction/?selections=weapons&key=${factionKey}`);
       weaponsData = weaponsRes.data.weapons || [];
@@ -1344,7 +1344,7 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
 
     // Build inventory items
     const items = [];
-    
+
     // Add armor items
     armorData.forEach(item => {
       const name = (item.name || '').toLowerCase();
@@ -1354,7 +1354,7 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
       else if (name.includes('glove') || name.includes('gloves') || name.includes('mitts') || name.includes('hand')) slot = 'gloves';
       else if (name.includes('pant') || name.includes('trouser') || name.includes('jean') || name.includes('leg') || name.includes('short')) slot = 'pants';
       else if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sand') || name.includes('foot')) slot = 'boots';
-      
+
       if (slot) {
         items.push({
           name: item.name,
@@ -1366,7 +1366,7 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
         });
       }
     });
-    
+
     // Add weapon items
     weaponsData.forEach(item => {
       const slot = (item.type || '').toLowerCase();
@@ -1374,7 +1374,7 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
       if (slot === 'primary') weaponSlot = 'primary';
       else if (slot === 'secondary') weaponSlot = 'secondary';
       else if (slot === 'melee') weaponSlot = 'melee';
-      
+
       if (weaponSlot) {
         items.push({
           name: item.name,
@@ -1401,7 +1401,7 @@ app.get('/api/admin/medical-inventory', isAuthenticated, isLeadershipOrOwnership
 
     // Fetch medical data from faction API
     let medicalData = [];
-    
+
     try {
       const medicalRes = await axios.get(`https://api.torn.com/faction/?selections=medical&key=${factionKey}`);
       medicalData = medicalRes.data.medical || [];
@@ -1430,7 +1430,7 @@ app.get('/api/admin/drug-inventory', isAuthenticated, isLeadershipOrOwnership, a
 
     // Fetch drugs data from faction API
     let drugData = [];
-    
+
     try {
       const drugRes = await axios.get(`https://api.torn.com/faction/?selections=drugs&key=${factionKey}`);
       drugData = drugRes.data.drugs || [];
@@ -1489,42 +1489,42 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
     // Fetch armor and weapon data
     let armorData = [];
     let weaponsData = [];
-    
+
     try {
       const armorRes = await axios.get(`https://api.torn.com/faction/?selections=armor&key=${factionKey}`);
       armorData = armorRes.data.armor || [];
     } catch (err) {
       console.error('Error fetching armor data:', err.message);
     }
-    
+
     try {
       const weaponsRes = await axios.get(`https://api.torn.com/faction/?selections=weapons&key=${factionKey}`);
       weaponsData = weaponsRes.data.weapons || [];
     } catch (err) {
       console.error('Error fetching weapon data:', err.message);
     }
-    
+
     // Process armor loans
     armorData.forEach(item => {
       if (!item.loaned_to || item.loaned === 0) return;
-      
+
       const name = (item.name || '').toLowerCase();
       let armorSlot = null;
-      
+
       // Determine slot from item name since type is just "Defensive"
       if (name.includes('helmet') || name.includes('hood') || name.includes('hat')) armorSlot = 'head';
       else if (name.includes('armor') || name.includes('vest') || name.includes('suit') || name.includes('jacket') || name.includes('coat') || name.includes('poncho')) armorSlot = 'body';
       else if (name.includes('glove') || name.includes('gloves') || name.includes('mitts') || name.includes('hand')) armorSlot = 'gloves';
       else if (name.includes('pant') || name.includes('trouser') || name.includes('jean') || name.includes('leg') || name.includes('short')) armorSlot = 'pants';
       else if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sand') || name.includes('foot')) armorSlot = 'boots';
-      
+
       if (!armorSlot) return;
-      
+
       // loaned_to can be a string of comma-separated IDs or a single ID
-      const ids = typeof item.loaned_to === 'string' 
+      const ids = typeof item.loaned_to === 'string'
         ? item.loaned_to.split(',').map(id => id.trim())
         : [String(item.loaned_to)];
-      
+
       ids.forEach(id => {
         if (loansData[id] && armorSlot) {
           loansData[id][armorSlot] = item.name;
@@ -1535,20 +1535,20 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
     // Process weapon loans
     weaponsData.forEach(item => {
       if (!item.loaned_to || item.loaned === 0) return;
-      
+
       const slot = (item.type || '').toLowerCase();
       let weaponSlot = null;
       if (slot === 'primary') weaponSlot = 'primary';
       else if (slot === 'secondary') weaponSlot = 'secondary';
       else if (slot === 'melee') weaponSlot = 'melee';
-      
+
       if (!weaponSlot) return;
-      
+
       // loaned_to can be a string of comma-separated IDs or a single ID
-      const ids = typeof item.loaned_to === 'string' 
+      const ids = typeof item.loaned_to === 'string'
         ? item.loaned_to.split(',').map(id => id.trim())
         : [String(item.loaned_to)];
-      
+
       ids.forEach(id => {
         if (loansData[id] && weaponSlot) {
           loansData[id][weaponSlot] = item.name;
@@ -1580,7 +1580,7 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
 
     // Build armory inventory summary from the API data
     const armoryItems = [];
-    
+
     // Add armor items
     armorData.forEach(item => {
       const name = (item.name || '').toLowerCase();
@@ -1590,7 +1590,7 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
       else if (name.includes('glove') || name.includes('gloves') || name.includes('mitts') || name.includes('hand')) slot = 'gloves';
       else if (name.includes('pant') || name.includes('trouser') || name.includes('jean') || name.includes('leg') || name.includes('short')) slot = 'pants';
       else if (name.includes('boot') || name.includes('shoe') || name.includes('sneaker') || name.includes('sand') || name.includes('foot')) slot = 'boots';
-      
+
       if (slot) {
         armoryItems.push({
           name: item.name,
@@ -1602,7 +1602,7 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
         });
       }
     });
-    
+
     // Add weapon items
     weaponsData.forEach(item => {
       const slot = (item.type || '').toLowerCase();
@@ -1610,7 +1610,7 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
       if (slot === 'primary') weaponSlot = 'primary';
       else if (slot === 'secondary') weaponSlot = 'secondary';
       else if (slot === 'melee') weaponSlot = 'melee';
-      
+
       if (weaponSlot) {
         armoryItems.push({
           name: item.name,
@@ -1783,43 +1783,43 @@ app.post('/api/apply', async (req, res) => {
   ].join('\n');
 
   try {
-      console.log(`✅ Application received from ${tornName} (${tornId})`);
+    console.log(`✅ Application received from ${tornName} (${tornId})`);
 
-      // ── (Commented out) Discord Webhook ───────────────────────────────────
-      // Discord is currently disabled due to a temporary IP ban.
-      // Uncomment this block when the ban is lifted.
-      //
-      // if (process.env.DISCORD_WEBHOOK_URL) { ... }
+    // ── (Commented out) Discord Webhook ───────────────────────────────────
+    // Discord is currently disabled due to a temporary IP ban.
+    // Uncomment this block when the ban is lifted.
+    //
+    // if (process.env.DISCORD_WEBHOOK_URL) { ... }
 
-      // ── Send email notification via Resend ────────────────────────────────
-      const notifyEmails = getNotifyEmails();
-      if (notifyEmails.length > 0) {
-        const emailResult = await sendEmail({
-          to: notifyEmails,
-          subject: `📋 New Faction Application: ${tornName} (${tornId})`,
-          text: message
-        });
-        console.log(`[Application] Email notification result:`, JSON.stringify(emailResult));
-      } else {
-        console.log(`[Application] No NOTIFY_EMAILS configured — skipping email send`);
-      }
+    // ── Send email notification via Resend ────────────────────────────────
+    const notifyEmails = getNotifyEmails();
+    if (notifyEmails.length > 0) {
+      const emailResult = await sendEmail({
+        to: notifyEmails,
+        subject: `📋 New Faction Application: ${tornName} (${tornId})`,
+        text: message
+      });
+      console.log(`[Application] Email notification result:`, JSON.stringify(emailResult));
+    } else {
+      console.log(`[Application] No NOTIFY_EMAILS configured — skipping email send`);
+    }
 
-      // ── Save in-app notification ──────────────────────────────────────────
-      try {
-        const notification = new AppNotification({
-          type: 'application',
-          title: `📋 New Application: ${tornName}`,
-          message: `Application received from ${tornName} (${tornId})\nStatus: ${allYes ? 'All conditions agreed' : '⚠️ Some conditions not agreed'}`,
-          applicantName: tornName,
-          applicantId: parseInt(tornId),
-          allYes: allYes,
-          answers: answers
-        });
-        await notification.save();
-        console.log(`[Application] In-app notification saved (ID: ${notification._id})`);
-      } catch (notifErr) {
-        console.error('[Application] Failed to save in-app notification:', notifErr.message);
-      }
+    // ── Save in-app notification ──────────────────────────────────────────
+    try {
+      const notification = new AppNotification({
+        type: 'application',
+        title: `📋 New Application: ${tornName}`,
+        message: `Application received from ${tornName} (${tornId})\nStatus: ${allYes ? 'All conditions agreed' : '⚠️ Some conditions not agreed'}`,
+        applicantName: tornName,
+        applicantId: parseInt(tornId),
+        allYes: allYes,
+        answers: answers
+      });
+      await notification.save();
+      console.log(`[Application] In-app notification saved (ID: ${notification._id})`);
+    } catch (notifErr) {
+      console.error('[Application] Failed to save in-app notification:', notifErr.message);
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1888,21 +1888,21 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
 
     const bankData = bankRes.data.bank || {};
     const meritsData = userRes.data.merits || {};
-    
+
     // Debug: Log the merits data structure
     //console.log('[/api/torn/bank-rates] Merits data:', JSON.stringify(meritsData));
-    
+
     // Get Bank Investment merit level (0-10)
     // Try different possible key formats based on API response
-    const bankInvestmentMerit = meritsData['Bank Interest'] || 
-                                 meritsData['Bank_Interest'] || 
-                                 meritsData['Bank Investment'] || 
-                                 meritsData['Bank_Investment'] || 
-                                 meritsData['bankinterest'] || 
-                                 meritsData['bankinvestment'] || 
-                                 0;
+    const bankInvestmentMerit = meritsData['Bank Interest'] ||
+      meritsData['Bank_Interest'] ||
+      meritsData['Bank Investment'] ||
+      meritsData['Bank_Investment'] ||
+      meritsData['bankinterest'] ||
+      meritsData['bankinvestment'] ||
+      0;
     const meritBonus = bankInvestmentMerit * 5; // 5% per merit level
-    
+
     // Calculate rates with merits applied
     const baseRates = {
       '1_week': bankData['1w'] || 0,
@@ -1911,7 +1911,7 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
       '2_months': bankData['2m'] || 0,
       '3_months': bankData['3m'] || 0
     };
-    
+
     // Apply merit bonus to get effective rates
     const meritMultiplier = 1 + (bankInvestmentMerit * 0.05);
     const ratesWithMerits = {
@@ -1921,9 +1921,9 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
       '2_months': baseRates['2_months'] * meritMultiplier,
       '3_months': baseRates['3_months'] * meritMultiplier
     };
-    
+
     const now = new Date();
-    
+
     const result = {
       baseRates: baseRates,
       rates: ratesWithMerits, // Return rates with merits applied
@@ -1943,7 +1943,7 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
 async function startServer() {
   try {
     const fixedPort = 3000;
-    
+
     const net = require('net');
     const checkPort = (port) => {
       return new Promise((resolve) => {
@@ -2029,9 +2029,9 @@ app.post('/api/oc/refresh', isAuthenticated, async (req, res) => {
   try {
     const { daysBack } = req.body;
     const startDate = daysBack ? new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000) : null;
-    
+
     const result = await refreshFactionCrimes(startDate);
-    
+
     if (result.success) {
       res.json(result);
     } else {
@@ -2047,17 +2047,17 @@ app.get('/api/oc/crimes', isAuthenticated, async (req, res) => {
   try {
     const { status, dateFrom, dateTo, sort, order, limit } = req.query;
     const filters = {};
-    
+
     if (status && status !== 'all') filters.status = status;
     if (dateFrom) filters.dateFrom = dateFrom;
     if (dateTo) filters.dateTo = dateTo;
-    
+
     let crimes = await getCrimesForFaction(SSG_FACTION_ID, filters);
-    
+
     // Sorting
     const sortBy = sort || 'timeStarted';
     const sortOrder = order === 'asc' ? 1 : -1;
-    
+
     crimes.sort((a, b) => {
       const aVal = a[sortBy];
       const bVal = b[sortBy];
@@ -2067,12 +2067,12 @@ app.get('/api/oc/crimes', isAuthenticated, async (req, res) => {
       if (aVal > bVal) return 1 * sortOrder;
       return 0;
     });
-    
+
     // Limit
     if (limit) {
       crimes = crimes.slice(0, parseInt(limit));
     }
-    
+
     res.json(crimes);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -2114,7 +2114,7 @@ app.get('/api/oc/participants/:playerId', isAuthenticated, async (req, res) => {
 app.put('/api/admin/members/profiles', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const { updates } = req.body;
-    
+
     if (!updates || !Array.isArray(updates)) {
       return res.status(400).json({ error: 'Invalid updates array' });
     }
@@ -2123,7 +2123,7 @@ app.put('/api/admin/members/profiles', isAuthenticated, isOwnership, async (req,
     const bulkOps = updates.map(update => ({
       updateOne: {
         filter: { tornPlayerId: update.tornPlayerId },
-        update: { 
+        update: {
           $set: {
             ...(update.bloodType !== undefined && { bloodType: update.bloodType }),
             ...(update.timeZone !== undefined && { timeZone: update.timeZone })
@@ -2183,13 +2183,13 @@ app.get('/api/admin/snapshot/latest/csv', isAuthenticated, isLeadershipOrOwnersh
 
     const current = snapshots[0];
     const previous = snapshots[1];
-    
+
     const diffRows = computeDiff(previous.memberStats, current.memberStats);
     const csvContent = buildDiffCSV(diffRows, previous.snapshotDate, current.snapshotDate);
-    
+
     const startDate = previous.snapshotDate.toISOString().split('T')[0];
     const endDate = current.snapshotDate.toISOString().split('T')[0];
-    
+
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="weekly_progress_latest_${startDate}_to_${endDate}.csv"`);
     res.send(csvContent);
@@ -2209,7 +2209,7 @@ app.post('/api/admin/snapshot/test-run', isAuthenticated, isLeadershipOrOwnershi
 app.post('/api/admin/snapshot/send-email', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const { startDate, endDate, emailTo } = req.body;
-    
+
     if (!startDate || !endDate) {
       return res.status(400).json({ error: 'startDate and endDate parameters are required' });
     }
@@ -2243,10 +2243,10 @@ app.get('/api/notifications', isAuthenticated, isOwnership, async (req, res) => 
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const type = req.query.type; // optional filter: 'application' or 'weekly_report'
-    
+
     const filter = {};
     if (type) filter.type = type;
-    
+
     const notifications = await AppNotification.find(filter)
       .sort({ createdAt: -1 })
       .limit(limit)
@@ -2270,7 +2270,7 @@ app.post('/api/notifications/:id/read', isAuthenticated, isOwnership, async (req
   try {
     const userId = parseInt(req.session.userId);
     const notification = await AppNotification.findById(req.params.id);
-    
+
     if (!notification) {
       return res.status(404).json({ error: 'Notification not found' });
     }
@@ -2401,11 +2401,11 @@ app.delete('/api/admin/companies/:companyId', isAuthenticated, isOwnership, asyn
 // ─── API: Role Impersonation (Ownership only) ─────────────────────────────────
 app.post('/api/user/impersonate', isAuthenticated, isOwnership, async (req, res) => {
   const { role } = req.body;
-  
+
   if (role && !Object.keys(POSITIONS).includes(role)) {
     return res.status(400).json({ error: 'Invalid role specified' });
   }
-  
+
   if (role) {
     req.session.impersonateRole = role;
     res.json({ success: true, message: `Now viewing as ${role} role`, impersonatedRole: role });
@@ -2425,18 +2425,20 @@ app.post('/api/stock-observe', express.json(), async (req, res) => {
   try {
     const { playerId, playerName, country, observedAt, stocks } = req.body;
 
-    if (!playerId || !country || !stocks || !Array.isArray(stocks)) {
-      return res.status(400).json({ error: 'Missing required fields: playerId, country, stocks' });
+    // Adjusted validation: Allow stocks to be missing or empty for flight location tracking
+    if (!playerId || !country) {
+      return res.status(400).json({ error: 'Missing required fields: playerId, country' });
     }
 
-    if (!stocks.length) {
-      return res.status(400).json({ error: 'Stocks array is empty' });
-    }
+    const cleanStocks = Array.isArray(stocks) ? stocks : [];
 
-    // Validate each stock entry has required fields
-    for (const s of stocks) {
-      if (!s.id || !s.name || s.quantity === undefined || s.cost === undefined) {
-        return res.status(400).json({ error: 'Each stock entry must have id, name, quantity, cost' });
+    // Validate entries ONLY if there are actually items in the array (when landed)
+    if (cleanStocks.length > 0) {
+      for (const s of cleanStocks) {
+        // Removed !s.id restriction to match the relaxed Mongoose schema
+        if (!s.name || s.quantity === undefined || s.cost === undefined) {
+          return res.status(400).json({ error: 'Each stock entry must have name, quantity, cost' });
+        }
       }
     }
 
@@ -2446,8 +2448,8 @@ app.post('/api/stock-observe', express.json(), async (req, res) => {
       playerName: playerName || '',
       country: country.toLowerCase(),
       observedAt: observedAt || Math.floor(Date.now() / 1000),
-      stocks: stocks.map(s => ({
-        id: s.id,
+      stocks: cleanStocks.map(s => ({
+        id: s.id || 0, // Fallback safely to 0 if the item doesn't pass a unique internal ID
         name: s.name,
         quantity: s.quantity,
         cost: s.cost
@@ -2458,9 +2460,13 @@ app.post('/api/stock-observe', express.json(), async (req, res) => {
 
     // Cleanup old observations to keep DB lean (keep only last 7 days)
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    StockObservation.deleteMany({ receivedAt: { $lt: sevenDaysAgo } }).catch(() => {});
+    StockObservation.deleteMany({ receivedAt: { $lt: sevenDaysAgo } }).catch(() => { });
 
-    res.json({ success: true, id: observation._id });
+    res.json({
+      success: true,
+      id: observation._id,
+      type: cleanStocks.length > 0 ? 'market_update' : 'flight_heartbeat'
+    });
   } catch (err) {
     console.error('Stock observation error:', err.message);
     res.status(500).json({ error: err.message });
@@ -2476,7 +2482,7 @@ app.get('/api/stockout-estimates', async (req, res) => {
     if (!country) {
       return res.status(400).json({ error: 'Country parameter is required' });
     }
-    
+
     // Fetch the last 2 observations for this country to calculate burn rate
     const matchFilter = { country };
     if (itemId) matchFilter['stocks.id'] = itemId;
@@ -2487,10 +2493,10 @@ app.get('/api/stockout-estimates', async (req, res) => {
       .lean();
 
     if (observations.length < 2) {
-      return res.json({ 
-        country, 
+      return res.json({
+        country,
         estimates: [],
-        message: 'Not enough observations yet. Need at least 2.' 
+        message: 'Not enough observations yet. Need at least 2.'
       });
     }
 
@@ -2520,7 +2526,7 @@ app.get('/api/stockout-estimates', async (req, res) => {
       const oldest = snapshots[0];
       const timeDiffMs = newest.time - oldest.time;
       const timeDiffMin = timeDiffMs / (60 * 1000);
-      
+
       if (timeDiffMin <= 0) return;
 
       const qtyDiff = oldest.quantity - newest.quantity;
@@ -2528,10 +2534,10 @@ app.get('/api/stockout-estimates', async (req, res) => {
 
       let stockoutIn = null;
       let stockoutConfidence = 'unreliable';
-      
+
       if (burnRatePerMin > 0 && newest.quantity > 0) {
         stockoutIn = Math.round(newest.quantity / burnRatePerMin);
-        
+
         // Determine confidence based on number of observations and time span
         const obsCount = snapshots.length;
         const hoursSpanned = timeDiffMin / 60;
