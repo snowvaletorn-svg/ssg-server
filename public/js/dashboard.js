@@ -3060,8 +3060,12 @@ function renderTravelProfits() {
 
   const summary = travelProfitsCache.summary || {};
 
-  // Find the best profit per run (highest profit × quantity minus flight cost)
-  const bestRun = profits.length > 0 ? profits.reduce((best, current) => {
+  // Separate in-stock and out-of-stock for summary calculations
+  const inStockProfits = profits.filter(p => !p.outOfStock);
+  const outOfStockProfits = profits.filter(p => p.outOfStock);
+
+  // Find the best profit per run from IN-STOCK items only
+  const bestRun = inStockProfits.length > 0 ? inStockProfits.reduce((best, current) => {
     const bestFlightCost = getFlightCost(best.country, travelMethod);
     const currentFlightCost = getFlightCost(current.country, travelMethod);
     const bestProfit = (best.profit * quantity) - bestFlightCost;
@@ -3149,21 +3153,26 @@ function renderTravelProfits() {
         }
       }
 
+      const isOos = item.outOfStock;
+      const rowStyle = isOos ? 'opacity:0.4;' : '';
+      const qtyDisplay = isOos ? '<span style="color:#ff4444;font-size:0.75rem;">OUT OF STOCK</span>' : item.quantity.toLocaleString();
+      const profitColor = item.profit > 0 ? '#4caf50' : '#ff4444';
+
       return `
-        <tr>
+        <tr style="${rowStyle}">
           <td>${escapeHtml(item.name)}</td>
           <td style="color:#888;font-size:0.85rem;">${escapeHtml(item.type)}</td>
-          <td style="text-align:center;">${item.quantity.toLocaleString()}</td>
+          <td style="text-align:center;">${qtyDisplay}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.buyPrice)}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.marketValue)}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#4caf50;">+$${formatNum(item.profit)}</td>
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${profitColor};">${item.profit > 0 ? '+$' + formatNum(item.profit) : '-$' + formatNum(Math.abs(item.profit))}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${item.profitPercent.toFixed(1)}%</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">+$${formatNum(profitPerRun)}</td>
-          <!-- <td style="text-align:center;font-size:0.85rem;">${restockDisplay}</td> -->
+          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">${item.profit > 0 ? '+$' + formatNum(profitPerRun) : '-'}</td>
+          <td style="text-align:center;font-size:0.85rem;">${restockDisplay}</td>
         </tr>`;
     }).join('');
 
-    html += `
+        html += `
       <div class="card" style="margin-bottom:1rem;">
         <div class="card-header">
           🌍 ${getCountryName(country)}
@@ -3172,7 +3181,7 @@ function renderTravelProfits() {
           </span>
         </div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-          <table class="members-table" style="min-width:700px;">
+          <table class="members-table" style="min-width:850px;">
             <thead>
               <tr>
                 <th style="white-space:nowrap;">Item</th>
@@ -3183,6 +3192,7 @@ function renderTravelProfits() {
                 <th style="text-align:right;white-space:nowrap;">Profit</th>
                 <th style="text-align:right;white-space:nowrap;">%</th>
                 <th style="text-align:right;white-space:nowrap;">Run</th>
+                <th style="text-align:center;white-space:nowrap;">⏰ Timing</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>

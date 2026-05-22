@@ -31,6 +31,7 @@ const {
 } = require('./services/snapshotService');
 const { sendEmail } = require('./services/emailService');
 const AppNotification = require('./models/AppNotification');
+const StockObservation = require('./models/StockObservation');
 const { startScheduler } = require('./services/schedulerService');
 const {
   addCompany,
@@ -889,6 +890,22 @@ app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── Userscript install endpoint ────────────────────────────────────────────
+app.get('/js/ssg-stock-observer.user.js', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const scriptPath = path.join(__dirname, 'public', 'js', 'ssg-stock-observer.user.js');
+  
+  fs.readFile(scriptPath, 'utf8', (err, data) => {
+    if (err) {
+      return res.status(404).send('Userscript not found');
+    }
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Content-Disposition', 'attachment; filename="ssg-stock-observer.user.js"');
+    res.send(data);
+  });
+});
+
 // ─── API: YATA foreign stock data ────────────────────────────────────────────
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
@@ -994,13 +1011,16 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
       const privateTime = privateTravelTimes[countryCode] || Math.round(standardTime * 0.5);
 
       (countryData.stocks || []).forEach(stockItem => {
-        if (stockItem.quantity <= 0) return;
-
         const catalogItem = itemCatalog[stockItem.id] || itemCatalog[String(stockItem.id)] || itemCatalog[Number(stockItem.id)];
+        const outOfStock = !stockItem.quantity || stockItem.quantity <= 0;
+
+        // Skip items not in the catalog and with no market value (can't calculate profit)
         if (!catalogItem || catalogItem.marketValue <= 0) return;
 
         const profit = catalogItem.marketValue - stockItem.cost;
-        if (profit <= 0) return;
+        
+        // Skip items that wouldn't be profitable even if in stock
+        if (profit <= 0 && !outOfStock) return;
 
         const profitPercent = ((profit / stockItem.cost) * 100);
         const estimatedRestockIn = minutesUntilRestock;
@@ -1019,6 +1039,7 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
           country: countryCode,
           countryName: countryData.name || countryCode,
           quantity: stockItem.quantity,
+          outOfStock: outOfStock,
           buyPrice: stockItem.cost,
           marketValue: catalogItem.marketValue,
           profit: profit,
@@ -2394,5 +2415,160 @@ app.post('/api/user/impersonate', isAuthenticated, isOwnership, async (req, res)
   }
 });
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// STOCK OBSERVATION API (for Tampermonkey userscript)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── API: Submit stock observations from torn.com/travel.php ──────────────────
+app.post('/api/stock-observe', express.json(), async (req, res) => {
+  try {
+    const { playerId, playerName, country, observedAt, stocks } = req.body;
+
+    if (!playerId || !country || !stocks || !Array.isArray(stocks)) {
+      return res.status(400).json({ error: 'Missing required fields: playerId, country, stocks' });
+    }
+
+    if (!stocks.length) {
+      return res.status(400).json({ error: 'Stocks array is empty' });
+    }
+
+    // Validate each stock entry has required fields
+    for (const s of stocks) {
+      if (!s.id || !s.name || s.quantity === undefined || s.cost === undefined) {
+        return res.status(400).json({ error: 'Each stock entry must have id, name, quantity, cost' });
+      }
+    }
+
+    // Create the observation document
+    const observation = new StockObservation({
+      playerId,
+      playerName: playerName || '',
+      country: country.toLowerCase(),
+      observedAt: observedAt || Math.floor(Date.now() / 1000),
+      stocks: stocks.map(s => ({
+        id: s.id,
+        name: s.name,
+        quantity: s.quantity,
+        cost: s.cost
+      }))
+    });
+
+    await observation.save();
+
+    // Cleanup old observations to keep DB lean (keep only last 7 days)
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    StockObservation.deleteMany({ receivedAt: { $lt: sevenDaysAgo } }).catch(() => {});
+
+    res.json({ success: true, id: observation._id });
+  } catch (err) {
+    console.error('Stock observation error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get stockout estimates for a given country ──────────────────────────
+app.get('/api/stockout-estimates', async (req, res) => {
+  try {
+    const country = req.query.country?.toLowerCase();
+    const itemId = req.query.itemId ? parseInt(req.query.itemId) : null;
+
+    if (!country) {
+      return res.status(400).json({ error: 'Country parameter is required' });
+    }
+    
+    // Fetch the last 2 observations for this country to calculate burn rate
+    const matchFilter = { country };
+    if (itemId) matchFilter['stocks.id'] = itemId;
+
+    const observations = await StockObservation.find(matchFilter)
+      .sort({ receivedAt: -1 })
+      .limit(50)
+      .lean();
+
+    if (observations.length < 2) {
+      return res.json({ 
+        country, 
+        estimates: [],
+        message: 'Not enough observations yet. Need at least 2.' 
+      });
+    }
+
+    // Build stock snapshots per item from each observation
+    const itemSnapshots = {};
+    observations.forEach(obs => {
+      obs.stocks.forEach(s => {
+        if (!itemSnapshots[s.id]) itemSnapshots[s.id] = [];
+        itemSnapshots[s.id].push({
+          quantity: s.quantity,
+          cost: s.cost,
+          name: s.name,
+          time: new Date(obs.receivedAt).getTime()
+        });
+      });
+    });
+
+    // Calculate burn rate and stockout estimate for each item
+    const estimates = [];
+    Object.entries(itemSnapshots).forEach(([id, snapshots]) => {
+      if (snapshots.length < 2) return;
+
+      // Sort by time ascending
+      snapshots.sort((a, b) => a.time - b.time);
+
+      const newest = snapshots[snapshots.length - 1];
+      const oldest = snapshots[0];
+      const timeDiffMs = newest.time - oldest.time;
+      const timeDiffMin = timeDiffMs / (60 * 1000);
+      
+      if (timeDiffMin <= 0) return;
+
+      const qtyDiff = oldest.quantity - newest.quantity;
+      const burnRatePerMin = qtyDiff > 0 ? qtyDiff / timeDiffMin : 0;
+
+      let stockoutIn = null;
+      let stockoutConfidence = 'unreliable';
+      
+      if (burnRatePerMin > 0 && newest.quantity > 0) {
+        stockoutIn = Math.round(newest.quantity / burnRatePerMin);
+        
+        // Determine confidence based on number of observations and time span
+        const obsCount = snapshots.length;
+        const hoursSpanned = timeDiffMin / 60;
+        if (obsCount >= 10 && hoursSpanned >= 1) {
+          stockoutConfidence = 'confident';
+        } else if (obsCount >= 5 && hoursSpanned >= 0.5) {
+          stockoutConfidence = 'estimated';
+        }
+      }
+
+      estimates.push({
+        id: parseInt(id),
+        name: newest.name,
+        currentQuantity: newest.quantity,
+        currentCost: newest.cost,
+        burnRatePerMin: Math.round(burnRatePerMin * 100) / 100,
+        stockoutInMinutes: stockoutIn,
+        observationsUsed: snapshots.length,
+        timeSpanMinutes: Math.round(timeDiffMin),
+        confidence: stockoutConfidence,
+        lastObserved: new Date(newest.time).toISOString()
+      });
+    });
+
+    // Sort: most confident first, then soonest stockout
+    estimates.sort((a, b) => {
+      const confidenceOrder = { confident: 0, estimated: 1, unreliable: 2 };
+      const confDiff = (confidenceOrder[a.confidence] || 2) - (confidenceOrder[b.confidence] || 2);
+      if (confDiff !== 0) return confDiff;
+      return (a.stockoutInMinutes || Infinity) - (b.stockoutInMinutes || Infinity);
+    });
+
+    res.json({ country, estimates });
+  } catch (err) {
+    console.error('Stockout estimates error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = app;

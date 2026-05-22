@@ -313,6 +313,24 @@
               </div>
             </div>
 
+            <!-- Stock Observer Userscript Install -->
+            <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-body" style="padding:0.85rem 1.25rem;">
+                <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;">
+                  <div style="flex:1;min-width:200px;">
+                    <div style="font-size:0.9rem;font-weight:600;margin-bottom:0.25rem;color:#888;">🔄 SSG Stock Observer</div>
+                    <div style="font-size:0.8rem;color:#888;">Automatically submits stock data when you visit torn.com/travel.php while abroad. Works on PC (Tampermonkey) and Torn PDA (Userscripts/Kiwi).</div>
+                  </div>
+                  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <a href="/js/ssg-stock-observer.user.js" class="btn btn-primary btn-small" style="text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;">
+                      📥 Install/Update Userscript
+                    </a>
+                    <button class="btn btn-small btn-outline" onclick="openHelp('travel')" style="font-size:0.78rem;">❓ Help</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Travel Configuration -->
             <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
               <div class="card-body">
@@ -360,7 +378,7 @@
                       </label>
                       <label
                         style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
-                        <input type="checkbox" id="type-other" onchange="renderTravelProfits()" /> Other
+                        <input type="checkbox" id="type-other" checked onchange="renderTravelProfits()" /> Other
                       </label>
                     </div>
                   </div>
@@ -407,13 +425,13 @@
                   <option value="uae">UAE</option>
                   <option value="sou">South Africa</option>
                 </select>
-                <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">↻ Refresh</button>
+                <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">↻ Load</button>
               </div>
             </div>
             <div id="travel-profits-data">
               <div class="empty-state">
                 <span class="empty-icon">💰</span>
-                <p>Click Refresh to load travel profit opportunities.</p>
+                <p>Click Load to load travel profit opportunities.</p>
                 <p class="muted">Shows items available abroad with current market prices and profit calculations.</p>
               </div>
             </div>
