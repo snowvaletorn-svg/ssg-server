@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.0.0
+// @version      1.1.0
 // @description  Automatically submits foreign stock data to SSG Dashboard when you visit torn.com/travel.php while abroad. PC + Torn PDA friendly.
 // @author       SSG
 // @match        https://www.torn.com/travel.php*
@@ -23,13 +23,12 @@
     'use strict';
 
     // ─── CONFIG ─────────────────────────────────────────────────────────────
-    // Auto-detect: if browsing localhost, use local server; otherwise use production
     const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const DEFAULT_SERVER = IS_LOCAL ? 'http://localhost:3000' : 'https://ssg-server.onrender.com';
     const SSG_SERVER = GM_getValue('ssg_server_url', DEFAULT_SERVER);
     const ENABLED = GM_getValue('ssg_enabled', true);
-    const SUBMIT_INTERVAL_MS = 60000; // Re-check every 60s while on the page
-    const PING_INTERVAL_MS = 3000; // Check DOM every 3s until stock table loads
+    const SUBMIT_INTERVAL_MS = 60000; 
+    const PING_INTERVAL_MS = 2000; // Checked slightly faster for snappier loading
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
@@ -39,10 +38,9 @@
     let pingInterval = null;
     let recheckInterval = null;
 
-    // ─── UI HELPERS (minimal, works on PC and PDA) ─────────────────────────
+    // ─── UI HELPERS ─────────────────────────────────────────────────────────
 
     function createStatusBadge() {
-        // Remove existing if any
         const existing = document.getElementById('ssg-stock-badge');
         if (existing) existing.remove();
 
@@ -70,7 +68,7 @@
                 'disabled': '⚫ Observer disabled',
                 'unknown': '⚪ Initializing...'
             }[status] || '⚪ Checking...';
-            alert(`SSG Stock Observer\nStatus: ${statusText}\nServer: ${SSG_SERVER}`);
+            alert(`SSG Stock Observer\nStatus: ${statusText}\nUser: ${playerName || 'Detecting...'} (${playerId || '???'})\nServer: ${SSG_SERVER}`);
         };
         document.body.appendChild(badge);
         return badge;
@@ -92,20 +90,15 @@
     // ─── DETECT USER ───────────────────────────────────────────────────────
 
     function detectUser() {
-        // Torn exposes the logged-in user on every page via window.user
         try {
-            if (typeof unsafeWindow !== 'undefined' && unsafeWindow.user) {
-                playerId = unsafeWindow.user.id;
-                playerName = unsafeWindow.user.name;
-                return true;
-            }
-            if (window.user) {
-                playerId = window.user.id;
-                playerName = window.user.name;
+            const win = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            if (win.user) {
+                playerId = win.user.id;
+                playerName = win.user.name;
                 return true;
             }
         } catch (e) {
-            // cross-origin restrictions
+            // Context/cross-origin handling
         }
         return false;
     }
@@ -113,40 +106,31 @@
     // ─── DETECT COUNTRY ────────────────────────────────────────────────────
 
     function detectCountry() {
-        // Try to find the country from the page content
-        // Torn travel.php shows the country name in various places
-
-        // Known country names in Torn
         const countries = [
             'Mexico', 'Cayman Islands', 'Canada', 'Hawaii', 
             'United Kingdom', 'Argentina', 'Switzerland', 
             'Japan', 'China', 'UAE', 'South Africa'
         ];
         
-        // Method 1: Look for #travel-main or travel container with country data
-        const travelMain = document.getElementById('travel-main');
-        if (travelMain) {
-            const text = travelMain.textContent || '';
-            const countryMatch = text.match(/you are currently in\s+([A-Za-z\s]+)/i);
-            if (countryMatch) return countryMatch[1].trim();
+        // Method 1: Look at Torn's native travel header container text
+        const travelHeader = document.querySelector('.travel-agency-header, .travel-header, .title-container');
+        const entireText = document.body.textContent || '';
+        
+        // Fallback checks on the container element or body text
+        for (const country of countries) {
+            const regex = new RegExp(`(currently in|welcome to|landed in|stock in)\\s*${country}`, 'i');
+            if (regex.test(entireText) || (travelHeader && travelHeader.textContent.toLowerCase().includes(country.toLowerCase()))) {
+                return country;
+            }
         }
 
-        // Method 2: Look for country name in the destination/title area
+        // Method 2: Fallback selector patterns
         const titleEl = document.querySelector('.travel-title, .destination-title, h2, h3');
         if (titleEl) {
             const text = titleEl.textContent || '';
             for (const country of countries) {
-                if (text.toLowerCase().includes(country.toLowerCase())) {
-                    return country;
-                }
+                if (text.toLowerCase().includes(country.toLowerCase())) return country;
             }
-        }
-
-        // Method 3: URL might contain country info in hash or params
-        const urlParams = new URLSearchParams(window.location.search);
-        const step = urlParams.get('step');
-        if (step && countries.some(c => step.toLowerCase().includes(c.toLowerCase()))) {
-            return step;
         }
 
         return null;
@@ -154,17 +138,9 @@
 
     function countryToCode(countryName) {
         const map = {
-            'mexico': 'mex',
-            'cayman islands': 'cay',
-            'canada': 'can',
-            'hawaii': 'haw',
-            'united kingdom': 'uni',
-            'argentina': 'arg',
-            'switzerland': 'swi',
-            'japan': 'jap',
-            'china': 'chi',
-            'uae': 'uae',
-            'south africa': 'sou'
+            'mexico': 'mex', 'cayman islands': 'cay', 'canada': 'can', 'hawaii': 'haw',
+            'united kingdom': 'uni', 'argentina': 'arg', 'switzerland': 'swi',
+            'japan': 'jap', 'china': 'chi', 'uae': 'uae', 'south africa': 'sou'
         };
         return map[(countryName || '').toLowerCase().trim()] || null;
     }
@@ -172,36 +148,32 @@
     // ─── SCRAPE STOCK TABLE ────────────────────────────────────────────────
 
     function scrapeStocks() {
-        // The stock table on torn.com/travel.php has item rows with name, quantity, cost
-        // Look for the stock items table - multiple possible selectors for PC and PDA
-        
         const stocks = [];
         
-        // Method 1: Look for stock items in the travel main content
-        // PDA often uses simpler markup
+        // Targeted selectors targeting modern Torn travel list structures 
         const stockRows = document.querySelectorAll(
+            '.travel-agency-market .users-list > li, ' +
+            '.travel-market-list .item-row, ' +
             '.stock-item, ' +
-            '[class*="stock-row"], ' +
-            '.items-list .item, ' +
-            '.travel-stock-table tbody tr, ' +
-            '#travel-main .item-row, ' +
             'table.travel-stock tr'
         );
 
         if (stockRows.length > 0) {
             stockRows.forEach(row => {
-                const cells = row.querySelectorAll('td, .item-cell, [class*="cell"]');
-                if (cells.length >= 3) {
-                    const nameEl = cells[0];
-                    const qtyEl = cells[1];
-                    const costEl = cells[2];
+                // Ignore headers if applicable
+                if (row.classList.contains('clear') || row.querySelector('.title')) return;
+
+                const nameEl = row.querySelector('.name, .item-name, .title');
+                const qtyEl = row.querySelector('.stkmkt-qty, .quantity, .stock, .count');
+                const costEl = row.querySelector('.stkmkt-value, .cost, .price, .value');
+
+                if (nameEl && qtyEl && costEl) {
+                    const name = nameEl.textContent.trim().split('\n')[0].trim();
+                    const qtyText = qtyEl.textContent.trim().replace(/,/g, '').match(/\d+/);
+                    const costText = costEl.textContent.trim().replace(/[$,]/g, '').match(/\d+/);
                     
-                    const name = (nameEl.textContent || '').trim();
-                    const qtyText = (qtyEl.textContent || '').trim().replace(/,/g, '');
-                    const costText = (costEl.textContent || '').trim().replace(/[$,]/g, '');
-                    
-                    const quantity = parseInt(qtyText);
-                    const cost = parseInt(costText);
+                    const quantity = qtyText ? parseInt(qtyText[0]) : NaN;
+                    const cost = costText ? parseInt(costText[0]) : NaN;
                     
                     if (name && !isNaN(quantity) && !isNaN(cost)) {
                         stocks.push({ name, quantity, cost });
@@ -210,26 +182,8 @@
             });
         }
 
-        // Method 2: Fall back to looking for structured data attributes
-        if (stocks.length === 0) {
-            const itemEls = document.querySelectorAll('[data-item-id], [data-stock-id]');
-            itemEls.forEach(el => {
-                const id = parseInt(el.dataset.itemId || el.dataset.stockId);
-                const name = (el.querySelector('.item-name') || el).textContent.trim();
-                const qtyEl = el.querySelector('.item-qty, .stock-qty, [data-quantity]');
-                const costEl = el.querySelector('.item-cost, .stock-cost, [data-cost]');
-                
-                const quantity = qtyEl ? parseInt((qtyEl.textContent || qtyEl.dataset.quantity || '').replace(/,/g, '')) : NaN;
-                const cost = costEl ? parseInt((costEl.textContent || costEl.dataset.cost || '').replace(/[$,]/g, '')) : NaN;
-                
-                if (id && name && !isNaN(quantity) && !isNaN(cost)) {
-                    stocks.push({ id, name, quantity, cost });
-                }
-            });
-        }
-
-        // Assign sequential IDs if none found (they'll be resolved server-side)
-        if (stocks.length > 0 && !stocks[0].id) {
+        // Pass explicit sequential IDs if server expects it
+        if (stocks.length > 0) {
             stocks.forEach((s, i) => { s.id = -1 - i; });
         }
 
@@ -245,27 +199,23 @@
         }
 
         const now = Date.now();
-        if (now - lastSubmitTime < 10000) return; // Don't submit more than once per 10s
+        if (now - lastSubmitTime < 5000) return; // Drop safety window slightly to 5s
         lastSubmitTime = now;
 
+        // Try user detection right before submitting if it wasn't caught at init
+        if (!playerId) detectUser();
+
         const payload = {
-            playerId: playerId,
-            playerName: playerName || '',
+            playerId: playerId || 0, // Fallback to 0 if Torn window hook is being stubborn
+            playerName: playerName || 'Unknown Observer',
             country: currentCountry,
             observedAt: Math.floor(now / 1000),
-            stocks: stocks.map(s => ({
-                id: s.id,
-                name: s.name,
-                quantity: s.quantity,
-                cost: s.cost
-            }))
+            stocks: stocks
         };
 
         const url = SSG_SERVER + '/api/stock-observe';
         const body = JSON.stringify(payload);
 
-        // Use GM_xmlhttpRequest if available (Tampermonkey/Greasemonkey on PC),
-        // otherwise fall back to standard fetch() (Torn PDA app, Violentmonkey, etc.)
         if (typeof GM_xmlhttpRequest !== 'undefined') {
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -274,75 +224,32 @@
                 data: body,
                 onload: function(response) {
                     if (response.status === 200) {
-                        try {
-                            const data = JSON.parse(response.responseText);
-                            if (data.success) {
-                                setStatus('submitted');
-                                console.log('[SSG Stock Observer] Submitted', stocks.length, 'items for', currentCountry);
-                            } else {
-                                setStatus('error');
-                                console.error('[SSG Stock Observer] Submit failed:', data.error);
-                            }
-                        } catch (e) {
-                            setStatus('error');
-                            console.error('[SSG Stock Observer] Parse error:', e);
-                        }
+                        setStatus('submitted');
+                        console.log('[SSG Stock Observer] API Response Accepted');
                     } else {
                         setStatus('error');
-                        console.error('[SSG Stock Observer] HTTP', response.status, response.responseText);
                     }
                 },
-                onerror: function(err) {
-                    setStatus('error');
-                    console.error('[SSG Stock Observer] Network error:', err);
-                },
-                ontimeout: function() {
-                    setStatus('error');
-                    console.error('[SSG Stock Observer] Timeout');
-                }
+                onerror: () => setStatus('error')
             });
         } else {
-            // Fallback for Torn PDA and other environments without GM_xmlhttpRequest
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: body
             })
-            .then(function(response) {
-                if (response.ok) {
-                    return response.json().then(function(data) {
-                        if (data.success) {
-                            setStatus('submitted');
-                            console.log('[SSG Stock Observer] Submitted', stocks.length, 'items for', currentCountry);
-                        } else {
-                            setStatus('error');
-                            console.error('[SSG Stock Observer] Submit failed:', data.error);
-                        }
-                    });
-                } else {
-                    setStatus('error');
-                    console.error('[SSG Stock Observer] HTTP', response.status);
-                }
-            })
-            .catch(function(err) {
-                setStatus('error');
-                console.error('[SSG Stock Observer] Network error:', err);
-            });
+            .then(res => res.ok ? setStatus('submitted') : setStatus('error'))
+            .catch(() => setStatus('error'));
         }
     }
 
     // ─── MAIN CHECK FUNCTION ───────────────────────────────────────────────
 
     function checkAndSubmit() {
-        if (!ENABLED || !playerId) return;
+        if (!ENABLED) return;
 
-        // Detect if we're abroad - look for stock data on the page
         const stocks = scrapeStocks();
-        
         if (stocks.length > 0) {
-            // We're abroad with visible stock data
-            // currentCountry may already be a code (e.g. 'mex') or a name (e.g. 'Mexico')
-            // Try detectCountry() first to get the name, then convert to code
             const countryName = detectCountry();
             const country = countryName ? countryToCode(countryName) : null;
             if (country) {
@@ -350,25 +257,14 @@
                 submitStocks(stocks);
             } else {
                 setStatus('idle');
-                console.log('[SSG Stock Observer] Abroad but could not detect country');
+                console.log('[SSG Stock Observer] Items found but country matching delayed.');
             }
         } else {
-            // Check if we're on the travel page abroad OR flying
-            const pageText = document.body.textContent;
-            const isAbroad = pageText.includes('You are currently in') ||
-                           pageText.includes('You are currently flying') ||
-                           pageText.includes('currently flying to') ||
-                           document.querySelector('.travel-main, #travel-main, .abroad-view') ||
-                           window.location.hash.includes('abroad');
-            
-            if (isAbroad) {
+            // Keep status badging active if user is explicitly on a travel view
+            if (document.querySelector('.travel-agency-market, .travel-agency-header, #travel-main')) {
                 setStatus('idle');
-            } else {
-                // In Torn, not abroad - hide the badge
-                if (statusIndicator) {
-                    statusIndicator.style.display = 'none';
-                }
-                return;
+            } else if (statusIndicator) {
+                statusIndicator.style.display = 'none';
             }
         }
     }
@@ -376,91 +272,44 @@
     // ─── INIT ───────────────────────────────────────────────────────────────
 
     function init() {
-        // Check if enabled
-        if (!ENABLED) {
-            console.log('[SSG Stock Observer] Disabled by user settings');
-            return;
-        }
+        if (!ENABLED) return;
 
-        // Detect user
-        if (!detectUser()) {
-            console.warn('[SSG Stock Observer] Could not detect user - are you logged in?');
-            // Still try to work - maybe user info loads later
-            setTimeout(detectUser, 3000);
-        }
-
-        // Create status indicator
+        detectUser();
         statusIndicator = createStatusBadge();
-        setStatus('unknown');
+        setStatus('idle');
 
-        // Register menu command for configuration (only if supported)
-        if (typeof GM_registerMenuCommand !== 'undefined') {
-            GM_registerMenuCommand('⚙️ SSG Server URL', () => {
-                const url = prompt('Enter SSG Dashboard URL:', GM_getValue('ssg_server_url', 'https://ssg-server.onrender.com'));
-                if (url) {
-                    GM_setValue('ssg_server_url', url);
-                    alert('SSG Server URL updated to: ' + url);
-                }
-            });
-
-            GM_registerMenuCommand(ENABLED ? '⏸️ Pause Observer' : '▶️ Resume Observer', () => {
-                const newState = !GM_getValue('ssg_enabled', true);
-                GM_setValue('ssg_enabled', newState);
-                alert('SSG Stock Observer ' + (newState ? 'resumed' : 'paused'));
-                location.reload();
-            });
-        }
-
-        // Wait for DOM to be ready with stock data
-        // Keep checking as long as we're on the travel page (flying or abroad)
+        // Setup dynamic interval loops
         pingInterval = setInterval(() => {
             const stocks = scrapeStocks();
-            const pageText = document.body.textContent;
-            const isAbroad = pageText.includes('You are currently in') ||
-                           pageText.includes('You are currently flying') ||
-                           pageText.includes('currently flying to') ||
-                           document.querySelector('.travel-main, #travel-main, .abroad-view') ||
-                           document.querySelector('.stock-item, [class*="stock-"], table.travel-stock');
-
-            if (stocks.length > 0 || isAbroad) {
-                // Don't clear pingInterval if we're still flying (no stocks yet)
-                // Only clear once we have stocks or if we've arrived with no stocks
-                if (stocks.length > 0 || pageText.includes('You are currently in')) {
+            
+            if (stocks.length > 0) {
+                const countryName = detectCountry();
+                const countryCode = countryName ? countryToCode(countryName) : null;
+                
+                if (countryCode) {
+                    currentCountry = countryCode;
+                    submitStocks(stocks);
+                    
+                    // Kill aggressive pinging cycle once we've successfully dropped our load
                     clearInterval(pingInterval);
                     pingInterval = null;
                 }
-                
-                if (stocks.length > 0) {
-                    const countryName = detectCountry();
-                    const countryCode = countryName ? countryToCode(countryName) : null;
-                    if (countryCode) {
-                        currentCountry = countryCode;
-                        submitStocks(stocks);
-                    }
-                }
-
-                // Set up periodic re-check every 60s (only once)
-                if (!recheckInterval) {
-                    recheckInterval = setInterval(checkAndSubmit, SUBMIT_INTERVAL_MS);
-                }
+            }
+            
+            if (!recheckInterval) {
+                recheckInterval = setInterval(checkAndSubmit, SUBMIT_INTERVAL_MS);
             }
         }, PING_INTERVAL_MS);
-
-        // No 30-second timeout - flights can take hours, so keep checking
-        // The script will naturally stop when navigating away from travel.php
     }
 
-    // Start when DOM is ready
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
 
-    // Clean up on page unload
     window.addEventListener('beforeunload', () => {
         if (pingInterval) clearInterval(pingInterval);
         if (recheckInterval) clearInterval(recheckInterval);
     });
-
 })();
