@@ -115,6 +115,13 @@
     function detectCountry() {
         // Try to find the country from the page content
         // Torn travel.php shows the country name in various places
+
+        // Known country names in Torn
+        const countries = [
+            'Mexico', 'Cayman Islands', 'Canada', 'Hawaii', 
+            'United Kingdom', 'Argentina', 'Switzerland', 
+            'Japan', 'China', 'UAE', 'South Africa'
+        ];
         
         // Method 1: Look for #travel-main or travel container with country data
         const travelMain = document.getElementById('travel-main');
@@ -128,12 +135,6 @@
         const titleEl = document.querySelector('.travel-title, .destination-title, h2, h3');
         if (titleEl) {
             const text = titleEl.textContent || '';
-            // Known country names in Torn
-            const countries = [
-                'Mexico', 'Cayman Islands', 'Canada', 'Hawaii', 
-                'United Kingdom', 'Argentina', 'Switzerland', 
-                'Japan', 'China', 'UAE', 'South Africa'
-            ];
             for (const country of countries) {
                 if (text.toLowerCase().includes(country.toLowerCase())) {
                     return country;
