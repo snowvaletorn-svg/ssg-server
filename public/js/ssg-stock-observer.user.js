@@ -11,6 +11,11 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
+// @connect      localhost
+// @connect      127.0.0.1
+// @connect      ssg-server.onrender.com
+// @connect      torn.com
+// @connect      www.torn.com
 // @run-at       document-idle
 // ==/UserScript==
 
@@ -255,17 +260,56 @@
             }))
         };
 
-        GM_xmlhttpRequest({
-            method: 'POST',
-            url: SSG_SERVER + '/api/stock-observe',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            data: JSON.stringify(payload),
-            onload: function(response) {
-                if (response.status === 200) {
-                    try {
-                        const data = JSON.parse(response.responseText);
+        const url = SSG_SERVER + '/api/stock-observe';
+        const body = JSON.stringify(payload);
+
+        // Use GM_xmlhttpRequest if available (Tampermonkey/Greasemonkey on PC),
+        // otherwise fall back to standard fetch() (Torn PDA app, Violentmonkey, etc.)
+        if (typeof GM_xmlhttpRequest !== 'undefined') {
+            GM_xmlhttpRequest({
+                method: 'POST',
+                url: url,
+                headers: { 'Content-Type': 'application/json' },
+                data: body,
+                onload: function(response) {
+                    if (response.status === 200) {
+                        try {
+                            const data = JSON.parse(response.responseText);
+                            if (data.success) {
+                                setStatus('submitted');
+                                console.log('[SSG Stock Observer] Submitted', stocks.length, 'items for', currentCountry);
+                            } else {
+                                setStatus('error');
+                                console.error('[SSG Stock Observer] Submit failed:', data.error);
+                            }
+                        } catch (e) {
+                            setStatus('error');
+                            console.error('[SSG Stock Observer] Parse error:', e);
+                        }
+                    } else {
+                        setStatus('error');
+                        console.error('[SSG Stock Observer] HTTP', response.status, response.responseText);
+                    }
+                },
+                onerror: function(err) {
+                    setStatus('error');
+                    console.error('[SSG Stock Observer] Network error:', err);
+                },
+                ontimeout: function() {
+                    setStatus('error');
+                    console.error('[SSG Stock Observer] Timeout');
+                }
+            });
+        } else {
+            // Fallback for Torn PDA and other environments without GM_xmlhttpRequest
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: body
+            })
+            .then(function(response) {
+                if (response.ok) {
+                    return response.json().then(function(data) {
                         if (data.success) {
                             setStatus('submitted');
                             console.log('[SSG Stock Observer] Submitted', stocks.length, 'items for', currentCountry);
@@ -273,24 +317,17 @@
                             setStatus('error');
                             console.error('[SSG Stock Observer] Submit failed:', data.error);
                         }
-                    } catch (e) {
-                        setStatus('error');
-                        console.error('[SSG Stock Observer] Parse error:', e);
-                    }
+                    });
                 } else {
                     setStatus('error');
-                    console.error('[SSG Stock Observer] HTTP', response.status, response.responseText);
+                    console.error('[SSG Stock Observer] HTTP', response.status);
                 }
-            },
-            onerror: function(err) {
+            })
+            .catch(function(err) {
                 setStatus('error');
                 console.error('[SSG Stock Observer] Network error:', err);
-            },
-            ontimeout: function() {
-                setStatus('error');
-                console.error('[SSG Stock Observer] Timeout');
-            }
-        });
+            });
+        }
     }
 
     // ─── MAIN CHECK FUNCTION ───────────────────────────────────────────────
@@ -355,21 +392,23 @@
         statusIndicator = createStatusBadge();
         setStatus('unknown');
 
-        // Register menu command for configuration
-        GM_registerMenuCommand('⚙️ SSG Server URL', () => {
-            const url = prompt('Enter SSG Dashboard URL:', GM_getValue('ssg_server_url', 'https://ssg-server.onrender.com'));
-            if (url) {
-                GM_setValue('ssg_server_url', url);
-                alert('SSG Server URL updated to: ' + url);
-            }
-        });
+        // Register menu command for configuration (only if supported)
+        if (typeof GM_registerMenuCommand !== 'undefined') {
+            GM_registerMenuCommand('⚙️ SSG Server URL', () => {
+                const url = prompt('Enter SSG Dashboard URL:', GM_getValue('ssg_server_url', 'https://ssg-server.onrender.com'));
+                if (url) {
+                    GM_setValue('ssg_server_url', url);
+                    alert('SSG Server URL updated to: ' + url);
+                }
+            });
 
-        GM_registerMenuCommand(ENABLED ? '⏸️ Pause Observer' : '▶️ Resume Observer', () => {
-            const newState = !GM_getValue('ssg_enabled', true);
-            GM_setValue('ssg_enabled', newState);
-            alert('SSG Stock Observer ' + (newState ? 'resumed' : 'paused'));
-            location.reload();
-        });
+            GM_registerMenuCommand(ENABLED ? '⏸️ Pause Observer' : '▶️ Resume Observer', () => {
+                const newState = !GM_getValue('ssg_enabled', true);
+                GM_setValue('ssg_enabled', newState);
+                alert('SSG Stock Observer ' + (newState ? 'resumed' : 'paused'));
+                location.reload();
+            });
+        }
 
         // Wait for DOM to be ready with stock data
         // Keep checking as long as we're on the travel page (flying or abroad)
