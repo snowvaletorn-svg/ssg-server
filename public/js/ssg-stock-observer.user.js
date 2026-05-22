@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.4.0
-// @description  Monitors and submits foreign stock data dynamically using safe layout DOM mapping. PC + Torn PDA friendly.
+// @version      1.4.2
+// @description  Monitors and submits foreign stock data dynamically using explicit text node analysis and hybrid polling. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
 // @match        *://*.torn.com/page.php?sid=travel*
@@ -24,7 +24,7 @@
     // ─── CONFIG ─────────────────────────────────────────────────────────────
     const SSG_SERVER = 'https://ssg-server.onrender.com';
     const ENABLED = true;
-    const MIN_SUBMIT_INTERVAL_MS = 10000; // 10s anti-spam protection
+    const MIN_SUBMIT_INTERVAL_MS = 10000;
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
@@ -33,11 +33,9 @@
     let currentCountry = null;
     let pageMutationObserver = null;
     let debounceTimer = null;
+    let heartbeatInterval = null;
     
-    // Tracking set to ensure we don't spam duplicate uploads on the same page state
     const completedPageStates = new Set();
-
-    // Diagnostic Log History Buffer
     const debugLogs = [];
 
     function logTrace(message, errorObj = null) {
@@ -82,7 +80,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.0 - Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.2 - Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -199,38 +197,52 @@
         return match ? parseInt(match, 10) : null;
     }
 
-    // DroqsDB-inspired robust text node scanning (bypasses broken CSS selectors)
     function scrapeStocks() {
         const stocks = [];
         
-        // Scan common block elements in the travel container layout
-        const rows = document.querySelectorAll('.content-wrapper li, .content-wrapper tr, [class*="travel-"] li, .travel-market-list .item-row');
+        // Dynamic search of common row containers
+        const rows = document.querySelectorAll(
+            '.travel-agency-market .users-list > li, ' +
+            '.travel-market-list .item-row, ' +
+            '.content-wrapper li, ' +
+            '.content-wrapper tr, ' +
+            '#mainContainer li, ' +
+            'tr, li'
+        );
         
-        logTrace(`Scraper triggered. Evaluating ${rows.length} generic text nodes.`);
-
         rows.forEach((row) => {
             if (row.querySelector('th') || row.classList.contains('clear') || row.classList.contains('title')) return;
 
-            const textContent = row.textContent || '';
-            // If there's no money sign present, this is not a stock transaction line
-            if (!textContent.includes('$')) return; 
+            // Target structural class definitions cleanly
+            const nameEl = row.querySelector('.name, .item-name, .title, [class*="name"]');
+            const qtyEl = row.querySelector('.stkmkt-qty, .quantity, .stock, .count, [class*="quantity"], [class*="stock"]');
+            const costEl = row.querySelector('.stkmkt-value, .cost, .price, .value, [class*="cost"], [class*="price"]');
 
-            // Safely breakdown inner cell arrays regardless of Torn's random class updates
-            const cells = row.querySelectorAll('div, span, td, p');
-            
-            // Clean out hidden elements or empty container text nodes
-            const validCells = Array.from(cells).filter(c => c.textContent.trim().length > 0);
+            if (nameEl && qtyEl && costEl) {
+                const name = nameEl.textContent.split('\n').trim();
+                const qty = parseNumeric(qtyEl.textContent);
+                const cost = parseNumeric(costEl.textContent);
 
-            if (validCells.length >= 3) {
-                let name = validCells.textContent.trim().split('\n').trim();
-                let qty = parseNumeric(validCells.textContent);
-                let cost = parseNumeric(validCells.textContent);
+                if (name && qty !== null && cost !== null && !stocks.some(s => s.name === name)) {
+                    stocks.push({ name, quantity: qty, cost });
+                }
+            } else {
+                // Fallback text cell breakdown mapping loop
+                const divs = row.querySelectorAll(':scope > div, :scope > span, :scope > td');
+                if (divs.length >= 3) {
+                    const rowText = row.textContent || '';
+                    if (rowText.includes('$')) {
+                        let name = divs.textContent.trim().split('\n').trim();
+                        let qty = parseNumeric(divs.textContent);
+                        let cost = parseNumeric(divs.textContent);
 
-                // Ensure data is mathematically structured before saving
-                if (name && qty !== null && cost !== null && !isNaN(qty) && !isNaN(cost)) {
-                    // Prevent pushing duplicate entries of the same item name in a single pass
-                    if (!stocks.some(s => s.name === name)) {
-                        stocks.push({ name, quantity: qty, cost });
+                        // Final structural block data type confirmation
+                        if (name && qty !== null && cost !== null && !isNaN(qty) && !isNaN(cost)) {
+                            // Filter headers and dirty strings out
+                            if (!stocks.some(s => s.name === name) && !['item', 'product', 'name', 'type', 'avail'].includes(name.toLowerCase())) {
+                                stocks.push({ name, quantity: qty, cost });
+                            }
+                        }
                     }
                 }
             }
@@ -240,7 +252,6 @@
             stocks.forEach((s, i) => { s.id = -1 - i; });
         }
         
-        logTrace(`Scrape phase finalized. Extracted: ${stocks.length} structured stock records.`);
         return stocks;
     }
 
@@ -255,11 +266,9 @@
         const now = Date.now();
         if (now - lastSubmitTime < MIN_SUBMIT_INTERVAL_MS) return; 
 
-        // Generate a unique fingerprint for this specific stock count payload
         const stateKey = currentCountry + "_" + stocks.length + "_" + stocks.reduce((acc, s) => acc + s.quantity, 0);
         if (completedPageStates.has(stateKey)) {
-            logTrace(`Payload dropped: State signature ${stateKey} already synced to server.`);
-            return;
+            return; // Dropped to avoid duplicating existing records on current tick
         }
 
         lastSubmitTime = now;
@@ -276,9 +285,8 @@
         const url = SSG_SERVER + '/api/stocks';
         const body = JSON.stringify(payload);
 
-        logTrace(`Dispatching secure out-of-context upload to: ${url}`);
+        logTrace(`Dispatching stock update array (${stocks.length} records) to Mongoose pipeline.`);
 
-        // EXPLICITLY REQUIRE GM FOR PC AND FALLBACK SAFELY FOR MOBILE APP CONTAINER WIRES
         if (typeof GM_xmlhttpRequest !== 'undefined') {
             GM_xmlhttpRequest({
                 method: 'POST',
@@ -286,7 +294,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 data: body,
                 onload: function(response) {
-                    logTrace(`Network callback returned: Status Code ${response.status}`);
+                    logTrace(`Server status trace: ${response.status}`);
                     if (response.status === 200 || response.status === 201) {
                         setStatus('submitted');
                         completedPageStates.add(stateKey);
@@ -302,7 +310,6 @@
                 }
             });
         } else {
-            logTrace(`GM object unavailable. Attempting fallback via native DOM window pipeline.`);
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -312,6 +319,7 @@
                 if (res.ok) {
                     setStatus('submitted');
                     completedPageStates.add(stateKey);
+                    logTrace(`SUCCESS: Native window fallback sync complete.`);
                 } else {
                     setStatus('error');
                     logTrace(`Native Fetch failed. Server status: ${res.status}`);
@@ -337,9 +345,8 @@
             const stocks = scrapeStocks();
             
             if (stocks.length > 0) {
+                logTrace(`Valid stock arrays verified. Passing data down pipeline.`);
                 submitStocks(stocks);
-            } else {
-                setStatus('idle');
             }
         } else {
             setStatus('idle');
@@ -356,18 +363,25 @@
         statusIndicator = createStatusBadge();
         setStatus('idle');
 
+        // FORCE IMMEDIATE PROCESS CALL INSTEAD OF WAITING ON MUTATIONS
+        logTrace(`Executing immediate upfront document analysis scan.`);
         processPageParsing();
 
-        // Standard 400ms Debounced Page Watcher loop
+        // Standard Mutation tracking capture link
         pageMutationObserver = new MutationObserver(() => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 processPageParsing();
             }, 400); 
         });
-
         pageMutationObserver.observe(document.body, { childList: true, subtree: true });
-        logTrace(`System live. Mutation listener attached successfully.`);
+
+        // HYBRID HEARTBEAT LOOP: Fires a safety check every 1.5s to capture dynamic mobile loading scripts
+        heartbeatInterval = setInterval(() => {
+            processPageParsing();
+        }, 1500);
+
+        logTrace(`System live. Mutation listener + Hybrid Heartbeat loop active.`);
     }
 
     if (document.readyState === 'loading') {
@@ -378,5 +392,6 @@
 
     window.addEventListener('beforeunload', () => {
         if (pageMutationObserver) pageMutationObserver.disconnect();
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
     });
 })();

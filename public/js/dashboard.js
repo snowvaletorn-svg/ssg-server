@@ -2949,33 +2949,6 @@ setInterval(() => {
 // TRAVEL PROFITS
 // ═══════════════════════════════════════════════════════════════════════════════
 
-let travelProfitsCache = null;
-
-async function fetchTravelProfits() {
-  const container = document.getElementById('travel-profits-data');
-  container.innerHTML = '<div class="channel-loading">LOADING TRAVEL PROFITS...</div>';
-  try {
-    const res = await fetch('/api/travel-profits');
-    const data = await res.json();
-    if (!res.ok) {
-      let errorMsg = `<div class="channel-error">⚠️ ${data.error}</div>`;
-      if (data.help) {
-        errorMsg += `<div class="channel-error" style="margin-top:0.5rem;padding:0.75rem;background:#1a1919;border:1px solid #333;border-radius:4px;font-size:0.85rem;">
-          <strong style="color:#f0a500;">How to fix:</strong><br>
-          ${data.help}<br><br>
-          <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#a78df5;">Go to API Key Settings →</a>
-        </div>`;
-      }
-      container.innerHTML = errorMsg;
-      return;
-    }
-    travelProfitsCache = data;
-    renderTravelProfits();
-  } catch (err) {
-    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
-  }
-}
-
 function renderTravelProfits() {
   const container = document.getElementById('travel-profits-data');
 
@@ -3013,7 +2986,6 @@ function renderTravelProfits() {
   // Filter by item type using checkboxes
   profits = profits.filter(p => {
     const type = p.type.toLowerCase();
-    // Normalize type to singular form for comparison
     const normalizedType = type.endsWith('s') ? type.slice(0, -1) : type;
 
     if (normalizedType === 'plushie' && typePlushie) return true;
@@ -3042,7 +3014,6 @@ function renderTravelProfits() {
       break;
     case 'profitPerRun':
     default:
-      // Sort by profit per run (profit per item × quantity minus flight cost)
       profits.sort((a, b) => {
         const aFlightCost = getFlightCost(a.country, travelMethod);
         const bFlightCost = getFlightCost(b.country, travelMethod);
@@ -3059,10 +3030,7 @@ function renderTravelProfits() {
   });
 
   const summary = travelProfitsCache.summary || {};
-
-  // Separate in-stock and out-of-stock for summary calculations
   const inStockProfits = profits.filter(p => !p.outOfStock);
-  const outOfStockProfits = profits.filter(p => p.outOfStock);
 
   // Find the best profit per run from IN-STOCK items only
   const bestRun = inStockProfits.length > 0 ? inStockProfits.reduce((best, current) => {
@@ -3073,25 +3041,20 @@ function renderTravelProfits() {
     return currentProfit > bestProfit ? current : best;
   }) : null;
 
-  // Calculate maximum possible profit for selected country (fill 25 slots optimally)
+  // Calculate maximum possible profit for selected country
   let selectedCountryTotal = 0;
   if (selectedCountry && profits.length > 0) {
     const flightCost = getFlightCost(selectedCountry, travelMethod);
     let slotsRemaining = quantity;
     let totalProfit = 0;
 
-    // Sort items descending by profit per item to fill slots optimally
     const sortedItems = [...profits].sort((a,b) => b.profit - a.profit);
-
     for (const item of sortedItems) {
       if (slotsRemaining <= 0) break;
-
-      // Take as many of this item as possible (up to available quantity or remaining slots)
       const takeAmount = Math.min(item.quantity, slotsRemaining);
       totalProfit += item.profit * takeAmount;
       slotsRemaining -= takeAmount;
     }
-
     selectedCountryTotal = totalProfit - flightCost;
   }
 
@@ -3106,7 +3069,7 @@ function renderTravelProfits() {
       <div class="card-body">
         <div class="stats-grid">
           ${selectedCountry ? statTile(getCountryName(selectedCountry), 'Selected Country') : (bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country'))}
-          ${selectedCountry ? statTile('$' + formatNum(selectedCountryTotal), 'Total Profit') : (bestRun ? statTile('+' + formatNum(bestRun.profit * quantity), 'Best Profit/Run') : statTile('—', 'Best Profit/Run'))}
+          ${selectedCountry ? statTile('$' + formatNum(selectedCountryTotal), 'Total Profit') : (bestRun ? statTile('+' + formatNum((bestRun.profit * quantity) - getFlightCost(bestRun.country, travelMethod)), 'Best Profit/Run') : statTile('—', 'Best Profit/Run'))}
           ${bestRun ? statTile(escapeHtml(bestRun.name), 'Best Item') : statTile('—', 'Best Item')}
           ${statTile(travelMethod === 'standard' ? '✈️ Standard' : travelMethod === 'airstrip' ? '🛫 Airstrip' : '🚀 Private', 'Travel Method')}
         </div>
@@ -3116,41 +3079,48 @@ function renderTravelProfits() {
   Object.entries(grouped).forEach(([country, items]) => {
     const flightCost = getFlightCost(country, travelMethod);
     const countryTotal = items.reduce((sum, p) => sum + (p.profit * quantity), 0) - flightCost;
-    const travelTime = items[0].travelTimes[travelMethod];
+    
+    // Dynamic flight travel durations based on checked travel methods
+    const baseTravelTime = items.travelTimes ? (items.travelTimes[travelMethod] || items.travelTimes['standard']) : 0;
 
     const rows = items.map(item => {
-      const flightCost = getFlightCost(country, travelMethod);
       const profitPerRun = (item.profit * quantity) - flightCost;
-
-      // Format best leave time display (to arrive at restock time)
       let restockDisplay = '<span style="color:#555;">—</span>';
 
-      if (item.minutesUntilLeave !== null && item.minutesUntilLeave !== undefined) {
-        const minsUntilLeave = item.minutesUntilLeave;
-        const leaveTime = item.bestLeaveTime || '—';
+      // Safe Extraction of baseline estimated stock intervals
+      let estimatedRestockMins = null;
+      if (item.estimatedRestockIn !== null && item.estimatedRestockIn !== undefined) {
+          estimatedRestockMins = item.estimatedRestockIn;
+      } else if (item.minutesUntilLeave !== null && item.travelTimes && item.travelTimes['standard']) {
+          // Fallback reverse-math calculation if needed
+          estimatedRestockMins = item.minutesUntilLeave + item.travelTimes['standard'];
+      }
 
-        if (minsUntilLeave <= 0) {
-          // Should leave now to arrive at restock
-          restockDisplay = `<span style="color:#4caf50;font-weight:600;">Leave Now!<br><small>Restock: ${leaveTime}</small></span>`;
-        } else if (minsUntilLeave < 60) {
-          // Leave in X minutes
-          restockDisplay = `<span style="color:#219653;">In ${minsUntilLeave}m<br><small>Leave at ${leaveTime}</small></span>`;
-        } else {
-          const h = Math.floor(minsUntilLeave / 60);
-          const m = minsUntilLeave % 60;
-          restockDisplay = `<span style="color:#219653;">In ${h}h ${m}m<br><small>Leave at ${leaveTime}</small></span>`;
-        }
-      } else if (item.estimatedRestockIn !== null && item.estimatedRestockIn !== undefined) {
-        // Fallback: just show restock countdown
-        const mins = item.estimatedRestockIn;
-        if (mins <= 0) {
-          restockDisplay = '<span style="color:#4caf50;font-weight:600;">Restocking Now</span>';
-        } else if (mins < 60) {
-          restockDisplay = `<span style="color:#f0a500;">~${mins}m to restock</span>`;
-        } else {
-          const h = Math.floor(mins / 60);
-          restockDisplay = `<span style="color:#ff9800;">~${h}h to restock</span>`;
-        }
+      if (estimatedRestockMins !== null) {
+          // Dynamic Departure Matrix: Recalculate offsets based on selected flight speeds
+          // Standard flight time = 100% baseline. Airstrip = 70% duration. Private Jet = 50% duration.
+          const actualFlightDuration = baseTravelTime || 0;
+          
+          // Minutes remaining before the pilot MUST switch flight statuses
+          const dynamicMinsUntilLeave = estimatedRestockMins - actualFlightDuration;
+
+          // Build absolute dynamic deadline time string format in UTC zone markers
+          const leaveDate = new Date(Date.now() + (dynamicMinsUntilLeave * 60 * 1000));
+          const utcHours = String(leaveDate.getUTCHours()).padStart(2, '0');
+          const utcMinutes = String(leaveDate.getUTCMinutes()).padStart(2, '0');
+          const dynamicLeaveTimeUTC = `${utcHours}:${utcMinutes} UTC`;
+
+          if (dynamicMinsUntilLeave <= 0) {
+              restockDisplay = `<span style="color:#ff4444;font-weight:700;animation:pulse 1.5s infinite;">⚠️ Missed Window<br><small>Restock: ~${estimatedRestockMins}m</small></span>`;
+          } else if (dynamicMinsUntilLeave === 0) {
+              restockDisplay = `<span style="color:#4caf50;font-weight:600;">Leave Now!<br><small>Target: ${dynamicLeaveTimeUTC}</small></span>`;
+          } else if (dynamicMinsUntilLeave < 60) {
+              restockDisplay = `<span style="color:#219653;font-weight:600;">In ${dynamicMinsUntilLeave}m<br><small>Leave: ${dynamicLeaveTimeUTC}</small></span>`;
+          } else {
+              const h = Math.floor(dynamicMinsUntilLeave / 60);
+              const m = dynamicMinsUntilLeave % 60;
+              restockDisplay = `<span style="color:#219653;">In ${h}h ${m}m<br><small>Leave: ${dynamicLeaveTimeUTC}</small></span>`;
+          }
       }
 
       const isOos = item.outOfStock;
@@ -3168,16 +3138,16 @@ function renderTravelProfits() {
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${profitColor};">${item.profit > 0 ? '+$' + formatNum(item.profit) : '-$' + formatNum(Math.abs(item.profit))}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${item.profitPercent.toFixed(1)}%</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">${item.profit > 0 ? '+$' + formatNum(profitPerRun) : '-'}</td>
-          <td style="text-align:center;font-size:0.85rem;">${restockDisplay}</td>
+          <td style="text-align:center;font-size:0.85rem;line-height:1.2;">${restockDisplay}</td>
         </tr>`;
     }).join('');
 
-        html += `
+    html += `
       <div class="card" style="margin-bottom:1rem;">
         <div class="card-header">
           🌍 ${getCountryName(country)}
           <span style="float:right;font-size:0.75rem;color:#555;">
-            Travel: ~${travelTime}min | Total: $${formatNum(countryTotal)}
+            Travel: ~${baseTravelTime} min | Total: $${formatNum(countryTotal)}
           </span>
         </div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
@@ -3192,7 +3162,7 @@ function renderTravelProfits() {
                 <th style="text-align:right;white-space:nowrap;">Profit</th>
                 <th style="text-align:right;white-space:nowrap;">%</th>
                 <th style="text-align:right;white-space:nowrap;">Run</th>
-                <th style="text-align:center;white-space:nowrap;">⏰ Timing</th>
+                <th style="text-align:center;white-space:nowrap;">⏰ Departure Window</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -3203,38 +3173,6 @@ function renderTravelProfits() {
 
   container.innerHTML = html;
 }
-
-function getCountryName(code) {
-  const names = {
-    mex: 'Mexico', cay: 'Cayman Islands', can: 'Canada',
-    haw: 'Hawaii', uni: 'United Kingdom', arg: 'Argentina',
-    swi: 'Switzerland', jap: 'Japan', chi: 'China',
-    uae: 'UAE', sou: 'South Africa'
-  };
-  return names[code] || code;
-}
-
-const STANDARD_FLIGHT_COSTS = {
-  mex: 6500,
-  cay: 10000,
-  can: 9000,
-  haw: 11000,
-  uni: 18000,
-  arg: 21000,
-  swi: 27000,
-  jap: 32000,
-  chi: 35000,
-  uae: 32000,
-  sou: 40000
-};
-
-function getFlightCost(countryCode, travelMethod) {
-  if (travelMethod === 'airstrip' || travelMethod === 'private') {
-    return 0;
-  }
-  return STANDARD_FLIGHT_COSTS[countryCode] || 0;
-}
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // ORGANIZED CRIME TRACKING
 // ═══════════════════════════════════════════════════════════════════════════════
