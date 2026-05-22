@@ -42,6 +42,7 @@
             <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
             <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
             <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
+            <a href="#scripts" class="nav-item" onclick="showSection('scripts', this)">📜 Scripts</a>
             <% if (isOwner || isDirector) { %>
               <a href="#companies" class="nav-item" onclick="showSection('companies', this)">🏢 Companies</a>
               <% } %>
@@ -610,6 +611,33 @@
                     onclick="document.getElementById('oc-participant-modal').style.display='none'">✕</button>
                 </div>
                 <div class="help-modal-body" id="participant-modal-body"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── SCRIPTS ── -->
+          <section id="scripts" class="section">
+            <div class="section-header">
+              <h3>📜 Helpful Scripts to Install</h3>
+            </div>
+            <div class="card mt-2">
+              <div class="card-header"></div>
+              <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:1rem;">
+                  <div>
+                    <label class="apply-label">Fair Fight Script</label>
+                    <p style="color: #888;">After you install this script, you will need to go to <a href="https://ffscouter.com/">https://ffscouter.com/</a> and follow the following
+                      steps:
+                      <ul style="color: #888;">
+                        <li>In the middle of the page, select "Generate Custom API Key" it will take you back to Torn.</li>
+                        <li>Generate and copy the key.</li>
+                        <li>Paste it into the API Key text box and check the checkboxes for all of the terms and conditions.</li>
+                        <li>Then select "Sign Up"</li>
+                      </ul>
+                    </p>
+                    <a href="https://greasyfork.org/en/scripts/535292-ff-scouter-v2">Fair Fight Script</a>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

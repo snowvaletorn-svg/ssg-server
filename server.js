@@ -256,19 +256,37 @@ app.set('views', path.join(__dirname, 'views'));
 
 app.use(cors({
   origin: function (origin, callback) {
+    // If no origin (like simple server-to-server or direct tools), allow it
     if (!origin) return callback(null, true);
+    
     const allowedOrigins = [
       'http://localhost:3000',
       'https://ssg-server.onrender.com',
+      'https://www.torn.com', // ALLOWS STANDARD PC BROWSER TAMPERMONKEY HANDSHAKES
+      'https://torn.com',
       process.env.ALLOWED_ORIGIN
     ].filter(Boolean);
-    if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.onrender.com')) {
+
+    // Allow matched origins, subdomains of onrender, OR requests coming from Torn itself
+    if (
+      allowedOrigins.indexOf(origin) !== -1 || 
+      origin.endsWith('.onrender.com') ||
+      origin.includes('torn.com')
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  credentials: true
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'User-Agent',
+    'Accept'
+  ],
+  credentials: true // Keeps session cookies functional for your dashboard login views
 }));
 app.use(compression({ level: 6 }));
 app.use(express.json());

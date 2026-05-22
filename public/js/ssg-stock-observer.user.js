@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.2.0
+// @version      1.2.1
 // @description  Monitors and submits foreign stock data dynamically using MutationObservers on page changes. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -12,8 +12,6 @@
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_registerMenuCommand
-// @connect      localhost
-// @connect      127.0.0.1
 // @connect      ssg-server.onrender.com
 // @connect      torn.com
 // @connect      www.torn.com
@@ -24,10 +22,9 @@
     'use strict';
 
     // ─── CONFIG ─────────────────────────────────────────────────────────────
-    const IS_LOCAL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const DEFAULT_SERVER = IS_LOCAL ? 'http://localhost:3000' : 'https://ssg-server.onrender.com';
-    const SSG_SERVER = GM_getValue('ssg_server_url', DEFAULT_SERVER);
-    const ENABLED = GM_getValue('ssg_enabled', true);
+    // Hardcoded directly to your live production address to stop local-fallback loops on mobile
+    const SSG_SERVER = 'https://ssg-server.onrender.com';
+    const ENABLED = true;
     const MIN_SUBMIT_INTERVAL_MS = 10000; // 10s anti-spam protection rule
 
     let lastSubmitTime = 0;
@@ -189,7 +186,8 @@
             stocks: stocks
         };
 
-        const url = SSG_SERVER + '/api/stock-observe';
+        // FIXED: Route explicitly matches your Express app's endpoint address setup
+        const url = SSG_SERVER + '/api/stocks';
         const body = JSON.stringify(payload);
 
         if (typeof GM_xmlhttpRequest !== 'undefined') {
@@ -199,14 +197,18 @@
                 headers: { 'Content-Type': 'application/json' },
                 data: body,
                 onload: function(response) {
-                    if (response.status === 200) {
+                    if (response.status === 200 || response.status === 201) {
                         setStatus('submitted');
                         console.log('[SSG Stock Observer] Data successfully transferred to dashboard pipeline.');
                     } else {
+                        console.error('[SSG] Server response error status:', response.status);
                         setStatus('error');
                     }
                 },
-                onerror: () => setStatus('error')
+                onerror: (err) => {
+                    console.error('[SSG] GM_xmlhttpRequest execution exception:', err);
+                    setStatus('error');
+                }
             });
         } else {
             fetch(url, {
@@ -231,7 +233,6 @@
             currentCountry = countryCode;
             const stocks = scrapeStocks();
             
-            // If we have either found data OR location text explicitly matched, sync with server
             if (stocks.length > 0 || countryName) {
                 submitStocks(stocks);
             }
@@ -249,14 +250,11 @@
         statusIndicator = createStatusBadge();
         setStatus('idle');
 
-        // Run an immediate baseline capture run
         processPageParsing();
 
-        // Attach MutationObserver to handle Torn's dynamic content swaps smoothly
         const targetNode = document.body;
         const observerConfig = { childList: true, subtree: true };
 
-        // Debounce tracking parameters so execution doesn't lock up computing frames
         let searchTimeout = null;
         pageMutationObserver = new MutationObserver(() => {
             if (searchTimeout) clearTimeout(searchTimeout);
