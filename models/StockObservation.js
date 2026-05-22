@@ -18,15 +18,15 @@ const stockObservationSchema = new mongoose.Schema({
   }],
   
   // Server metadata
-  // REMOVED 'index: true' from here to prevent the duplicate index warning
+  // Explicitly keep this as a basic un-indexed field here
   receivedAt: { type: Date, default: Date.now } 
 });
 
-// Compound index for efficient dashboard queries (fetching latest records by country)
+// Compound indices for clean dashboard pipeline processing
 stockObservationSchema.index({ country: 1, receivedAt: -1 });
 stockObservationSchema.index({ 'stocks.id': 1, country: 1 });
 
-// This single line indexes receivedAt AND applies the 7-day automatic cleanup rule
+// Single dedicated TTL rule index handling database cleanup seamlessly
 stockObservationSchema.index({ receivedAt: 1 }, { expireAfterSeconds: 604800 });
 
 module.exports = mongoose.model('StockObservation', stockObservationSchema);

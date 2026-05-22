@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.3.2
-// @description  Monitors and submits foreign stock data dynamically using MutationObservers on page changes. Includes persistent UI overlay logs.
+// @version      1.4.0
+// @description  Monitors and submits foreign stock data dynamically using safe layout DOM mapping. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
 // @match        *://*.torn.com/page.php?sid=travel*
@@ -24,7 +24,7 @@
     // ─── CONFIG ─────────────────────────────────────────────────────────────
     const SSG_SERVER = 'https://ssg-server.onrender.com';
     const ENABLED = true;
-    const MIN_SUBMIT_INTERVAL_MS = 10000; // 10s anti-spam protection rule
+    const MIN_SUBMIT_INTERVAL_MS = 10000; // 10s anti-spam protection
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
@@ -32,8 +32,12 @@
     let playerName = null;
     let currentCountry = null;
     let pageMutationObserver = null;
+    let debounceTimer = null;
     
-    // Diagnostic History Buffer
+    // Tracking set to ensure we don't spam duplicate uploads on the same page state
+    const completedPageStates = new Set();
+
+    // Diagnostic Log History Buffer
     const debugLogs = [];
 
     function logTrace(message, errorObj = null) {
@@ -46,7 +50,7 @@
         console.log(`[SSG-TRACE] ${message}`, errorObj || '');
     }
 
-    // ─── UI HELPERS ─────────────────────────────────────────────────────────
+    // ─── UI INTERACTIVE DIAGNOSTICS ──────────────────────────────────────────
 
     function showDiagnosticReport() {
         const existingOverlay = document.getElementById('ssg-debug-overlay');
@@ -78,7 +82,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.3.2 - System Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.0 - Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -91,7 +95,6 @@
         textLogs.readOnly = true;
         textLogs.style.cssText = 'flex-grow:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:10px; font-size:12px; resize:none; border-radius:4px;';
         
-        // Build out current context state header block
         let reportStr = `ENVIRONMENT STATS:\n`;
         reportStr += `--------------------------------------------------\n`;
         reportStr += `Target Server : ${SSG_SERVER}\n`;
@@ -145,7 +148,7 @@
         statusIndicator.style.background = colors[status] || '#888888';
     }
 
-    // ─── DETECT DATA LOOKUPS ────────────────────────────────────────────────
+    // ─── RESILIENT DATA PARSING ─────────────────────────────────────────────
 
     function detectUser() {
         try {
@@ -153,11 +156,11 @@
             if (win && win.user) {
                 playerId = win.user.id;
                 playerName = win.user.name;
-                logTrace(`User verification hook resolved: ${playerName} (${playerId})`);
+                logTrace(`User verified: ${playerName} (${playerId})`);
                 return true;
             }
         } catch (e) {
-            logTrace(`User context acquisition exception`, { error: e.message });
+            logTrace(`User context acquisition failure`, { error: e.message });
         }
         return false;
     }
@@ -189,71 +192,77 @@
         return map[(countryName || '').toLowerCase().trim()] || null;
     }
 
+    function parseNumeric(text) {
+        if (!text) return null;
+        const cleaned = text.replace(/,/g, '').trim();
+        const match = cleaned.match(/\d+/);
+        return match ? parseInt(match, 10) : null;
+    }
+
+    // DroqsDB-inspired robust text node scanning (bypasses broken CSS selectors)
     function scrapeStocks() {
         const stocks = [];
-        const stockRows = document.querySelectorAll(
-            '.travel-agency-market .users-list > li, ' +
-            '.travel-market-list .item-row, ' +
-            '.stock-item, ' +
-            '[class*="travel-"] li, ' +
-            'table.travel-stock tr'
-        );
+        
+        // Scan common block elements in the travel container layout
+        const rows = document.querySelectorAll('.content-wrapper li, .content-wrapper tr, [class*="travel-"] li, .travel-market-list .item-row');
+        
+        logTrace(`Scraper triggered. Evaluating ${rows.length} generic text nodes.`);
 
-        logTrace(`Scraper triggered. Found total DOM rows matching selectors: ${stockRows.length}`);
+        rows.forEach((row) => {
+            if (row.querySelector('th') || row.classList.contains('clear') || row.classList.contains('title')) return;
 
-        if (stockRows.length > 0) {
-            stockRows.forEach((row, idx) => {
-                if (row.classList.contains('clear') || row.querySelector('.title')) return;
+            const textContent = row.textContent || '';
+            // If there's no money sign present, this is not a stock transaction line
+            if (!textContent.includes('$')) return; 
 
-                const nameEl = row.querySelector('.name, .item-name, .title, [class*="name"]');
-                const qtyEl = row.querySelector('.stkmkt-qty, .quantity, .stock, .count, [class*="quantity"], [class*="stock"]');
-                const costEl = row.querySelector('.stkmkt-value, .cost, .price, .value, [class*="cost"], [class*="price"]');
+            // Safely breakdown inner cell arrays regardless of Torn's random class updates
+            const cells = row.querySelectorAll('div, span, td, p');
+            
+            // Clean out hidden elements or empty container text nodes
+            const validCells = Array.from(cells).filter(c => c.textContent.trim().length > 0);
 
-                if (nameEl && qtyEl && costEl) {
-                    const name = nameEl.textContent.trim().split('\n')[0].trim();
-                    const qtyText = qtyEl.textContent.trim().replace(/,/g, '').match(/\d+/);
-                    const costText = costEl.textContent.trim().replace(/[$,]/g, '').match(/\d+/);
-                    
-                    const quantity = qtyText ? parseInt(qtyText[0]) : NaN;
-                    const cost = costText ? parseInt(costText[0]) : NaN;
-                    
-                    if (name && !isNaN(quantity) && !isNaN(cost)) {
-                        stocks.push({ name, quantity, cost });
-                    }
-                } else {
-                    if (idx === 0) {
-                        logTrace(`Row layout pattern evaluation failed. Element structural map:`, {
-                            hasName: !!nameEl, hasQty: !!qtyEl, hasCost: !!costEl
-                        });
+            if (validCells.length >= 3) {
+                let name = validCells.textContent.trim().split('\n').trim();
+                let qty = parseNumeric(validCells.textContent);
+                let cost = parseNumeric(validCells.textContent);
+
+                // Ensure data is mathematically structured before saving
+                if (name && qty !== null && cost !== null && !isNaN(qty) && !isNaN(cost)) {
+                    // Prevent pushing duplicate entries of the same item name in a single pass
+                    if (!stocks.some(s => s.name === name)) {
+                        stocks.push({ name, quantity: qty, cost });
                     }
                 }
-            });
-        }
+            }
+        });
 
         if (stocks.length > 0) {
             stocks.forEach((s, i) => { s.id = -1 - i; });
         }
-        logTrace(`Scrape engine evaluation completed. Total elements validated: ${stocks.length}`);
+        
+        logTrace(`Scrape phase finalized. Extracted: ${stocks.length} structured stock records.`);
         return stocks;
     }
 
-    // ─── TRANSMIT DATA ──────────────────────────────────────────────────────
+    // ─── TRANSMIT DATA WITH CORS SAFEGUARDS ──────────────────────────────────
 
     function submitStocks(stocks) {
         if (!ENABLED) {
             setStatus('disabled');
-            logTrace(`Submission bypassed: Script execution is set to explicit disabled state.`);
             return;
         }
 
         const now = Date.now();
-        const splitDiff = now - lastSubmitTime;
-        if (splitDiff < MIN_SUBMIT_INTERVAL_MS) {
-            logTrace(`Submission throttled by anti-spam rule. Time delta: ${splitDiff}ms / Required: ${MIN_SUBMIT_INTERVAL_MS}ms`);
-            return;
-        } 
-        lastSubmitTime = now;
+        if (now - lastSubmitTime < MIN_SUBMIT_INTERVAL_MS) return; 
 
+        // Generate a unique fingerprint for this specific stock count payload
+        const stateKey = currentCountry + "_" + stocks.length + "_" + stocks.reduce((acc, s) => acc + s.quantity, 0);
+        if (completedPageStates.has(stateKey)) {
+            logTrace(`Payload dropped: State signature ${stateKey} already synced to server.`);
+            return;
+        }
+
+        lastSubmitTime = now;
         if (!playerId) detectUser();
 
         const payload = {
@@ -267,60 +276,55 @@
         const url = SSG_SERVER + '/api/stocks';
         const body = JSON.stringify(payload);
 
-        logTrace(`Beginning data transmission to endpoint: ${url}`);
+        logTrace(`Dispatching secure out-of-context upload to: ${url}`);
 
+        // EXPLICITLY REQUIRE GM FOR PC AND FALLBACK SAFELY FOR MOBILE APP CONTAINER WIRES
         if (typeof GM_xmlhttpRequest !== 'undefined') {
-            logTrace(`Dispatching payload via GM_xmlhttpRequest loop.`);
             GM_xmlhttpRequest({
                 method: 'POST',
                 url: url,
                 headers: { 'Content-Type': 'application/json' },
                 data: body,
                 onload: function(response) {
-                    logTrace(`GM Response interceptor fired. Server Code: ${response.status}`);
+                    logTrace(`Network callback returned: Status Code ${response.status}`);
                     if (response.status === 200 || response.status === 201) {
                         setStatus('submitted');
-                        logTrace(`SUCCESS: Data pipeline accepted array structures cleanly.`);
+                        completedPageStates.add(stateKey);
+                        logTrace(`SUCCESS: Data saved to Mongoose pipeline.`);
                     } else {
                         setStatus('error');
-                        logTrace(`FAILURE: Server threw validation error rejection. Raw Response Body:`, {
-                            status: response.status,
-                            text: response.responseText ? response.responseText.substring(0, 300) : 'None'
-                        });
+                        logTrace(`REJECTED: Server code ${response.status}. Raw string reply: ${response.responseText}`);
                     }
                 },
                 onerror: (err) => {
                     setStatus('error');
-                    logTrace(`CRITICAL ERROR: GM execution block context level drop. Raw error details:`, err);
+                    logTrace(`CRITICAL DROP: Extension network layer crashed. Check extension security tab.`, err);
                 }
             });
         } else {
-            logTrace(`GM wrapper fallback. Dispatching pipeline payload via Standard Native Fetch window component.`);
+            logTrace(`GM object unavailable. Attempting fallback via native DOM window pipeline.`);
             fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: body
             })
             .then(res => {
-                logTrace(`Native Fetch Response interceptor fired. Server Code: ${res.status} | Ok: ${res.ok}`);
                 if (res.ok) {
                     setStatus('submitted');
+                    completedPageStates.add(stateKey);
                 } else {
                     setStatus('error');
-                    logTrace(`Server returned rejection across standard fetch route.`);
+                    logTrace(`Native Fetch failed. Server status: ${res.status}`);
                 }
             })
             .catch((fetchErr) => {
                 setStatus('error');
-                logTrace(`CRITICAL ERROR: Native fetch context execution thrown. Network might be offline or blocked by CORS rules.`, {
-                    message: fetchErr.message,
-                    context: 'Check browser cross-origin policy exceptions'
-                });
+                logTrace(`CORS / NETWORK LOCK: Native browser engine rejected connection payload.`, { message: fetchErr.message });
             });
         }
     }
 
-    // ─── RUN ENGINE PROCESSING ──────────────────────────────────────────────
+    // ─── ENGINE RUN TIME EXECUTION ──────────────────────────────────────────
 
     function processPageParsing() {
         if (!ENABLED) return;
@@ -329,14 +333,13 @@
         const countryCode = countryName ? countryToCode(countryName) : null;
 
         if (countryCode) {
-            if (currentCountry !== countryCode) {
-                logTrace(`Location initialization completed. Structural Target: ${countryName} (${countryCode})`);
-            }
             currentCountry = countryCode;
             const stocks = scrapeStocks();
             
-            if (stocks.length > 0 || countryName) {
+            if (stocks.length > 0) {
                 submitStocks(stocks);
+            } else {
+                setStatus('idle');
             }
         } else {
             setStatus('idle');
@@ -347,7 +350,7 @@
 
     function init() {
         if (!ENABLED) return;
-        logTrace(`Boot sequence active. Running environment analysis...`);
+        logTrace(`Boot initialization running.`);
 
         detectUser();
         statusIndicator = createStatusBadge();
@@ -355,19 +358,16 @@
 
         processPageParsing();
 
-        const targetNode = document.body;
-        const observerConfig = { childList: true, subtree: true };
-
-        let searchTimeout = null;
+        // Standard 400ms Debounced Page Watcher loop
         pageMutationObserver = new MutationObserver(() => {
-            if (searchTimeout) clearTimeout(searchTimeout);
-            searchTimeout = setTimeout(() => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
                 processPageParsing();
-            }, 800); 
+            }, 400); 
         });
 
-        pageMutationObserver.observe(targetNode, observerConfig);
-        logTrace(`Mutation Tracking Core bound to active document body.`);
+        pageMutationObserver.observe(document.body, { childList: true, subtree: true });
+        logTrace(`System live. Mutation listener attached successfully.`);
     }
 
     if (document.readyState === 'loading') {
