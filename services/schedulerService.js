@@ -35,7 +35,7 @@ function startScheduler() {
           'Weekly Stat Progress Report',
           false,
           null,
-          'Snowvaletorn@gmail.com'
+          'snowvaletorn@gmail.com'
         );
         console.log('[Scheduler] Send results:', JSON.stringify(sendResults));
       } else {
