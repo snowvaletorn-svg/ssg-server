@@ -4,8 +4,9 @@
 // @version      1.1.0
 // @description  Automatically submits foreign stock data to SSG Dashboard when you visit torn.com/travel.php while abroad. PC + Torn PDA friendly.
 // @author       SSG
-// @match        https://www.torn.com/travel.php*
-// @match        https://torn.com/travel.php*
+// @match        *://*.torn.com/travel.php*
+// @match        *://*.torn.com/page.php?sid=travel*
+// @match        *://torn.com/page.php?sid=travel*
 // @icon         https://www.google.com/s2/favicons?domain=torn.com
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
