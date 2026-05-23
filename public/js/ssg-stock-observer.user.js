@@ -80,7 +80,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.4 - Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.5 - Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -100,6 +100,31 @@
         reportStr += `Detected Zone : ${currentCountry || 'NOT_IN_FOREIGN_COUNTRY'}\n`;
         reportStr += `UserAgent     : ${navigator.userAgent}\n`;
         reportStr += `GM Network    : ${typeof GM_xmlhttpRequest !== 'undefined' ? 'Available (Extension Mode)' : 'Unavailable (Native Fetch Mode)'}\n`;
+        reportStr += `--------------------------------------------------\n\n`;
+        
+        // Dump page structure for debugging - show non-empty tables and lists
+        reportStr += `PAGE TABLE STRUCTURE:\n`;
+        const allTables = document.querySelectorAll('table');
+        allTables.forEach((t, ti) => {
+            const rows = t.querySelectorAll('tr');
+            reportStr += `  Table #${ti+1}: ${rows.length} rows\n`;
+            rows.forEach((r, ri) => {
+                const cells = r.querySelectorAll('td, th');
+                const textPreview = (r.textContent || '').trim().substring(0, 80).replace(/\n/g, ' ');
+                if (textPreview) reportStr += `    Row ${ri}: [${cells.length} cells] "${textPreview}"\n`;
+            });
+        });
+        
+        const allLists = document.querySelectorAll('ul, ol');
+        allLists.forEach((l, li) => {
+            const items = l.querySelectorAll('li');
+            reportStr += `  List #${li+1}: ${items.length} items\n`;
+            items.forEach((item, ii) => {
+                const textPreview = (item.textContent || '').trim().substring(0, 80).replace(/\n/g, ' ');
+                if (textPreview) reportStr += `    Item ${ii}: "${textPreview}"\n`;
+            });
+        });
+        
         reportStr += `--------------------------------------------------\n\nLOG EVENT HISTORY:\n`;
         reportStr += debugLogs.join('\n');
 
