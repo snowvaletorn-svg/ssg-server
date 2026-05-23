@@ -80,7 +80,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.6 - Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.7 - Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -378,222 +378,187 @@
         const stocks = [];
         logTrace(`Scraping stocks from page...`);
 
-        // Strategy 1: Look for Torn's stock market table directly
-        // Torn travel.php uses a bazaar/market table structure
-        const marketContainers = document.querySelectorAll(
-            '[class*="stock"]:not(.ssg-ignore), ' +
-            '[class*="market"]:not(.ssg-ignore), ' +
-            '.items-list, ' +
-            'table.torn-table, ' +
-            'table:not(.ssg-ignore)'
-        );
+        // Torn's travel.php uses a grid-based layout with hashed CSS module class names.
+        // Stock data appears inside <div class="stockTableWrapper___XXXXX"> elements.
+        // Each item row has child <div> cells with classes like tabletColA, tabletColB, etc.
+        // We use partial class name matching to handle the hashed suffixes.
 
-        // Try to find rows in any table-like structure
-        let potentialRows = document.querySelectorAll(
-            'table tr:not(:first-child), ' +
-            'ul.items-list li, ' +
-            '[class*="item-row"], ' +
-            '[class*="stock-row"], ' +
-            '[class*="list-item"], ' +
-            '.item, ' +
-            '[class*="bazaar"] tr, ' +
-            '[class*="shop"] tr, ' +
-            'li[class*="item"]'
-        );
-
-        potentialRows.forEach((row) => {
-            // Skip headers and structural elements
-            if (row.querySelector('th')) return;
-            if (row.classList.contains('clear')) return;
-            if (row.classList.contains('title')) return;
-            if ((row.textContent || '').trim().length < 5) return;
-            if (!(row.textContent || '').includes('$')) return;
-
-            const rowText = row.textContent.trim();
-            const cells = row.querySelectorAll(':scope > td, :scope > div, :scope > span');
-            
-            // Try to find name, quantity, and cost from visible text
-            const allTextElements = row.querySelectorAll('*:not(script):not(style)');
-            let name = '';
-            let qty = null;
-            let cost = null;
-
-            // Approach A: Extract name from first meaningful text, qty and cost from numbers
-            const textParts = [];
-            cells.forEach(cell => {
-                const text = (cell.textContent || '').trim();
-                if (text) textParts.push(text);
-            });
-
-            if (textParts.length === 0) {
-                // Fallback to splitting by whitespace/line
-                const splitParts = rowText.split(/\s{2,}|\n|\t/).filter(p => p.trim());
-                textParts.push(...splitParts);
-            }
-
-            for (let i = 0; i < textParts.length; i++) {
-                const part = textParts[i].trim();
-                if (!part || part === '$') continue;
-                
-                const num = parseNumeric(part);
-                
-                if (part.includes('$') || (num !== null && part.replace(/,/g, '').match(/^\d+$/) && (part.length > 3 || i === textParts.length - 1))) {
-                    // This looks like a price
-                    if (cost === null) {
-                        cost = num !== null ? num : parseNumeric(part.replace(/[^0-9,]/g, ''));
-                    }
-                } else if (num !== null && part.replace(/,/g, '').match(/^\d+$/)) {
-                    // This looks like a quantity
-                    if (qty === null) {
-                        qty = num;
-                    }
-                } else if (!name && isNaN(part)) {
-                    // This looks like a name (not a number)
-                    name = part;
-                }
-            }
-
-            // Approach B: Direct text parsing per cell for multi-cell rows
-            if (!name || qty === null || cost === null) {
-                const cellTexts = [];
-                cells.forEach(cell => {
-                    const t = (cell.textContent || '').trim();
-                    if (t) cellTexts.push(t);
-                });
-
-                if (cellTexts.length >= 3) {
-                    // First cell with actual text = name
-                    for (let i = 0; i < cellTexts.length; i++) {
-                        const t = cellTexts[i];
-                        if (t && !t.match(/^[\d\s,]+$/) && !t.includes('$')) {
-                            if (!name) name = t;
-                        } else if (t.match(/^\d[\d,]*$/) || t.match(/^[\d,]+$/)) {
-                            // Pure number = quantity
-                            if (qty === null) qty = parseInt(t.replace(/,/g, ''), 10);
-                        } else if (t.includes('$')) {
-                            // Has dollar sign = cost
-                            const n = parseNumeric(t);
-                            if (cost === null && n !== null) cost = n;
-                        }
-                    }
-                }
-            }
-
-            // Approach C: Regex extraction from row text as last resort
-            if (!name || qty === null || cost === null) {
-                const numbers = [];
-                const dollarAmounts = [];
-                
-                // Extract all dollar amounts
-                const dollarRegex = /\$[\d,]+/g;
-                let match;
-                while ((match = dollarRegex.exec(rowText)) !== null) {
-                    dollarAmounts.push(parseInt(match[0].replace(/[$,]/g, ''), 10));
-                }
-                
-                // Extract all other numbers
-                const numRegex = /(\d[\d,]*)/g;
-                while ((match = numRegex.exec(rowText)) !== null) {
-                    const val = parseInt(match[1].replace(/,/g, ''), 10);
-                    if (!dollarAmounts.includes(val)) {
-                        numbers.push(val);
-                    }
-                }
-                
-                // Extract potential name (first text segment before numbers)
-                const firstNumberIndex = rowText.search(/\d/);
-                if (firstNumberIndex > 0) {
-                    const potentialName = rowText.substring(0, firstNumberIndex).trim();
-                    if (potentialName && potentialName.length > 1 && !potentialName.includes('$')) {
-                        name = potentialName;
-                    }
-                }
-                
-                if (dollarAmounts.length > 0) cost = dollarAmounts[dollarAmounts.length - 1];
-                if (numbers.length > 0) qty = numbers[0];
-            }
-
-            // Validate and push
-            if (name && qty !== null && cost !== null && qty > 0 && cost > 0) {
-                const cleanName = name.replace(/^[^a-zA-Z]+/, '').trim();
-                if (cleanName && !stocks.some(s => s.name === cleanName) && 
-                    !['item', 'product', 'name', 'type', 'avail', 'quantity', 'cost', 'price', 'stock', 'value', ''].includes(cleanName.toLowerCase())) {
-                    stocks.push({ name: cleanName, quantity: qty, cost });
-                    logTrace(`Scraped stock: ${cleanName}, qty=${qty}, cost=${cost}`);
-                }
-            }
-        });
-
-        // Strategy 2: If no results from rows, try scanning all table cells for pattern: name + qty + price
-        if (stocks.length === 0) {
-            logTrace(`No stock data found in row selectors, trying direct text scanning.`);
-            const allTables = document.querySelectorAll('table');
-            allTables.forEach(table => {
-                const rows = table.querySelectorAll('tr');
-                rows.forEach((row, idx) => {
-                    if (idx === 0) return; // Skip header
-                    const cells = row.querySelectorAll('td, th');
-                    if (cells.length >= 3) {
-                        const name = (cells[0].textContent || '').trim();
-                        const qty = parseNumeric(cells[1].textContent);
-                        const costText = (cells[cells.length - 1].textContent || '');
-                        const cost = parseNumeric(costText);
-                        
-                        if (name && qty !== null && cost !== null && qty > 0 && cost > 0) {
-                            const cleanName = name.replace(/^[^a-zA-Z]+/, '').trim();
-                            if (cleanName && !stocks.some(s => s.name === cleanName)) {
-                                stocks.push({ name: cleanName, quantity: qty, cost });
-                                logTrace(`Scraped stock (table method): ${cleanName}, qty=${qty}, cost=${cost}`);
-                            }
-                        }
-                    }
+        // Strategy 1: Find stock table wrappers by partial class match
+        const stockTables = document.querySelectorAll('[class*="stockTableWrapper"]');
+        
+        if (stockTables.length === 0) {
+            logTrace(`No stockTableWrapper found, trying broader shop container search.`);
+            // Fallback: find the shops container
+            const shopContainers = document.querySelectorAll('[class*="shops"]');
+            shopContainers.forEach(container => {
+                const wrappers = container.querySelectorAll('[class*="stockTableWrapper"]');
+                wrappers.forEach(w => {
+                    if (!stockTables.length) { /* already handled */ }
+                    parseStockTable(w, stocks);
                 });
             });
         }
+        
+        stockTables.forEach(table => parseStockTable(table, stocks));
 
-        // Strategy 3: Try to find stock data in script/JSON embedded in the page
+        // Strategy 2: Fallback - scan all divs containing $ that look like stock items
         if (stocks.length === 0) {
-            logTrace(`No stock data found in tables, trying embedded data.`);
-            try {
-                const scripts = document.querySelectorAll('script:not([src])');
-                scripts.forEach(script => {
-                    const content = script.textContent || '';
-                    // Look for arrays of stock items in JavaScript variables
-                    const stockMatch = content.match(/\[[\s\S]*?stock[\s\S]*?\]/i) || 
-                                       content.match(/\[[\s\S]*?(?:item|product)[\s\S]*?\d[\s\S]*?\$[\s\S]*?\]/i);
-                    if (stockMatch) {
-                        // Try to extract item objects from the array
-                        const itemRegex = /\{[^}]*(?:name|item|stock)[^}]*\}/gi;
-                        let m;
-                        while ((m = itemRegex.exec(stockMatch[0])) !== null) {
-                            const objStr = m[0];
-                            const nameMatch = objStr.match(/["'](?:name|item)["']\s*:\s*["']([^"']+)["']/i);
-                            const qtyMatch = objStr.match(/["'](?:quantity|qty|stock|amount)["']\s*:\s*(\d+)/i);
-                            const costMatch = objStr.match(/["'](?:cost|price|value)["']\s*:\s*(\d+)/i);
-                            
-                            const name = nameMatch ? nameMatch[1] : null;
-                            const qty = qtyMatch ? parseInt(qtyMatch[1], 10) : null;
-                            const cost = costMatch ? parseInt(costMatch[1], 10) : null;
-                            
-                            if (name && qty !== null && cost !== null && !stocks.some(s => s.name === name)) {
+            logTrace(`No stock data from stockTableWrappers, trying direct scanning.`);
+            const allDivs = document.querySelectorAll('div[class*="cell"]');
+            const nameEls = document.querySelectorAll('[class*="tabletColB"]');
+            const costEls = document.querySelectorAll('[class*="displayPrice"]');
+            const stockEls = document.querySelectorAll('[class*="neededSpace"]');
+            
+            // If we found any of these elements, try to pair them up by proximity
+            if (nameEls.length > 0 && costEls.length > 0) {
+                // Walk through and pair names with costs that are in the same parent row
+                const processedParents = new Set();
+                nameEls.forEach(nameEl => {
+                    const row = nameEl.closest('[class*="cell"]') || nameEl.parentElement;
+                    if (!row || processedParents.has(row)) return;
+                    processedParents.add(row);
+                    
+                    // Find all tabletColB (name), tabletColC (stock), tabletColD (cost) in this row
+                    const name = (nameEl.textContent || '').trim();
+                    const rowParent = row.parentElement;
+                    
+                    // Find sibling cells in the same row parent
+                    if (rowParent) {
+                        // Look for the cost cell (tabletColD) and stock cell (tabletColC)
+                        const cells = rowParent.querySelectorAll(':scope > [class*="cell"]');
+                        let qty = null;
+                        let cost = null;
+                        
+                        cells.forEach(cell => {
+                            const cls = cell.className || '';
+                            const text = (cell.textContent || '').trim();
+                            if (cls.includes('tabletColC') || cls.includes('neededSpace')) {
+                                // Stock column - extract number
+                                const n = parseNumeric(text);
+                                if (n !== null) qty = n;
+                            }
+                            if (cls.includes('tabletColD') || cls.includes('displayPrice')) {
+                                // Cost column - extract $ amount
+                                const n = parseNumeric(text);
+                                if (n !== null) cost = n;
+                            }
+                        });
+                        
+                        if (name && qty !== null && cost !== null && qty > 0 && cost > 0) {
+                            if (!stocks.some(s => s.name === name)) {
                                 stocks.push({ name, quantity: qty, cost });
-                                logTrace(`Scraped stock (embedded JS): ${name}, qty=${qty}, cost=${cost}`);
+                                logTrace(`Scraped stock (cell scan): ${name}, qty=${qty}, cost=${cost}`);
                             }
                         }
                     }
                 });
-            } catch (e) {
-                logTrace(`Embedded data parsing error: ${e.message}`);
+            } else {
+                // Ultra-fallback: scan all elements for the pattern: text with $ and name before it
+                logTrace(`No structured cells found, trying brute-force text scan.`);
+                const text = document.body.textContent || '';
+                const patterns = text.match(/([A-Z][a-zA-Z\s]{2,40}?)\s*\$?([\d,]+)\s*\$?([\d,]+)/g);
+                if (patterns) {
+                    patterns.forEach(p => {
+                        const match = p.match(/([A-Z][a-zA-Z\s]{2,40}?)\s*\$?([\d,]+)\s*\$?([\d,]+)/);
+                        if (match) {
+                            const name = match[1].trim();
+                            const qty = parseInt(match[2].replace(/,/g, ''), 10);
+                            const cost = parseInt(match[3].replace(/,/g, ''), 10);
+                            if (name && !isNaN(qty) && !isNaN(cost) && qty > 0 && cost > 0 && !stocks.some(s => s.name === name)) {
+                                stocks.push({ name, quantity: qty, cost });
+                                logTrace(`Scraped stock (brute regex): ${name}, qty=${qty}, cost=${cost}`);
+                            }
+                        }
+                    });
+                }
             }
         }
 
         if (stocks.length > 0) {
             stocks.forEach((s, i) => { s.id = -1 - i; });
         } else {
-            logTrace(`No stocks scraped from page. Page may be in transit or has no stock market visible.`);
+            logTrace(`No stocks scraped from page.`);
         }
         
         return stocks;
+    }
+
+    // Helper: Parse items from a stockTableWrapper div
+    function parseStockTable(tableEl, stocks) {
+        // Get direct children that represent item rows (skip the itemsHeader)
+        const children = tableEl.children;
+        let sectionName = '';
+        
+        // Find the shop heading that precedes this table
+        let sibling = tableEl.previousElementSibling;
+        while (sibling) {
+            if (sibling.className && sibling.className.includes('shopHeader')) {
+                sectionName = (sibling.textContent || '').trim();
+                break;
+            }
+            sibling = sibling.previousElementSibling;
+        }
+        
+        for (let i = 0; i < children.length; i++) {
+            const child = children[i];
+            // Skip header rows
+            if (child.className && child.className.includes('itemsHeader')) continue;
+            if (child.className && child.className.includes('itemsHeaderCell')) continue;
+            
+            // Check if this child contains $ amounts and item data
+            const childText = (child.textContent || '').trim();
+            if (!childText.includes('$') || childText.length < 10) continue;
+            if (childText.includes('Item') && childText.includes('Name') && childText.includes('Cost')) continue;
+            
+            // Extract data from the child
+            // Look for: name in tabletColB descendant, cost in displayPrice descendant, stock in neededSpace descendant
+            const nameEl = child.querySelector('[class*="tabletColB"]') || 
+                          child.querySelector('[class*="item-name"]');
+            const costEl = child.querySelector('[class*="displayPrice"]');
+            const stockEl = child.querySelector('[class*="neededSpace"]');
+            
+            if (nameEl && costEl) {
+                const name = (nameEl.textContent || '').trim().replace(/^buy\s+/i, '').replace(/^type\s+/i, '');
+                const costNum = parseNumeric(costEl.textContent);
+                let qtyNum = null;
+                
+                // Stock may come from neededSpace element or parsed from text
+                if (stockEl) {
+                    const stockText = (stockEl.textContent || '').trim();
+                    // Sometimes stock shows as "$25" (same as price) - if so, skip it
+                    if (!stockText.includes('$')) {
+                        qtyNum = parseNumeric(stockText);
+                    }
+                }
+                
+                // If qty is still null, try to find it from direct child divs
+                if (qtyNum === null) {
+                    const itemCells = child.querySelectorAll(':scope > div');
+                    itemCells.forEach(cell => {
+                        const cls = cell.className || '';
+                        const txt = (cell.textContent || '').trim();
+                        // tabletColC is the stock column
+                        if (cls.includes('tabletColC')) {
+                            const n = parseNumeric(txt);
+                            if (n !== null && !txt.includes('$')) qtyNum = n;
+                        }
+                    });
+                }
+                
+                // If still null, try parsing from text: find "stock XXXX" pattern
+                if (qtyNum === null) {
+                    const stockMatch = childText.match(/stock\s+([\d,]+)/i);
+                    if (stockMatch) qtyNum = parseInt(stockMatch[1].replace(/,/g, ''), 10);
+                }
+                
+                if (name && qtyNum !== null && costNum !== null && qtyNum > 0 && costNum > 0) {
+                    if (!stocks.some(s => s.name === name)) {
+                        stocks.push({ name, quantity: qtyNum, cost: costNum });
+                        logTrace(`Scraped stock: ${name}, qty=${qtyNum}, cost=${costNum} [${sectionName}]`);
+                    }
+                }
+            }
+        }
     }
 
     // ─── TRANSMIT DATA WITH CORS SAFEGUARDS ──────────────────────────────────
