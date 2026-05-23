@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.5.0
+// @version      2.0.0
 // @description  Monitors and submits foreign stock data. Flight-aware: only polls when landed, uses arrival time estimation.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
