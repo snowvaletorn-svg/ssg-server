@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.4.2
+// @version      1.4.3
 // @description  Monitors and submits foreign stock data dynamically using explicit text node analysis and hybrid polling. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -80,7 +80,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.2 - Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.3 - Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -149,35 +149,160 @@
     // ─── RESILIENT DATA PARSING ─────────────────────────────────────────────
 
     function detectUser() {
+        // Try multiple sources to find the player ID
         try {
+            // Method 1: Check unsafeWindow.user (most common for Torn pages)
             const win = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
             if (win && win.user) {
                 playerId = win.user.id;
                 playerName = win.user.name;
-                logTrace(`User verified: ${playerName} (${playerId})`);
+                logTrace(`User verified via window.user: ${playerName} (${playerId})`);
                 return true;
             }
         } catch (e) {
-            logTrace(`User context acquisition failure`, { error: e.message });
+            logTrace(`User context acquisition failure (method 1)`, { error: e.message });
         }
+
+        // Method 2: Check for user data in Torn's global userdata variable
+        try {
+            const win = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
+            if (win && win.userdata && win.userdata.id) {
+                playerId = win.userdata.id;
+                playerName = win.userdata.name || win.userdata.username || 'Unknown';
+                logTrace(`User verified via window.userdata: ${playerName} (${playerId})`);
+                return true;
+            }
+        } catch (e) {
+            logTrace(`User context acquisition failure (method 2)`, { error: e.message });
+        }
+
+        // Method 3: Extract from Torn page's user-info elements
+        try {
+            const userInfoEl = document.querySelector('.user-info-name, .user-name, [class*="user-info"] a, #user-profile a, .msg-wrap .user, [href*="profiles.php?XID="]');
+            if (userInfoEl) {
+                const href = userInfoEl.getAttribute('href') || '';
+                const match = href.match(/XID=(\d+)/);
+                if (match && match[1]) {
+                    playerId = parseInt(match[1], 10);
+                    playerName = userInfoEl.textContent.trim();
+                    logTrace(`User verified via page element: ${playerName} (${playerId})`);
+                    return true;
+                }
+            }
+        } catch (e) {
+            logTrace(`User context acquisition failure (method 3)`, { error: e.message });
+        }
+
+        // Method 4: Extract from Torn's API key in localStorage
+        try {
+            // Torn sometimes stores user info in localStorage
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.includes('user') || key.includes('player') || key.includes('torn'))) {
+                    try {
+                        const val = JSON.parse(localStorage.getItem(key));
+                        if (val && val.player_id) {
+                            playerId = val.player_id;
+                            playerName = val.name || val.username || 'Unknown';
+                            logTrace(`User verified via localStorage: ${playerName} (${playerId})`);
+                            return true;
+                        }
+                        if (val && val.id && typeof val.id === 'number') {
+                            playerId = val.id;
+                            playerName = val.name || val.username || 'Unknown';
+                            logTrace(`User verified via localStorage.data: ${playerName} (${playerId})`);
+                            return true;
+                        }
+                    } catch (e2) { /* not JSON, skip */ }
+                }
+            }
+        } catch (e) {
+            logTrace(`User context acquisition failure (method 4)`, { error: e.message });
+        }
+
+        // Method 5: Try to find player ID in Torn cookies
+        try {
+            const cookies = document.cookie.split(';');
+            for (const cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'player_id' || name === 'user_id' || name === 'torn_user_id') {
+                    playerId = parseInt(value, 10);
+                    playerName = 'Unknown';
+                    logTrace(`User verified via cookie: ${playerId}`);
+                    return true;
+                }
+            }
+        } catch (e) {
+            logTrace(`User context acquisition failure (method 5)`, { error: e.message });
+        }
+
+        logTrace(`Failed to detect user from any source. Will use 0 as fallback.`);
         return false;
     }
 
     function detectCountry() {
-        const countries = [
-            'Mexico', 'Cayman Islands', 'Canada', 'Hawaii', 
-            'United Kingdom', 'Argentina', 'Switzerland', 
-            'Japan', 'China', 'UAE', 'South Africa'
+        const countryConfig = [
+            { name: 'Mexico', codes: ['mex', 'mexico'] },
+            { name: 'Cayman Islands', codes: ['cay', 'cayman', 'cayman islands'] },
+            { name: 'Canada', codes: ['can', 'canada'] },
+            { name: 'Hawaii', codes: ['haw', 'hawaii'] },
+            { name: 'United Kingdom', codes: ['uni', 'united kingdom', 'uk', 'london'] },
+            { name: 'Argentina', codes: ['arg', 'argentina'] },
+            { name: 'Switzerland', codes: ['swi', 'switzerland'] },
+            { name: 'Japan', codes: ['jap', 'japan'] },
+            { name: 'China', codes: ['chi', 'china'] },
+            { name: 'UAE', codes: ['uae', 'dubai'] },
+            { name: 'South Africa', codes: ['sou', 'south africa'] }
         ];
         
         const entireText = document.body.textContent || '';
+        const lowerText = entireText.toLowerCase();
         
-        for (const country of countries) {
-            const regex = new RegExp(`(currently in|welcome to|landed in|stock in|flight to|travelling to|traveling to|you are in)\\s*${country}`, 'i');
-            if (regex.test(entireText)) {
-                return country;
+        // Method 1: Look for heading/title elements containing country names (most reliable)
+        const headings = document.querySelectorAll('h1, h2, h3, h4, .title, .page-title, .content-title, [class*="heading"], [class*="header"]');
+        for (const el of headings) {
+            const text = (el.textContent || '').toLowerCase();
+            for (const config of countryConfig) {
+                for (const code of config.codes) {
+                    if (text.includes(code)) {
+                        return config.name;
+                    }
+                }
             }
         }
+        
+        // Method 2: Check common markers in page text
+        const countryMarkers = [
+            { name: 'Mexico', patterns: ['currently in mexico', 'welcome to mexico', 'mexico stock', 'mexico market'] },
+            { name: 'Cayman Islands', patterns: ['currently in cayman', 'welcome to cayman', 'cayman islands stock', 'cayman market'] },
+            { name: 'Canada', patterns: ['currently in canada', 'welcome to canada', 'canada stock', 'canada market'] },
+            { name: 'Hawaii', patterns: ['currently in hawaii', 'welcome to hawaii', 'hawaii stock', 'hawaii market'] },
+            { name: 'United Kingdom', patterns: ['currently in united kingdom', 'welcome to united kingdom', 'uk stock', 'united kingdom stock', 'uk market', 'london stock'] },
+            { name: 'Argentina', patterns: ['currently in argentina', 'welcome to argentina', 'argentina stock', 'argentina market'] },
+            { name: 'Switzerland', patterns: ['currently in switzerland', 'welcome to switzerland', 'switzerland stock', 'switzerland market'] },
+            { name: 'Japan', patterns: ['currently in japan', 'welcome to japan', 'japan stock', 'japan market'] },
+            { name: 'China', patterns: ['currently in china', 'welcome to china', 'china stock', 'china market'] },
+            { name: 'UAE', patterns: ['currently in uae', 'welcome to uae', 'dubai stock', 'uae stock', 'uae market'] },
+            { name: 'South Africa', patterns: ['currently in south africa', 'welcome to south africa', 'south africa stock', 'south africa market'] }
+        ];
+        
+        for (const marker of countryMarkers) {
+            for (const pattern of marker.patterns) {
+                if (lowerText.includes(pattern)) {
+                    return marker.name;
+                }
+            }
+        }
+        
+        // Method 3: Raw country name match as substring (broad fallback)
+        for (const config of countryConfig) {
+            for (const code of config.codes) {
+                if (lowerText.includes(code)) {
+                    return config.name;
+                }
+            }
+        }
+        
         return null;
     }
 
@@ -219,7 +344,7 @@
             const costEl = row.querySelector('.stkmkt-value, .cost, .price, .value, [class*="cost"], [class*="price"]');
 
             if (nameEl && qtyEl && costEl) {
-                const name = nameEl.textContent.split('\n').trim();
+                const name = (nameEl.textContent || '').trim();
                 const qty = parseNumeric(qtyEl.textContent);
                 const cost = parseNumeric(costEl.textContent);
 
@@ -232,9 +357,15 @@
                 if (divs.length >= 3) {
                     const rowText = row.textContent || '';
                     if (rowText.includes('$')) {
-                        let name = divs.textContent.trim().split('\n').trim();
-                        let qty = parseNumeric(divs.textContent);
-                        let cost = parseNumeric(divs.textContent);
+                        // Use the first div as name, parse numbers from all divs for qty/cost
+                        const name = (divs[0].textContent || '').trim();
+                        const numbers = [];
+                        divs.forEach(d => {
+                            const n = parseNumeric(d.textContent);
+                            if (n !== null) numbers.push(n);
+                        });
+                        let qty = numbers.length > 0 ? numbers[0] : null;
+                        let cost = numbers.length > 1 ? numbers[1] : null;
 
                         // Final structural block data type confirmation
                         if (name && qty !== null && cost !== null && !isNaN(qty) && !isNaN(cost)) {
@@ -282,7 +413,7 @@
             stocks: stocks
         };
 
-        const url = SSG_SERVER + '/api/stocks';
+        const url = SSG_SERVER + '/api/stock-observe';
         const body = JSON.stringify(payload);
 
         logTrace(`Dispatching stock update array (${stocks.length} records) to Mongoose pipeline.`);
@@ -336,6 +467,11 @@
 
     function processPageParsing() {
         if (!ENABLED) return;
+
+        // Re-detect user on each cycle if we don't have it yet
+        if (!playerId) {
+            detectUser();
+        }
 
         const countryName = detectCountry();
         const countryCode = countryName ? countryToCode(countryName) : null;
