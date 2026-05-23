@@ -258,32 +258,44 @@
         const entireText = document.body.textContent || '';
         const lowerText = entireText.toLowerCase();
         
-        // Method 1: Look for heading/title elements containing country names (most reliable)
-        const headings = document.querySelectorAll('h1, h2, h3, h4, .title, .page-title, .content-title, [class*="heading"], [class*="header"]');
-        for (const el of headings) {
-            const text = (el.textContent || '').toLowerCase();
-            for (const config of countryConfig) {
-                for (const code of config.codes) {
-                    if (text.includes(code)) {
-                        return config.name;
-                    }
+        // First: Check if we're in transit (flying) - if so, don't detect any country
+        const flightIndicators = ['flight to', 'arriving in', 'travelling to', 'traveling to', 'on a flight', 'in transit', 'departed'];
+        for (const indicator of flightIndicators) {
+            if (lowerText.includes(indicator)) {
+                // If flight indicators exist without arrival indicators, we're still flying
+                const arrivalIndicators = ['currently in', 'you are in', 'stock market', 'items for sale'];
+                const hasArrived = arrivalIndicators.some(a => lowerText.includes(a));
+                if (!hasArrived) {
+                    return null; // Still in flight, don't detect country
                 }
             }
         }
         
-        // Method 2: Check common markers in page text
+        // Method 1: Look for heading/title elements containing full country names (most reliable)
+        const headings = document.querySelectorAll('h1, h2, h3, h4, .title, .page-title, .content-title, [class*="heading"], [class*="header"]');
+        for (const el of headings) {
+            const text = (el.textContent || '').toLowerCase();
+            for (const config of countryConfig) {
+                // Only match full country names in headings (no short codes)
+                if (text.includes(config.name.toLowerCase())) {
+                    return config.name;
+                }
+            }
+        }
+        
+        // Method 2: Check common markers in page text (only when actually in-country)
         const countryMarkers = [
-            { name: 'Mexico', patterns: ['currently in mexico', 'welcome to mexico', 'mexico stock', 'mexico market'] },
-            { name: 'Cayman Islands', patterns: ['currently in cayman', 'welcome to cayman', 'cayman islands stock', 'cayman market'] },
-            { name: 'Canada', patterns: ['currently in canada', 'welcome to canada', 'canada stock', 'canada market'] },
-            { name: 'Hawaii', patterns: ['currently in hawaii', 'welcome to hawaii', 'hawaii stock', 'hawaii market'] },
-            { name: 'United Kingdom', patterns: ['currently in united kingdom', 'welcome to united kingdom', 'uk stock', 'united kingdom stock', 'uk market', 'london stock'] },
-            { name: 'Argentina', patterns: ['currently in argentina', 'welcome to argentina', 'argentina stock', 'argentina market'] },
-            { name: 'Switzerland', patterns: ['currently in switzerland', 'welcome to switzerland', 'switzerland stock', 'switzerland market'] },
-            { name: 'Japan', patterns: ['currently in japan', 'welcome to japan', 'japan stock', 'japan market'] },
-            { name: 'China', patterns: ['currently in china', 'welcome to china', 'china stock', 'china market'] },
-            { name: 'UAE', patterns: ['currently in uae', 'welcome to uae', 'dubai stock', 'uae stock', 'uae market'] },
-            { name: 'South Africa', patterns: ['currently in south africa', 'welcome to south africa', 'south africa stock', 'south africa market'] }
+            { name: 'Mexico', patterns: ['currently in mexico', 'you are in mexico', 'items for sale in mexico', 'mexico stock market'] },
+            { name: 'Cayman Islands', patterns: ['currently in cayman', 'you are in cayman', 'items for sale in cayman', 'cayman islands stock'] },
+            { name: 'Canada', patterns: ['currently in canada', 'you are in canada', 'items for sale in canada', 'canada stock market'] },
+            { name: 'Hawaii', patterns: ['currently in hawaii', 'you are in hawaii', 'items for sale in hawaii', 'hawaii stock market'] },
+            { name: 'United Kingdom', patterns: ['currently in united kingdom', 'you are in united kingdom', 'items for sale in united kingdom', 'united kingdom stock', 'items for sale in uk', 'uk stock market'] },
+            { name: 'Argentina', patterns: ['currently in argentina', 'you are in argentina', 'items for sale in argentina', 'argentina stock market'] },
+            { name: 'Switzerland', patterns: ['currently in switzerland', 'you are in switzerland', 'items for sale in switzerland', 'switzerland stock market'] },
+            { name: 'Japan', patterns: ['currently in japan', 'you are in japan', 'items for sale in japan', 'japan stock market'] },
+            { name: 'China', patterns: ['currently in china', 'you are in china', 'items for sale in china', 'china stock market'] },
+            { name: 'UAE', patterns: ['currently in uae', 'you are in uae', 'items for sale in uae', 'uae stock market', 'items for sale in dubai'] },
+            { name: 'South Africa', patterns: ['currently in south africa', 'you are in south africa', 'items for sale in south africa', 'south africa stock market'] }
         ];
         
         for (const marker of countryMarkers) {
@@ -294,10 +306,14 @@
             }
         }
         
-        // Method 3: Raw country name match as substring (broad fallback)
+        // Method 3: Full country name as whole word match only (prevent "sou" matching "resource")
+        // Uses word boundaries to avoid partial matches
         for (const config of countryConfig) {
-            for (const code of config.codes) {
-                if (lowerText.includes(code)) {
+            const fullName = config.name.toLowerCase();
+            const regex = new RegExp('\\b' + fullName.replace(/ /g, '\\s') + '\\b', 'i');
+            if (regex.test(entireText)) {
+                // Only match if we also see arrival indicators nearby
+                if (lowerText.includes('stock') || lowerText.includes('market') || lowerText.includes('items for sale') || lowerText.includes('currently')) {
                     return config.name;
                 }
             }
