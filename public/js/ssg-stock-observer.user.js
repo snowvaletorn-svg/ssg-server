@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.4.6
+// @version      1.4.7
 // @description  Monitors and submits foreign stock data dynamically using explicit text node analysis and hybrid polling. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
