@@ -2595,4 +2595,48 @@ app.get('/api/stockout-estimates', async (req, res) => {
   }
 });
 
+// ─── API: Stock analysis for restock times and predictions ───────────────────
+const { analyzeCountry, getTravelRecommendations } = require('./services/stockAnalysisService');
+
+// ─── API: Get detailed stock analysis for a country ─────────────────────────
+app.get('/api/restock-analysis', async (req, res) => {
+  try {
+    const country = req.query.country?.toLowerCase();
+    if (!country) {
+      return res.status(400).json({ error: 'Country parameter is required' });
+    }
+
+    const analysis = await analyzeCountry(country);
+    if (analysis.status === 'no_data') {
+      return res.json({
+        country,
+        status: 'no_data',
+        message: 'Not enough observations yet. As more users visit this country, data will accumulate.',
+        items: []
+      });
+    }
+
+    res.json(analysis);
+  } catch (err) {
+    console.error('Restock analysis error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get travel recommendations based on stock analysis ────────────────
+app.get('/api/travel-recommendations', async (req, res) => {
+  try {
+    const maxItems = parseInt(req.query.max) || 20;
+    const recommendations = await getTravelRecommendations(maxItems);
+    res.json({
+      generatedAt: new Date().toISOString(),
+      count: recommendations.length,
+      recommendations
+    });
+  } catch (err) {
+    console.error('Travel recommendations error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = app;

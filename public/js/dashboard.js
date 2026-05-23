@@ -1603,6 +1603,134 @@ function renderTravelProfits() {
   container.innerHTML = html;
 }
 
+// ── Stock Analytics ──────────────────────────────────────────────────────────
+async function fetchStockAnalytics() {
+  const container = document.getElementById('stock-analytics-data');
+  const countrySelect = document.getElementById('analytics-country-select');
+  const country = countrySelect?.value;
+
+  if (!country) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">🌍</span><p>Please select a country to analyze.</p></div>';
+    return;
+  }
+
+  container.innerHTML = '<div class="channel-loading">LOADING STOCK ANALYSIS...</div>';
+
+  try {
+    const res = await fetch(`/api/restock-analysis?country=${country}`);
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load analysis'}</div>`;
+      return;
+    }
+
+    if (data.status === 'no_data' || !data.items || data.items.length === 0) {
+      const countryName = getCountryName(country);
+      container.innerHTML = `
+        <div class="card mt-2">
+          <div class="card-body">
+            <div class="empty-state">
+              <span class="empty-icon">📊</span>
+              <p>Not enough data for <strong>${countryName}</strong> yet.</p>
+              <p class="muted">Data accumulates as faction members visit this country with the Stock Observer userscript installed.</p>
+            </div>
+          </div>
+        </div>`;
+      return;
+    }
+
+    const countryName = getCountryName(country);
+    
+    // Summary stats
+    const itemsWithData = data.items.filter(i => i.confidence !== 'insufficient_data');
+    const itemsStockingOut = itemsWithData.filter(i => i.stockout?.willStockOut);
+    const itemsWithRestocks = itemsWithData.filter(i => i.nextRestock);
+    
+    let html = `
+      <div class="card mt-2">
+        <div class="card-header">
+          📊 ${countryName} · Stock Analysis
+          <span style="float:right;font-size:0.75rem;color:#555;">${data.observationCount} observations · ${data.itemCount} items tracked</span>
+        </div>
+        <div class="card-body">
+          <div class="stats-grid" style="margin-bottom:1rem;">
+            ${statTile(itemsWithData.length, 'Items with Data')}
+            ${statTile(itemsStockingOut.length, 'Stocking Out Soon', itemsStockingOut.length > 0 ? '#e74c3c' : '#4caf50')}
+            ${statTile(itemsWithRestocks.length, 'Restock Patterns Found', itemsWithRestocks.length > 0 ? '#f0a500' : '#555')}
+          </div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="torn-table" style="width:100%;font-size:0.8rem;">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Stock</th>
+              <th>Burn Rate/hr</th>
+              <th>Stockout In</th>
+              <th>Next Restock</th>
+              <th>Recommendation</th>
+              <th>Confidence</th>
+            </tr>
+          </thead>
+          <tbody>`;
+    
+    data.items.forEach(item => {
+      const burnRate = item.burnRate?.perHour || 0;
+      const stockoutStr = item.stockout?.willStockOut
+        ? `<span style="color:#e74c3c;">~${item.stockout.stockoutInMinutes} min</span>`
+        : item.stockout?.stockoutInMinutes
+          ? `<span style="color:#4caf50;">${item.stockout.stockoutInMinutes} min (restocks first)</span>`
+          : '<span style="color:#555;">N/A</span>';
+      
+      const restockStr = item.nextRestock
+        ? `<span style="color:#f0a500;">~${item.nextRestock.inMinutes} min</span>`
+        : '<span style="color:#555;">Unknown</span>';
+      
+      const rec = item.optimalArrival?.departureRecommendation;
+      const recStr = rec
+        ? `<span style="color:${rec.action.includes('now') ? '#4caf50' : '#f0a500'};font-size:0.75rem;">
+             ${rec.action}<br><span style="color:#888;">${rec.reason}</span>
+           </span>`
+        : '<span style="color:#555;">Insufficient data</span>';
+      
+      const confColors = { high: '#4caf50', medium: '#f0a500', low: '#e74c3c', insufficient_data: '#555' };
+      const confColor = confColors[item.confidence] || '#555';
+      
+      const stockBar = item.currentQty > 0
+        ? `<div style="background:#2a2828;border-radius:3px;height:6px;width:60px;display:inline-block;vertical-align:middle;margin-right:4px;">
+             <div style="width:${Math.min(100, item.currentQty / 100)}%;height:100%;background:#4a9eff;border-radius:3px;"></div>
+           </div>`
+        : '';
+      
+      html += `
+        <tr>
+          <td style="white-space:nowrap;font-weight:500;">${item.name}</td>
+          <td style="white-space:nowrap;">${stockBar}${item.currentQty?.toLocaleString() || 0}</td>
+          <td style="white-space:nowrap;">${burnRate > 0 ? burnRate.toFixed(1) : '<span style="color:#555;">—</span>'}</td>
+          <td>${stockoutStr}</td>
+          <td>${restockStr}</td>
+          <td>${recStr}</td>
+          <td><span style="color:${confColor};">${item.confidence}</span></td>
+        </tr>`;
+    });
+    
+    html += `</tbody></table></div>`;
+    
+    // Data freshness note
+    if (data.lastObservation) {
+      const age = Math.round((Date.now() - new Date(data.lastObservation).getTime()) / 60000);
+      html += `<p class="muted" style="margin-top:0.5rem;font-size:0.75rem;">
+        Last observation: ${age} min ago. ${age > 30 ? '<span style="color:#f0a500;">Data may be stale — more observations needed.</span>' : '<span style="color:#4caf50;">Recent data available.</span>'}
+      </p>`;
+    }
+
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
 function getCountryName(code) {
   const names = {
     mex: 'Mexico', cay: 'Cayman Islands', can: 'Canada',
