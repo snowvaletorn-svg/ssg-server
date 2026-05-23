@@ -552,14 +552,19 @@
                 logTrace(`In flight. Arriving in ~${Math.round(flightRemaining / 60000)} min.`);
                 if (flightTimer) clearTimeout(flightTimer);
                 if (landingTimer) clearInterval(landingTimer);
-                flightTimer = setTimeout(() => { processPageParsing(); }, Math.min(flightRemaining + 5000, 7200000));
+                // Check for landing every 1 second - supports fast in-and-out trips (<15s)
                 landingTimer = setInterval(() => {
                     if (!isInTransit() && detectCountry()) {
                         clearInterval(landingTimer);
                         landingTimer = null;
+                        logTrace(`Landed. Scraping stock data.`);
                         processPageParsing();
+                        // One more check after 2s for dynamic content to fully render
+                        setTimeout(() => { processPageParsing(); }, 2000);
                     }
-                }, 30000);
+                }, 1000);
+                // Also schedule a timeout at estimated arrival + a buffer
+                flightTimer = setTimeout(() => { processPageParsing(); }, Math.min(flightRemaining + 5000, 7200000));
             }
             return;
         }
