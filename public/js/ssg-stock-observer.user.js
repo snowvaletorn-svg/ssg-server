@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      1.4.5
+// @version      1.4.6
 // @description  Monitors and submits foreign stock data dynamically using explicit text node analysis and hybrid polling. PC + Torn PDA friendly.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -80,7 +80,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.5 - Diagnostics</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.4.6 - Diagnostics</span>`;
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -102,28 +102,39 @@
         reportStr += `GM Network    : ${typeof GM_xmlhttpRequest !== 'undefined' ? 'Available (Extension Mode)' : 'Unavailable (Native Fetch Mode)'}\n`;
         reportStr += `--------------------------------------------------\n\n`;
         
-        // Dump page structure for debugging - show non-empty tables and lists
-        reportStr += `PAGE TABLE STRUCTURE:\n`;
-        const allTables = document.querySelectorAll('table');
-        allTables.forEach((t, ti) => {
-            const rows = t.querySelectorAll('tr');
-            reportStr += `  Table #${ti+1}: ${rows.length} rows\n`;
-            rows.forEach((r, ri) => {
-                const cells = r.querySelectorAll('td, th');
-                const textPreview = (r.textContent || '').trim().substring(0, 80).replace(/\n/g, ' ');
-                if (textPreview) reportStr += `    Row ${ri}: [${cells.length} cells] "${textPreview}"\n`;
-            });
+        // Dump page structure for debugging - show containers with $ signs (stock data)
+        reportStr += `PAGE DOLLAR-CONTAINING ELEMENTS:\n`;
+        const allElements = document.querySelectorAll('body *:not(script):not(style):not(noscript)');
+        let dollarCount = 0;
+        allElements.forEach((el, ei) => {
+            if (el.children.length > 0) return; // Only leaf elements
+            const text = (el.textContent || '').trim();
+            if (text.includes('$') && text.length < 200) {
+                const tag = el.tagName.toLowerCase();
+                const cls = el.className ? ` class="${el.className}"` : '';
+                const id = el.id ? ` id="${el.id}"` : '';
+                const parentCls = el.parentElement?.className ? ` parent-class="${el.parentElement.className}"` : '';
+                const parentTag = el.parentElement?.tagName?.toLowerCase() || '';
+                reportStr += `  <${tag}${id}${cls}${parentCls} (in <${parentTag}>) "${text.substring(0, 120)}"\n`;
+                dollarCount++;
+                if (dollarCount > 30) { reportStr += `  ... (truncated at 30)\n`; return; }
+            }
         });
+        if (dollarCount === 0) reportStr += `  (none found - page has no $ amounts)\n`;
         
-        const allLists = document.querySelectorAll('ul, ol');
-        allLists.forEach((l, li) => {
-            const items = l.querySelectorAll('li');
-            reportStr += `  List #${li+1}: ${items.length} items\n`;
-            items.forEach((item, ii) => {
-                const textPreview = (item.textContent || '').trim().substring(0, 80).replace(/\n/g, ' ');
-                if (textPreview) reportStr += `    Item ${ii}: "${textPreview}"\n`;
+        reportStr += `\nPAGE ALL-CONTAINING-CLASSES (stock/market/shop/bazaar):\n`;
+        const relevantContainers = document.querySelectorAll('[class*="stock"],[class*="market"],[class*="bazaar"],[class*="shop"],[class*="item-list"],[class*="items"],[class*="travel"],[class*="foreign"]');
+        if (relevantContainers.length === 0) {
+            reportStr += `  (none found with those class names)\n`;
+        } else {
+            relevantContainers.forEach((el, ei) => {
+                const tag = el.tagName.toLowerCase();
+                const cls = el.className;
+                const textPreview = (el.textContent || '').trim().substring(0, 100).replace(/\n/g, ' ');
+                reportStr += `  <${tag} class="${cls}"> "${textPreview}"\n`;
+                if (ei > 20) { reportStr += `  ... (truncated at 20)\n`; return; }
             });
-        });
+        }
         
         reportStr += `--------------------------------------------------\n\nLOG EVENT HISTORY:\n`;
         reportStr += debugLogs.join('\n');
