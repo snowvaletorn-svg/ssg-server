@@ -102,40 +102,6 @@
         reportStr += `GM Network    : ${typeof GM_xmlhttpRequest !== 'undefined' ? 'Available (Extension Mode)' : 'Unavailable (Native Fetch Mode)'}\n`;
         reportStr += `--------------------------------------------------\n\n`;
         
-        // Dump page structure for debugging - show containers with $ signs (stock data)
-        reportStr += `PAGE DOLLAR-CONTAINING ELEMENTS:\n`;
-        const allElements = document.querySelectorAll('body *:not(script):not(style):not(noscript)');
-        let dollarCount = 0;
-        allElements.forEach((el, ei) => {
-            if (el.children.length > 0) return; // Only leaf elements
-            const text = (el.textContent || '').trim();
-            if (text.includes('$') && text.length < 200) {
-                const tag = el.tagName.toLowerCase();
-                const cls = el.className ? ` class="${el.className}"` : '';
-                const id = el.id ? ` id="${el.id}"` : '';
-                const parentCls = el.parentElement?.className ? ` parent-class="${el.parentElement.className}"` : '';
-                const parentTag = el.parentElement?.tagName?.toLowerCase() || '';
-                reportStr += `  <${tag}${id}${cls}${parentCls} (in <${parentTag}>) "${text.substring(0, 120)}"\n`;
-                dollarCount++;
-                if (dollarCount > 30) { reportStr += `  ... (truncated at 30)\n`; return; }
-            }
-        });
-        if (dollarCount === 0) reportStr += `  (none found - page has no $ amounts)\n`;
-        
-        reportStr += `\nPAGE ALL-CONTAINING-CLASSES (stock/market/shop/bazaar):\n`;
-        const relevantContainers = document.querySelectorAll('[class*="stock"],[class*="market"],[class*="bazaar"],[class*="shop"],[class*="item-list"],[class*="items"],[class*="travel"],[class*="foreign"]');
-        if (relevantContainers.length === 0) {
-            reportStr += `  (none found with those class names)\n`;
-        } else {
-            relevantContainers.forEach((el, ei) => {
-                const tag = el.tagName.toLowerCase();
-                const cls = el.className;
-                const textPreview = (el.textContent || '').trim().substring(0, 100).replace(/\n/g, ' ');
-                reportStr += `  <${tag} class="${cls}"> "${textPreview}"\n`;
-                if (ei > 20) { reportStr += `  ... (truncated at 20)\n`; return; }
-            });
-        }
-        
         reportStr += `--------------------------------------------------\n\nLOG EVENT HISTORY:\n`;
         reportStr += debugLogs.join('\n');
 
@@ -453,24 +419,7 @@
                     }
                 });
             } else {
-                // Ultra-fallback: scan all elements for the pattern: text with $ and name before it
-                logTrace(`No structured cells found, trying brute-force text scan.`);
-                const text = document.body.textContent || '';
-                const patterns = text.match(/([A-Z][a-zA-Z\s]{2,40}?)\s*\$?([\d,]+)\s*\$?([\d,]+)/g);
-                if (patterns) {
-                    patterns.forEach(p => {
-                        const match = p.match(/([A-Z][a-zA-Z\s]{2,40}?)\s*\$?([\d,]+)\s*\$?([\d,]+)/);
-                        if (match) {
-                            const name = match[1].trim();
-                            const qty = parseInt(match[2].replace(/,/g, ''), 10);
-                            const cost = parseInt(match[3].replace(/,/g, ''), 10);
-                            if (name && !isNaN(qty) && !isNaN(cost) && qty > 0 && cost > 0 && !stocks.some(s => s.name === name)) {
-                                stocks.push({ name, quantity: qty, cost });
-                                logTrace(`Scraped stock (brute regex): ${name}, qty=${qty}, cost=${cost}`);
-                            }
-                        }
-                    });
-                }
+                logTrace(`No structured cells found - page may still be loading.`);
             }
         }
 
