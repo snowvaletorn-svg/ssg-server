@@ -7,7 +7,7 @@ function showSection(sectionId, el) {
 
   if (sectionId === 'torn') { fetchTornUser(); }
   if (sectionId === 'faction') { fetchFaction(); }
-  if (sectionId === 'travel') { fetchTravel(); fetchYataStock(); fetchTravelProfits(); }
+  if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
   if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); }
 }
@@ -1349,6 +1349,7 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
 // ── Travel Profit Analytics Engine ───────────────────────────────────────────
 let travelProfitsCache = null;
+let stockAnalyticsCache = {};
 
 async function fetchTravelProfits() {
   const container = document.getElementById('travel-profits-data');
@@ -1360,372 +1361,61 @@ async function fetchTravelProfits() {
       let errorMsg = `<div class="channel-error">⚠️ ${data.error}</div>`;
       if (data.help) {
         errorMsg += `<div class="channel-error" style="margin-top:0.5rem;padding:0.75rem;background:#1a1919;border:1px solid #333;border-radius:4px;font-size:0.85rem;">
-          <strong style="color:#f0a500;">How to fix:</strong><br>
-          ${data.help}<br><br>
-          <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#a78df5;">Go to API Key Settings →</a>
-        </div>`;
+        <strong style="color:#f0a500;">How to fix:</strong><br>
+        ${data.help}<br><br>
+        <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" style="color:#a78df5;">Go to API Key Settings →</a>
+        </div>`;
       }
       container.innerHTML = errorMsg;
       return;
     }
     travelProfitsCache = data;
-    renderTravelProfits();
-  } catch (err) {
-    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
-  }
-}
 
-function renderTravelProfits() {
-  const container = document.getElementById('travel-profits-data');
-
-  if (!travelProfitsCache || !travelProfitsCache.profits || !travelProfitsCache.profits.length) {
-    container.innerHTML = `
-      <div class="empty-state">
-        <span class="empty-icon">💰</span>
-        <p>No profitable items found.</p>
-        <p class="muted">Items may not be available or market prices may not exceed foreign costs.</p>
-      </div>`;
-    return;
-  }
-
-  // Get travel method from radio buttons
-  const travelMethod = document.querySelector('input[name="travelMethod"]:checked')?.value || 'standard';
-
-  // Get selected country from dropdown
-  const selectedCountry = document.getElementById('travel-country-select')?.value || '';
-
-  // Get quantity from input (default 25, min 5, max 29)
-  const quantityInput = document.getElementById('profit-quantity');
-  let quantity = parseInt(quantityInput?.value) || 25;
-  quantity = Math.max(5, Math.min(29, quantity));
-
-  // Get item types from checkboxes
-  const typePlushie = document.getElementById('type-plushie')?.checked ?? true;
-  const typeFlower = document.getElementById('type-flower')?.checked ?? true;
-  const typeDrug = document.getElementById('type-drug')?.checked ?? true;
-  const typeOther = document.getElementById('type-other')?.checked ?? false;
-
-  const sortBy = document.getElementById('profit-sort')?.value || 'profitPerRun';
-
-  let profits = [...travelProfitsCache.profits];
-
-  // Filter by item type using checkboxes
-  profits = profits.filter(p => {
-    const type = p.type.toLowerCase();
-    // Normalize type to singular form for comparison
-    const normalizedType = type.endsWith('s') ? type.slice(0, -1) : type;
-
-    if (normalizedType === 'plushie' && typePlushie) return true;
-    if (normalizedType === 'flower' && typeFlower) return true;
-    if (normalizedType === 'drug' && typeDrug) return true;
-    if (!['plushie', 'flower', 'drug'].includes(normalizedType) && typeOther) return true;
-
-    return false;
-  });
-
-  // Filter by selected country if one is chosen
-  if (selectedCountry) {
-    profits = profits.filter(p => p.country === selectedCountry);
-  }
-
-  // Sort
-  switch (sortBy) {
-    case 'profit':
-      profits.sort((a, b) => b.profit - a.profit);
-      break;
-    case 'profitPercent':
-      profits.sort((a, b) => b.profitPercent - a.profitPercent);
-      break;
-    case 'country':
-      profits.sort((a, b) => a.country.localeCompare(b.country));
-      break;
-    case 'profitPerRun':
-    default:
-      // Sort by profit per run (profit per item × quantity minus flight cost)
-      profits.sort((a, b) => {
-        const aFlightCost = getFlightCost(a.country, travelMethod);
-        const bFlightCost = getFlightCost(b.country, travelMethod);
-        return ((b.profit * quantity) - bFlightCost) - ((a.profit * quantity) - aFlightCost);
-      });
-      break;
-  }
-
-  // Group by country
-  const grouped = {};
-  profits.forEach(p => {
-    if (!grouped[p.country]) grouped[p.country] = [];
-    grouped[p.country].push(p);
-  });
-
-  const summary = travelProfitsCache.summary || {};
-
-  // Separate in-stock and out-of-stock for summary calculations
-  const inStockProfits = profits.filter(p => !p.outOfStock);
-  const outOfStockProfits = profits.filter(p => p.outOfStock);
-
-  // Find the best profit per run from IN-STOCK items only
-  const bestRun = inStockProfits.length > 0 ? inStockProfits.reduce((best, current) => {
-    const bestFlightCost = getFlightCost(best.country, travelMethod);
-    const currentFlightCost = getFlightCost(current.country, travelMethod);
-    const bestProfit = (best.profit * quantity) - bestFlightCost;
-    const currentProfit = (current.profit * quantity) - currentFlightCost;
-    return currentProfit > bestProfit ? current : best;
-  }) : null;
-
-  // Calculate maximum possible profit for selected country (fill 25 slots optimally)
-  let selectedCountryTotal = 0;
-  if (selectedCountry && profits.length > 0) {
-    const flightCost = getFlightCost(selectedCountry, travelMethod);
-    let slotsRemaining = quantity;
-    let totalProfit = 0;
-
-    // Sort items descending by profit per item to fill slots optimally
-    const sortedItems = [...profits].sort((a, b) => b.profit - a.profit);
-
-    for (const item of sortedItems) {
-      if (slotsRemaining <= 0) break;
-
-      // Take as many of this item as possible (up to available quantity or remaining slots)
-      const takeAmount = Math.min(item.quantity, slotsRemaining);
-      totalProfit += item.profit * takeAmount;
-      slotsRemaining -= takeAmount;
-    }
-
-    selectedCountryTotal = totalProfit - flightCost;
-  }
-
-  let html = `
-    <div class="card" style="margin-bottom:1rem;">
-      <div class="card-header">
-        💰 Travel Profits Summary
-        <span style="float:right;font-size:0.8rem;color:#555;">
-          ${profits.length} items ${selectedCountry ? `for ${getCountryName(selectedCountry)}` : `across ${Object.keys(grouped).length} countries`}
-        </span>
-      </div>
-      <div class="card-body">
-        <div class="stats-grid">
-          ${selectedCountry ? statTile(getCountryName(selectedCountry), 'Selected Country') : (bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country'))}
-          ${selectedCountry ? statTile('$' + formatNum(selectedCountryTotal), 'Total Profit') : (bestRun ? statTile('+' + formatNum(bestRun.profit * quantity), 'Best Profit/Run') : statTile('—', 'Best Profit/Run'))}
-          ${bestRun ? statTile(escapeHtml(bestRun.name), 'Best Item') : statTile('—', 'Best Item')}
-          ${statTile(travelMethod === 'standard' ? '✈️ Standard' : travelMethod === 'airstrip' ? '🛫 Airstrip' : '🚀 Private', 'Travel Method')}
-        </div>
-      </div>
-    </div>`;
-
-  Object.entries(grouped).forEach(([country, items]) => {
-    const flightCost = getFlightCost(country, travelMethod);
-    const countryTotal = items.reduce((sum, p) => sum + (p.profit * quantity), 0) - flightCost;
-    const travelTime = items[0].travelTimes[travelMethod];
-
-    const rows = items.map(item => {
-      const flightCost = getFlightCost(country, travelMethod);
-      const profitPerRun = (item.profit * quantity) - flightCost;
-
-      // Format best leave time display (to arrive at restock time)
-      let restockDisplay = '<span style="color:#555;">—</span>';
-
-      if (item.minutesUntilLeave !== null && item.minutesUntilLeave !== undefined) {
-        const minsUntilLeave = item.minutesUntilLeave;
-        const leaveTime = item.bestLeaveTime || '—';
-
-        if (minsUntilLeave <= 0) {
-          // Should leave now to arrive at restock
-          restockDisplay = `<span style="color:#4caf50;font-weight:600;">Leave Now!<br><small>Restock: ${leaveTime}</small></span>`;
-        } else if (minsUntilLeave < 60) {
-          // Leave in X minutes
-          restockDisplay = `<span style="color:#219653;">In ${minsUntilLeave}m<br><small>Leave at ${leaveTime}</small></span>`;
-        } else {
-          const h = Math.floor(minsUntilLeave / 60);
-          const m = minsUntilLeave % 60;
-          restockDisplay = `<span style="color:#219653;">In ${h}h ${m}m<br><small>Leave at ${leaveTime}</small></span>`;
+    // Fetch stock analytics for all countries present in the profits data
+    const countries = [...new Set(data.profits.map(p => p.country))];
+    const analyticsMap = {};
+    console.log('[Travel Profits] Fetching analytics for countries:', countries);
+    await Promise.all(countries.map(async (country) => {
+      try {
+        const aRes = await fetch(`/api/restock-analysis?country=${country}`);
+        const aData = await aRes.json();
+        console.log(`[Travel Profits] Analytics response for ${country}:`, aData.status, 'items:', aData.items?.length);
+        if (aRes.ok && aData.items) {
+          aData.items.forEach(item => {
+            // Store analytics keyed by both string and number for robust matching
+            //analyticsMap[String(item.id)] = item;
+            //analyticsMap[item.id] = item;
+            analyticsMap[`${country}::${item.name}`] = item;
+          });
         }
-      } else if (item.estimatedRestockIn !== null && item.estimatedRestockIn !== undefined) {
-        // Fallback: just show restock countdown
-        const mins = item.estimatedRestockIn;
-        if (mins <= 0) {
-          restockDisplay = '<span style="color:#4caf50;font-weight:600;">Restocking Now</span>';
-        } else if (mins < 60) {
-          restockDisplay = `<span style="color:#f0a500;">~${mins}m to restock</span>`;
-        } else {
-          const h = Math.floor(mins / 60);
-          restockDisplay = `<span style="color:#ff9800;">~${h}h to restock</span>`;
-        }
+      } catch (e) {
+        console.error(`[Travel Profits] Analytics error for ${country}:`, e.message);
       }
+    }));
+    stockAnalyticsCache = analyticsMap;
+    console.log('[Travel Profits] Loaded analytics for', Object.keys(analyticsMap).length, 'items across', countries.length, 'countries');
 
-      const isOos = item.outOfStock;
-      const rowStyle = isOos ? 'opacity:0.4;' : '';
-      const qtyDisplay = isOos ? '<span style="color:#ff4444;font-size:0.75rem;">OUT OF STOCK</span>' : item.quantity.toLocaleString();
-      const profitColor = item.profit > 0 ? '#4caf50' : '#ff4444';
-
-      return `
-        <tr style="${rowStyle}">
-          <td>${escapeHtml(item.name)}</td>
-          <td style="color:#888;font-size:0.85rem;">${escapeHtml(item.type)}</td>
-          <td style="text-align:center;">${qtyDisplay}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.buyPrice)}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.marketValue)}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${profitColor};">${item.profit > 0 ? '+$' + formatNum(item.profit) : '-$' + formatNum(Math.abs(item.profit))}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${item.profitPercent.toFixed(1)}%</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">${item.profit > 0 ? '+$' + formatNum(profitPerRun) : '-'}</td>
-          <td style="text-align:center;font-size:0.85rem;">${restockDisplay}</td>
-        </tr>`;
-    }).join('');
-
-    html += `
-      <div class="card" style="margin-bottom:1rem;">
-        <div class="card-header">
-          🌍 ${getCountryName(country)}
-          <span style="float:right;font-size:0.75rem;color:#555;">
-            Travel: ~${travelTime}min | Total: $${formatNum(countryTotal)}
-          </span>
-        </div>
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-          <table class="members-table" style="min-width:850px;">
-            <thead>
-              <tr>
-                <th style="white-space:nowrap;">Item</th>
-                <th style="white-space:nowrap;">Type</th>
-                <th style="text-align:center;white-space:nowrap;">Avail</th>
-                <th style="text-align:right;white-space:nowrap;">Buy</th>
-                <th style="text-align:right;white-space:nowrap;">Market</th>
-                <th style="text-align:right;white-space:nowrap;">Profit</th>
-                <th style="text-align:right;white-space:nowrap;">%</th>
-                <th style="text-align:right;white-space:nowrap;">Run</th>
-                <th style="text-align:center;white-space:nowrap;">⏰ Timing</th>
-              </tr>
-            </thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>`;
-  });
-
-  container.innerHTML = html;
-}
-
-// ── Stock Analytics ──────────────────────────────────────────────────────────
-async function fetchStockAnalytics() {
-  const container = document.getElementById('stock-analytics-data');
-  const countrySelect = document.getElementById('analytics-country-select');
-  const country = countrySelect?.value;
-
-  if (!country) {
-    container.innerHTML = '<div class="empty-state"><span class="empty-icon">🌍</span><p>Please select a country to analyze.</p></div>';
-    return;
-  }
-
-  container.innerHTML = '<div class="channel-loading">LOADING STOCK ANALYSIS...</div>';
-
-  try {
-    const res = await fetch(`/api/restock-analysis?country=${country}`);
-    const data = await res.json();
-    if (!res.ok) {
-      container.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to load analysis'}</div>`;
-      return;
-    }
-
-    if (data.status === 'no_data' || !data.items || data.items.length === 0) {
-      const countryName = getCountryName(country);
-      container.innerHTML = `
-        <div class="card mt-2">
-          <div class="card-body">
-            <div class="empty-state">
-              <span class="empty-icon">📊</span>
-              <p>Not enough data for <strong>${countryName}</strong> yet.</p>
-              <p class="muted">Data accumulates as faction members visit this country with the Stock Observer userscript installed.</p>
-            </div>
-          </div>
-        </div>`;
-      return;
-    }
-
-    const countryName = getCountryName(country);
-    
-    // Summary stats
-    const itemsWithData = data.items.filter(i => i.confidence !== 'insufficient_data');
-    const itemsStockingOut = itemsWithData.filter(i => i.stockout?.willStockOut);
-    const itemsWithRestocks = itemsWithData.filter(i => i.nextRestock);
-    
-    let html = `
-      <div class="card mt-2">
-        <div class="card-header">
-          📊 ${countryName} · Stock Analysis
-          <span style="float:right;font-size:0.75rem;color:#555;">${data.observationCount} observations · ${data.itemCount} items tracked</span>
-        </div>
-        <div class="card-body">
-          <div class="stats-grid" style="margin-bottom:1rem;">
-            ${statTile(itemsWithData.length, 'Items with Data')}
-            ${statTile(itemsStockingOut.length, 'Stocking Out Soon', itemsStockingOut.length > 0 ? '#e74c3c' : '#4caf50')}
-            ${statTile(itemsWithRestocks.length, 'Restock Patterns Found', itemsWithRestocks.length > 0 ? '#f0a500' : '#555')}
-          </div>
-        </div>
-      </div>
-      <div style="overflow-x:auto;">
-        <table class="torn-table" style="width:100%;font-size:0.8rem;">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Stock</th>
-              <th>Burn Rate/hr</th>
-              <th>Stockout In</th>
-              <th>Next Restock</th>
-              <th>Recommendation</th>
-              <th>Confidence</th>
-            </tr>
-          </thead>
-          <tbody>`;
-    
-    data.items.forEach(item => {
-      const burnRate = item.burnRate?.perHour || 0;
-      const stockoutStr = item.stockout?.willStockOut
-        ? `<span style="color:#e74c3c;">~${item.stockout.stockoutInMinutes} min</span>`
-        : item.stockout?.stockoutInMinutes
-          ? `<span style="color:#4caf50;">${item.stockout.stockoutInMinutes} min (restocks first)</span>`
-          : '<span style="color:#555;">N/A</span>';
-      
-      const restockStr = item.nextRestock
-        ? `<span style="color:#f0a500;">~${item.nextRestock.inMinutes} min</span>`
-        : '<span style="color:#555;">Unknown</span>';
-      
-      const rec = item.optimalArrival?.departureRecommendation;
-      const recStr = rec
-        ? `<span style="color:${rec.action.includes('now') ? '#4caf50' : '#f0a500'};font-size:0.75rem;">
-             ${rec.action}<br><span style="color:#888;">${rec.reason}</span>
-           </span>`
-        : '<span style="color:#555;">Insufficient data</span>';
-      
-      const confColors = { high: '#4caf50', medium: '#f0a500', low: '#e74c3c', insufficient_data: '#555' };
-      const confColor = confColors[item.confidence] || '#555';
-      
-      const stockBar = item.currentQty > 0
-        ? `<div style="background:#2a2828;border-radius:3px;height:6px;width:60px;display:inline-block;vertical-align:middle;margin-right:4px;">
-             <div style="width:${Math.min(100, item.currentQty / 100)}%;height:100%;background:#4a9eff;border-radius:3px;"></div>
-           </div>`
-        : '';
-      
-      html += `
-        <tr>
-          <td style="white-space:nowrap;font-weight:500;">${item.name}</td>
-          <td style="white-space:nowrap;">${stockBar}${item.currentQty?.toLocaleString() || 0}</td>
-          <td style="white-space:nowrap;">${burnRate > 0 ? burnRate.toFixed(1) : '<span style="color:#555;">—</span>'}</td>
-          <td>${stockoutStr}</td>
-          <td>${restockStr}</td>
-          <td>${recStr}</td>
-          <td><span style="color:${confColor};">${item.confidence}</span></td>
-        </tr>`;
+    // Build a name-based lookup as fallback (stock observer uses fake negative IDs)
+    const analyticsByName = {};
+    Object.values(analyticsMap).forEach(item => {
+      analyticsByName[item.name] = item;
     });
-    
-    html += `</tbody></table></div>`;
-    
-    // Data freshness note
-    if (data.lastObservation) {
-      const age = Math.round((Date.now() - new Date(data.lastObservation).getTime()) / 60000);
-      html += `<p class="muted" style="margin-top:0.5rem;font-size:0.75rem;">
-        Last observation: ${age} min ago. ${age > 30 ? '<span style="color:#f0a500;">Data may be stale — more observations needed.</span>' : '<span style="color:#4caf50;">Recent data available.</span>'}
-      </p>`;
+
+    // Count how many travel profit items actually match analytics data
+    let matchCount = 0;
+    let nameMatchCount = 0;
+    if (data.profits.length > 0) {
+      data.profits.forEach(p => {
+        if (analyticsMap[String(p.id)]) matchCount++;
+        if (analyticsByName[p.name]) nameMatchCount++;
+      });
+      console.log('[Travel Profits] ID matches:', matchCount, '| Name matches:', nameMatchCount, 'out of', data.profits.length, 'profit items');
+
+      // Store name lookup for use in render
+      analyticsMap._byName = analyticsByName;
     }
 
-    container.innerHTML = html;
+    renderTravelProfits();
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
@@ -3411,7 +3101,7 @@ function renderTravelProfits() {
   const typePlushie = document.getElementById('type-plushie')?.checked ?? true;
   const typeFlower = document.getElementById('type-flower')?.checked ?? true;
   const typeDrug = document.getElementById('type-drug')?.checked ?? true;
-  const typeOther = document.getElementById('type-other')?.checked ?? false;
+  const typeOther = document.getElementById('type-other')?.checked ?? true;
 
   const sortBy = document.getElementById('profit-sort')?.value || 'profitPerRun';
 
@@ -3514,47 +3204,53 @@ function renderTravelProfits() {
     const flightCost = getFlightCost(country, travelMethod);
     const countryTotal = items.reduce((sum, p) => sum + (p.profit * quantity), 0) - flightCost;
 
-    // Dynamic flight travel durations based on checked travel methods
-    const baseTravelTime = items.travelTimes ? (items.travelTimes[travelMethod] || items.travelTimes['standard']) : 0;
+    // Travel time for this country
+    let baseTravelTime = 0;
+    if (items.length > 0 && items[0].travelTimes) {
+      baseTravelTime = items[0].travelTimes[travelMethod] || items[0].travelTimes['standard'] || 0;
+    }
 
     const rows = items.map(item => {
       const profitPerRun = (item.profit * quantity) - flightCost;
-      let restockDisplay = '<span style="color:#555;">—</span>';
+      // Try ID match first, then fall back to name match (stock observer uses fake IDs)
+      let analytics = stockAnalyticsCache[`${item.country}::${item.name}`]
+             || stockAnalyticsCache[String(item.id)];
 
-      // Safe Extraction of baseline estimated stock intervals
-      let estimatedRestockMins = null;
-      if (item.estimatedRestockIn !== null && item.estimatedRestockIn !== undefined) {
-        estimatedRestockMins = item.estimatedRestockIn;
-      } else if (item.minutesUntilLeave !== null && item.travelTimes && item.travelTimes['standard']) {
-        // Fallback reverse-math calculation if needed
-        estimatedRestockMins = item.minutesUntilLeave + item.travelTimes['standard'];
+      // Burn Rate
+      let burnRateHtml = '<span style="color:#555;">—</span>';
+      if (analytics && analytics.burnRate && analytics.burnRate.perHour > 0) {
+        burnRateHtml = `<span style="font-family:'Share Tech Mono',monospace;">${analytics.burnRate.perHour.toFixed(1)}</span>`;
       }
 
-      if (estimatedRestockMins !== null) {
-        // Dynamic Departure Matrix: Recalculate offsets based on selected flight speeds
-        // Standard flight time = 100% baseline. Airstrip = 70% duration. Private Jet = 50% duration.
-        const actualFlightDuration = baseTravelTime || 0;
-
-        // Minutes remaining before the pilot MUST switch flight statuses
-        const dynamicMinsUntilLeave = estimatedRestockMins - actualFlightDuration;
-
-        // Build absolute dynamic deadline time string format in UTC zone markers
-        const leaveDate = new Date(Date.now() + (dynamicMinsUntilLeave * 60 * 1000));
-        const utcHours = String(leaveDate.getUTCHours()).padStart(2, '0');
-        const utcMinutes = String(leaveDate.getUTCMinutes()).padStart(2, '0');
-        const dynamicLeaveTimeUTC = `${utcHours}:${utcMinutes} UTC`;
-
-        if (dynamicMinsUntilLeave <= 0) {
-          restockDisplay = `<span style="color:#ff4444;font-weight:700;animation:pulse 1.5s infinite;">⚠️ Missed Window<br><small>Restock: ~${estimatedRestockMins}m</small></span>`;
-        } else if (dynamicMinsUntilLeave === 0) {
-          restockDisplay = `<span style="color:#4caf50;font-weight:600;">Leave Now!<br><small>Target: ${dynamicLeaveTimeUTC}</small></span>`;
-        } else if (dynamicMinsUntilLeave < 60) {
-          restockDisplay = `<span style="color:#219653;font-weight:600;">In ${dynamicMinsUntilLeave}m<br><small>Leave: ${dynamicLeaveTimeUTC}</small></span>`;
-        } else {
-          const h = Math.floor(dynamicMinsUntilLeave / 60);
-          const m = dynamicMinsUntilLeave % 60;
-          restockDisplay = `<span style="color:#219653;">In ${h}h ${m}m<br><small>Leave: ${dynamicLeaveTimeUTC}</small></span>`;
+      // Stockout
+      let stockoutHtml = '<span style="color:#555;">—</span>';
+      if (analytics && analytics.stockout) {
+        if (analytics.stockout.willStockOut && analytics.stockout.stockoutInMinutes) {
+          stockoutHtml = `<span style="color:#e74c3c;font-family:'Share Tech Mono',monospace;">~${analytics.stockout.stockoutInMinutes}m</span>`;
+        } else if (analytics.stockout.stockoutInMinutes) {
+          stockoutHtml = `<span style="color:#4caf50;font-family:'Share Tech Mono',monospace;">${analytics.stockout.stockoutInMinutes}m</span>`;
         }
+      }
+
+      // Next Restock
+      let restockHtml = '<span style="color:#555;">—</span>';
+      if (analytics && analytics.nextRestock) {
+        restockHtml = `<span style="color:#f0a500;font-family:'Share Tech Mono',monospace;">~${analytics.nextRestock.inMinutes}m</span>`;
+      }
+
+      // Recommendation
+      let recHtml = '<span style="color:#555;">—</span>';
+      if (analytics && analytics.optimalArrival && analytics.optimalArrival.departureRecommendation) {
+        const rec = analytics.optimalArrival.departureRecommendation;
+        const recColor = rec.action && rec.action.includes('now') ? '#4caf50' : '#f0a500';
+        recHtml = `<span style="color:${recColor};font-size:0.75rem;">${rec.action}<br><small style="color:#888;">${rec.reason}</small></span>`;
+      }
+
+      // Confidence
+      let confHtml = '<span style="color:#555;">—</span>';
+      if (analytics && analytics.confidence) {
+        const confColors = { high: '#4caf50', medium: '#f0a500', low: '#e74c3c' };
+        confHtml = `<span style="color:${confColors[analytics.confidence] || '#555'};font-size:0.78rem;">${analytics.confidence}</span>`;
       }
 
       const isOos = item.outOfStock;
@@ -3570,9 +3266,12 @@ function renderTravelProfits() {
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.buyPrice)}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.marketValue)}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${profitColor};">${item.profit > 0 ? '+$' + formatNum(item.profit) : '-$' + formatNum(Math.abs(item.profit))}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${item.profitPercent.toFixed(1)}%</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">${item.profit > 0 ? '+$' + formatNum(profitPerRun) : '-'}</td>
-          <td style="text-align:center;font-size:0.85rem;line-height:1.2;">${restockDisplay}</td>
+          <td style="text-align:center;font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${burnRateHtml}</td>
+          <td style="text-align:center;font-family:'Share Tech Mono',monospace;font-size:0.85rem;">${stockoutHtml}</td>
+          <td style="text-align:center;font-size:0.85rem;">${restockHtml}</td>
+          <td style="text-align:center;font-size:0.78rem;line-height:1.3;">${recHtml}</td>
+          <td style="text-align:center;">${confHtml}</td>
         </tr>`;
     }).join('');
 
@@ -3585,7 +3284,7 @@ function renderTravelProfits() {
           </span>
         </div>
         <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;">
-          <table class="members-table" style="min-width:850px;">
+          <table class="members-table" style="min-width:1100px;">
             <thead>
               <tr>
                 <th style="white-space:nowrap;">Item</th>
@@ -3594,9 +3293,12 @@ function renderTravelProfits() {
                 <th style="text-align:right;white-space:nowrap;">Buy</th>
                 <th style="text-align:right;white-space:nowrap;">Market</th>
                 <th style="text-align:right;white-space:nowrap;">Profit</th>
-                <th style="text-align:right;white-space:nowrap;">%</th>
                 <th style="text-align:right;white-space:nowrap;">Run</th>
-                <th style="text-align:center;white-space:nowrap;">⏰ Departure Window</th>
+                <th style="text-align:center;white-space:nowrap;">🔥 Burn/hr</th>
+                <th style="text-align:center;white-space:nowrap;">⏳ Stockout</th>
+                <th style="text-align:center;white-space:nowrap;">🔁 Restock</th>
+                <th style="text-align:center;white-space:nowrap;">🎯 Recommendation</th>
+                <th style="text-align:center;white-space:nowrap;">🔒 Conf.</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>

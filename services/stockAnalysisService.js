@@ -205,19 +205,36 @@ function getEffectiveStockout(currentQty, burnRate, nextRestockPrediction) {
  * Returns when you should be in-country to catch an item before it stocks out.
  */
 function calculateOptimalArrival(currentQty, burnRate, nextRestockPrediction, flightTimeMinutes) {
+  // FIX: If quantity is 0, we can't assume it's available unless a restock is happening right now
+  if (currentQty <= 0) {
+    if (nextRestockPrediction && nextRestockPrediction.nextRestockInMinutes) {
+      const restockIn = nextRestockPrediction.nextRestockInMinutes;
+      if (restockIn <= flightTimeMinutes) {
+        return {
+          departureRecommendation: { action: 'Depart now', reason: `Restock expected in ${restockIn} min (before you land)` }
+        };
+      }
+      return {
+        departureRecommendation: { action: `Wait ${Math.max(0, restockIn - flightTimeMinutes)} min`, reason: `Item is out of stock. Next restock in ${restockIn} min.` }
+      };
+    }
+    return {
+      departureRecommendation: { action: 'Do not travel', reason: 'Item is out of stock with no restock data.' }
+    };
+  }
+
   if (!burnRate || burnRate <= 0) {
-    return { available: true, note: 'No burn rate data - assuming available' };
+    return { available: true, departureRecommendation: { action: 'Depart now', reason: 'Stock exists but depletion rate is unknown' } };
   }
   
   const stockoutMin = predictStockout(currentQty, burnRate);
   if (!stockoutMin) {
-    return { available: true, note: 'Sufficient stock' };
+    return { available: true, departureRecommendation: { action: 'Depart now', reason: 'Sufficient stock' } };
   }
   
-  // If restock expected, calculate window after restock
   if (nextRestockPrediction && nextRestockPrediction.nextRestockInMinutes) {
     const restockIn = nextRestockPrediction.nextRestockInMinutes;
-    const windowAfterRestock = Math.round(currentQty / burnRate); // how long items last after restock
+    const windowAfterRestock = Math.round(currentQty / burnRate);
     
     return {
       currentStockWillLast: stockoutMin,
@@ -227,12 +244,11 @@ function calculateOptimalArrival(currentQty, burnRate, nextRestockPrediction, fl
         { start: stockoutMin, end: restockIn + windowAfterRestock, label: 'After restock' }
       ],
       departureRecommendation: stockoutMin > flightTimeMinutes 
-        ? { action: 'Depart now', reason: 'Stock will still be available when you arrive' }
-        : { action: `Wait ${Math.max(0, stockoutMin - 5)} min or arrive after restock`, reason: 'Current stock will sell out before you arrive' }
+        ? { action: 'Depart now', reason: `Stock will last ${stockoutMin} min; you arrive in ${flightTimeMinutes} min` }
+        : { action: `Wait or arrive after restock`, reason: `Current stock sells out in ${stockoutMin} min; flight is ${flightTimeMinutes} min` }
     };
   }
   
-  // No restock data - just use current stock level
   const neededFlightBuffer = stockoutMin - flightTimeMinutes;
   
   return {
@@ -240,7 +256,7 @@ function calculateOptimalArrival(currentQty, burnRate, nextRestockPrediction, fl
     expiring: stockoutMin < 30,
     departureRecommendation: neededFlightBuffer > 0
       ? { action: 'Depart now', reason: `${neededFlightBuffer} min of stock remaining after arrival` }
-      : { action: 'Wait - stock critically low', reason: `Only ${stockoutMin} min of stock left` }
+      : { action: 'Wait - stock critically low', reason: `Stock lasts ${stockoutMin} min, but flight takes ${flightTimeMinutes} min` }
   };
 }
 

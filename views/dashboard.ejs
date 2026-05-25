@@ -441,51 +441,21 @@
                   <option value="uae">UAE</option>
                   <option value="sou">South Africa</option>
                 </select>
-                <!--<div class="travel-analytics-wrapper">
-                  <div id="yata-stock-data">
-                  </div>-->
-                  <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">↻ Load</button>
-                  <div id="travel-profit-results"></div>
-                </div>
+                <button class="btn btn-primary btn-small" onclick="fetchTravelProfits()">↻ Load</button>
+                <div id="travel-profit-results"></div>
               </div>
-                <div id="travel-profits-data">
-                <div class="empty-state">
-                  <span class="empty-icon">💰</span>
-                  <p>Click Load to load travel profit opportunities.</p>
-                  <p class="muted">Shows items available abroad with current market prices and profit calculations.</p>
-                </div>
-              </div>
+            </div>
 
-              <!-- ── STOCK ANALYTICS ── -->
-              <div class="section-header" style="margin-top:2rem;">
-                <h3>📊 Stock Analytics</h3>
-                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-                  <select id="analytics-country-select" class="channel-dropdown" style="min-width:160px;">
-                    <option value="">— All Countries —</option>
-                    <option value="mex">Mexico</option>
-                    <option value="cay">Cayman Islands</option>
-                    <option value="can">Canada</option>
-                    <option value="haw">Hawaii</option>
-                    <option value="uni">United Kingdom</option>
-                    <option value="arg">Argentina</option>
-                    <option value="swi">Switzerland</option>
-                    <option value="jap">Japan</option>
-                    <option value="chi">China</option>
-                    <option value="uae">UAE</option>
-                    <option value="sou">South Africa</option>
-                  </select>
-                  <button class="btn btn-primary btn-small" onclick="fetchStockAnalytics()">↻ Analyze</button>
-                  <span class="muted" style="font-size:0.75rem;">Uses crowd-sourced stock observations</span>
-                </div>
+            <div id="travel-profits-data">
+              <div class="empty-state">
+                <span class="empty-icon">💰</span>
+                <p>Click Load to load travel profit opportunities.</p>
+                <p class="muted">Shows items available abroad with current market prices and profit calculations.</p>
               </div>
-              <div id="stock-analytics-data">
-                <div class="empty-state">
-                  <span class="empty-icon">📊</span>
-                  <p>Select a country and click Analyze to view stock burn rates, restock predictions, and optimal departure times.</p>
-                  <p class="muted">Data improves as more users submit observations via the Stock Observer userscript.</p>
-                </div>
-              </div>
+            </div>
+
           </section>
+
           <!-- ── TRAINING ── -->
           <section id="training" class="section">
             <div class="section-header">

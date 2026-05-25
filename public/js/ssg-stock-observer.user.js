@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.0.0
+// @version      2.0.1
 // @description  Monitors and submits foreign stock data. Flight-aware: only polls when landed, uses arrival time estimation.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -18,7 +18,7 @@
 // @run-at       document-idle
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
 
     // ─── CONFIG ─────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@
     let debounceTimer = null;
     let flightTimer = null;
     let landingTimer = null;
-    
+
     const completedPageStates = new Set();
     const debugLogs = [];
     let stocksLogged = false;
@@ -83,7 +83,7 @@
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
         header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.5.0 - Diagnostics</span>`;
-        
+
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
         closeBtn.style.cssText = 'background:#e74c3c; color:white; border:none; padding:5px 10px; cursor:pointer; border-radius:4px;';
@@ -94,7 +94,7 @@
         const textLogs = document.createElement('textarea');
         textLogs.readOnly = true;
         textLogs.style.cssText = 'flex-grow:1; background:#0d1117; color:#c9d1d9; border:1px solid #30363d; padding:10px; font-size:12px; resize:none; border-radius:4px;';
-        
+
         let reportStr = `ENVIRONMENT STATS:\n`;
         reportStr += `--------------------------------------------------\n`;
         reportStr += `Target Server : ${SSG_SERVER}\n`;
@@ -233,10 +233,10 @@
             { name: 'UAE', codes: ['uae', 'dubai'] },
             { name: 'South Africa', codes: ['sou', 'south africa'] }
         ];
-        
+
         const entireText = document.body.textContent || '';
         const lowerText = entireText.toLowerCase();
-        
+
         // Method 1: Look for heading/title elements containing full country names
         const headings = document.querySelectorAll('h1, h2, h3, h4, .title, .page-title, .content-title, [class*="heading"], [class*="header"]');
         for (const el of headings) {
@@ -247,7 +247,7 @@
                 }
             }
         }
-        
+
         // Method 2: Check common arrival markers in page text
         const countryMarkers = [
             { name: 'Mexico', patterns: ['currently in mexico', 'you are in mexico', 'items for sale in mexico', 'mexico stock market'] },
@@ -262,7 +262,7 @@
             { name: 'UAE', patterns: ['currently in uae', 'you are in uae', 'items for sale in uae', 'uae stock market', 'items for sale in dubai'] },
             { name: 'South Africa', patterns: ['currently in south africa', 'you are in south africa', 'items for sale in south africa', 'south africa stock market'] }
         ];
-        
+
         for (const marker of countryMarkers) {
             for (const pattern of marker.patterns) {
                 if (lowerText.includes(pattern)) {
@@ -270,7 +270,7 @@
                 }
             }
         }
-        
+
         // Method 3: Full country name as whole word match
         for (const config of countryConfig) {
             const fullName = config.name.toLowerCase();
@@ -281,7 +281,7 @@
                 }
             }
         }
-        
+
         return null;
     }
 
@@ -307,25 +307,25 @@
         const lowerText = (document.body.textContent || '').toLowerCase();
         const flightIndicators = ['flight to', 'arriving in', 'travelling to', 'traveling to', 'on a flight', 'departed', 'arrives in'];
         const arrivalIndicators = ['currently in', 'you are in', 'stock market', 'items for sale', 'travel home'];
-        
+
         const hasFlightIndicators = flightIndicators.some(i => lowerText.includes(i));
         const hasArrived = arrivalIndicators.some(i => lowerText.includes(i));
-        
+
         return hasFlightIndicators && !hasArrived;
     }
 
     function detectFlightTimeRemaining() {
         const lowerText = (document.body.textContent || '').toLowerCase();
-        
+
         const minuteMatch = lowerText.match(/arriving in\s+(\d+)\s*minutes?/i);
         if (minuteMatch) return parseInt(minuteMatch[1], 10) * 60 * 1000;
-        
+
         const hourMatch = lowerText.match(/arriving in\s+(\d+)\s*hours?/i);
         if (hourMatch) return parseInt(hourMatch[1], 10) * 3600 * 1000;
-        
+
         const timerMatch = lowerText.match(/(\d+)m\s*(\d+)s\s*(?:remaining|left|to go)/i);
         if (timerMatch) return (parseInt(timerMatch[1], 10) * 60 + parseInt(timerMatch[2], 10)) * 1000;
-        
+
         return null;
     }
 
@@ -335,7 +335,7 @@
         const stocks = [];
 
         const stockTables = document.querySelectorAll('[class*="stockTableWrapper"]');
-        
+
         if (stockTables.length > 0) {
             stockTables.forEach(table => parseStockTable(table, stocks));
         } else {
@@ -347,26 +347,66 @@
             });
         }
 
+        // --- 2. Insert Problem 3 Fix: Targeted Shop-Type Awareness Pass ---
+        // Check if we failed to find stocks, OR specifically check if plushies/flowers/drugs might have been missed.
+        const foundCategories = stocks.map(s => (s.name || '').toLowerCase());
+        const missingSpecialtyItems = !foundCategories.some(name => name.includes('plush') || name.includes('flower') || name.includes('drug'));
+
+        if (stocks.length === 0 || missingSpecialtyItems) {
+            // Look for Torn's shop headers (adjust class name if Torn uses something slightly different, e.g., 'title' or 'subheader')
+            document.querySelectorAll('[class*="shopHeader"], [class*="title"]').forEach(header => {
+                const headerText = (header.textContent || '').toLowerCase();
+
+                // Target the specific categories
+                if (headerText.includes('plush') || headerText.includes('flower') || headerText.includes('drug')) {
+                    let next = header.nextElementSibling;
+
+                    // Traverse down the DOM siblings to find the nearest table wrapper
+                    while (next) {
+                        // If we hit another header before finding a table, stop looking for this section
+                        if (next.className && (next.className.includes('shopHeader') || next.className.includes('title'))) {
+                            break;
+                        }
+
+                        // If we find the table wrapper (even if nested slightly differently), parse it
+                        if (next.className && next.className.includes('stockTableWrapper')) {
+                            parseStockTable(next, stocks);
+                            break;
+                        }
+
+                        // Also check if the table wrapper is nested just one level inside the next sibling
+                        const nestedWrapper = next.querySelector('[class*="stockTableWrapper"]');
+                        if (nestedWrapper) {
+                            parseStockTable(nestedWrapper, stocks);
+                            break;
+                        }
+
+                        next = next.nextElementSibling;
+                    }
+                }
+            });
+        }
+
         // Fallback: cell scanning
         if (stocks.length === 0) {
             const nameEls = document.querySelectorAll('[class*="tabletColB"]');
             const costEls = document.querySelectorAll('[class*="displayPrice"]');
-            
+
             if (nameEls.length > 0 && costEls.length > 0) {
                 const processedParents = new Set();
                 nameEls.forEach(nameEl => {
                     const row = nameEl.closest('[class*="cell"]') || nameEl.parentElement;
                     if (!row || processedParents.has(row)) return;
                     processedParents.add(row);
-                    
+
                     const name = (nameEl.textContent || '').trim();
                     const rowParent = row.parentElement;
-                    
+
                     if (rowParent) {
                         const cells = rowParent.querySelectorAll(':scope > [class*="cell"]');
                         let qty = null;
                         let cost = null;
-                        
+
                         cells.forEach(cell => {
                             const cls = cell.className || '';
                             const text = (cell.textContent || '').trim();
@@ -379,7 +419,7 @@
                                 if (n !== null) cost = n;
                             }
                         });
-                        
+
                         if (name && qty !== null && cost !== null && qty > 0 && cost > 0) {
                             if (!stocks.some(s => s.name === name)) {
                                 stocks.push({ name, quantity: qty, cost });
@@ -393,13 +433,13 @@
         if (stocks.length > 0) {
             stocks.forEach((s, i) => { s.id = -1 - i; });
         }
-        
+
         return stocks;
     }
 
     function parseStockTable(tableEl, stocks) {
         const children = tableEl.children;
-        
+
         let sibling = tableEl.previousElementSibling;
         while (sibling) {
             if (sibling.className && sibling.className.includes('shopHeader')) {
@@ -407,30 +447,30 @@
             }
             sibling = sibling.previousElementSibling;
         }
-        
+
         for (let i = 0; i < children.length; i++) {
             const child = children[i];
             if (child.className && child.className.includes('itemsHeader')) continue;
-            
+
             const childText = (child.textContent || '').trim();
-            if (!childText.includes('$') || childText.length < 10) continue;
-            
+            if (childText.length < 3) continue;
+
             const nameEl = child.querySelector('[class*="tabletColB"]');
             const costEl = child.querySelector('[class*="displayPrice"]');
             const stockEl = child.querySelector('[class*="neededSpace"]');
-            
+
             if (nameEl && costEl) {
                 const name = (nameEl.textContent || '').trim().replace(/^buy\s+/i, '').replace(/^type\s+/i, '');
                 const costNum = parseNumeric(costEl.textContent);
                 let qtyNum = null;
-                
+
                 if (stockEl) {
                     const stockText = (stockEl.textContent || '').trim();
                     if (!stockText.includes('$')) {
                         qtyNum = parseNumeric(stockText);
                     }
                 }
-                
+
                 if (qtyNum === null) {
                     const itemCells = child.querySelectorAll(':scope > div');
                     itemCells.forEach(cell => {
@@ -442,13 +482,13 @@
                         }
                     });
                 }
-                
+
                 if (qtyNum === null) {
                     const stockMatch = childText.match(/stock\s+([\d,]+)/i);
                     if (stockMatch) qtyNum = parseInt(stockMatch[1].replace(/,/g, ''), 10);
                 }
-                
-                if (name && qtyNum !== null && costNum !== null && qtyNum > 0 && costNum > 0) {
+
+                if (name && qtyNum !== null && costNum !== null && qtyNum >= 0 && costNum > 0) {
                     if (!stocks.some(s => s.name === name)) {
                         stocks.push({ name, quantity: qtyNum, cost: costNum });
                     }
@@ -466,7 +506,7 @@
         }
 
         const now = Date.now();
-        if (now - lastSubmitTime < MIN_SUBMIT_INTERVAL_MS) return; 
+        if (now - lastSubmitTime < MIN_SUBMIT_INTERVAL_MS) return;
 
         const stateKey = currentCountry + "_" + stocks.length + "_" + stocks.reduce((acc, s) => acc + s.quantity, 0);
         if (completedPageStates.has(stateKey)) {
@@ -477,7 +517,7 @@
         if (!playerId) detectUser();
 
         const payload = {
-            playerId: playerId || 0, 
+            playerId: playerId || 0,
             playerName: playerName || 'Unknown Observer',
             country: currentCountry,
             observedAt: Math.floor(now / 1000),
@@ -493,7 +533,7 @@
                 url: url,
                 headers: { 'Content-Type': 'application/json' },
                 data: body,
-                onload: function(response) {
+                onload: function (response) {
                     if (response.status === 200 || response.status === 201) {
                         setStatus('submitted');
                         if (!completedPageStates.has(stateKey)) {
@@ -516,22 +556,22 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: body
             })
-            .then(res => {
-                if (res.ok) {
-                    setStatus('submitted');
-                    if (!completedPageStates.has(stateKey)) {
-                        logTrace(`Stock data submitted (${stocks.length} items).`);
+                .then(res => {
+                    if (res.ok) {
+                        setStatus('submitted');
+                        if (!completedPageStates.has(stateKey)) {
+                            logTrace(`Stock data submitted (${stocks.length} items).`);
+                        }
+                        completedPageStates.add(stateKey);
+                    } else {
+                        setStatus('error');
+                        logTrace(`Submission failed: server returned ${res.status}`);
                     }
-                    completedPageStates.add(stateKey);
-                } else {
+                })
+                .catch((fetchErr) => {
                     setStatus('error');
-                    logTrace(`Submission failed: server returned ${res.status}`);
-                }
-            })
-            .catch((fetchErr) => {
-                setStatus('error');
-                logTrace(`Network error submitting data.`, { message: fetchErr.message });
-            });
+                    logTrace(`Network error submitting data.`, { message: fetchErr.message });
+                });
         }
     }
 
@@ -578,7 +618,7 @@
             }
             currentCountry = countryCode;
             const stocks = scrapeStocks();
-            
+
             if (stocks.length > 0) {
                 if (!stocksLogged) {
                     logTrace(`Scraped ${stocks.length} stock items in ${countryName}.`);
@@ -611,7 +651,7 @@
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
                 processPageParsing();
-            }, 400); 
+            }, 400);
         });
         pageMutationObserver.observe(document.body, { childList: true, subtree: true });
 
