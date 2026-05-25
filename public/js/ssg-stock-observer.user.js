@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.0.1
+// @version      2.0.1 
 // @description  Monitors and submits foreign stock data. Flight-aware: only polls when landed, uses arrival time estimation.
 // @author       SSG
 // @match        *://*.torn.com/travel.php*
@@ -20,7 +20,7 @@
 
 (function () {
     'use strict';
-
+//search for "version #" to fix versions in logs.
     // ─── CONFIG ─────────────────────────────────────────────────────────────
     const SSG_SERVER = 'https://ssg-server.onrender.com';
     const ENABLED = true;
@@ -82,7 +82,8 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v1.5.0 - Diagnostics</span>`;
+        //Update each time for version #
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v2.0.1 - Diagnostics</span>`;
 
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -635,7 +636,8 @@
 
     function init() {
         if (!ENABLED) return;
-        logTrace(`SSG Stock Observer v1.5.0 loaded.`);
+        //Update each time for version #
+        logTrace(`SSG Stock Observer v2.0.1 loaded.`);
 
         detectUser();
         if (playerId) {
