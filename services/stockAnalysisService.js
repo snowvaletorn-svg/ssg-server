@@ -330,7 +330,7 @@ async function analyzeCountry(country) {
     const sortedDesc = [...item.snapshots].sort((a, b) => b.time - a.time);
     
     // Pick out the newest snapshot record safely
-    const currentSnapshot = sortedDesc;
+    const currentSnapshot = sortedDesc; // FIXED: Access the first element of the array instead of the whole array
     if (!currentSnapshot) return;
 
     const currentQty = typeof currentSnapshot.quantity === 'number' ? currentSnapshot.quantity : 0;

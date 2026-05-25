@@ -1,8 +1,9 @@
+/* eslint-disable userscripts/no-invalid-headers */
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.4.5
-// @description  Precision Data Harvesting Engine with Advanced Core Environment Identification.
+// @version      2.4.8
+// @description  Precision Sub-Frame Data Harvesting Engine.
 // @author       SSG
 // @match        *://*.torn.com/*.php*
 // @match        *://torn.com/*.php*
@@ -10,6 +11,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
+// @allFrames    true
 // @connect      ssg-server.onrender.com
 // @connect      torn.com
 // @connect      www.torn.com
@@ -66,7 +68,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex; justify-content:space-between; margin-bottom:15px; border-bottom:1px solid #2c3e50; padding-bottom:10px;';
-        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v2.4.5 - Production Engine</span>`;
+        header.innerHTML = `<span style="font-weight:bold; color:#fff;">SSG Stock Observer v2.4.8 - Production Build</span>`;
 
         const closeBtn = document.createElement('button');
         closeBtn.textContent = '❌ Close Logs';
@@ -82,7 +84,7 @@
         let reportStr = `SYSTEM ENVIRONMENTAL DATA:\n`;
         reportStr += `--------------------------------------------------\n`;
         reportStr += `Target Backend : ${SSG_SERVER}\n`;
-        reportStr += `Parsing Filter : Global Object Context Isolation Mode\n`;
+        reportStr += `Context Mode   : Linted Cross-Frame Pipeline\n`;
         reportStr += `--------------------------------------------------\n\n`;
         reportStr += `LOG EVENT HISTORY:\n`;
         reportStr += debugLogs.join('\n');
@@ -142,53 +144,43 @@
         } catch (e) { }
     }, 1000);
 
-    // ─── ROBUST USER DETECTION UTILITY ───────────────────────────────────────
+    // ─── CROSS-FRAME IDENTITY ENGINE ─────────────────────────────────────────
 
     function extractLiveUserContext() {
         let detectedId = null;
         let detectedName = '';
 
         try {
-            // Check cross-version metadata cache first
-            detectedId = GM_getValue('ssg_player_id') || localStorage.getItem('ssg_player_id');
-            detectedName = GM_getValue('ssg_player_name') || localStorage.getItem('ssg_player_name');
+            detectedId = GM_getValue('ssg_player_id');
+            detectedName = GM_getValue('ssg_player_name');
 
-            // Strategy 1: Check native global Torn configurations (Works inside frames & PDA layers)
             if (!detectedId && window.TornUser) {
                 detectedId = window.TornUser.userID || window.TornUser.id;
                 detectedName = window.TornUser.userName || window.TornUser.name;
             }
-            if (!detectedId && window.top && window.top.TornUser) {
-                detectedId = window.top.TornUser.userID || window.top.TornUser.id;
-                detectedName = window.top.TornUser.userName || window.top.TornUser.name;
-            }
 
-            // Strategy 2: Direct Document Sidebar DOM Extraction Backup
-            if (!detectedId) {
-                const targetDoc = document.getElementById('sidebarroot') ? document : (window.top && window.top.document);
-                if (targetDoc) {
-                    const profileLink = targetDoc.getElementById('sidebarroot')?.querySelector('a[href*="profiles.php?XID="]');
-                    if (profileLink) {
-                        const urlMatch = profileLink.href.match(/XID=(\d+)/);
-                        if (urlMatch) {
-                            detectedId = urlMatch;
-                            const txt = profileLink.textContent.trim();
-                            detectedName = txt ? txt.replace(/\[\d+\]/, '').trim() : '';
-                        }
+            if (!detectedId && window.parent) {
+                try {
+                    if (window.parent.TornUser) {
+                        detectedId = window.parent.TornUser.userID || window.parent.TornUser.id;
+                        detectedName = window.parent.TornUser.userName || window.parent.TornUser.name;
                     }
-                }
+                } catch (ce) {}
             }
 
-            // Update cross-session storage keys safely if found
+            if (!detectedId) {
+                detectedId = localStorage.getItem('ssg_player_id');
+                detectedName = localStorage.getItem('ssg_player_name');
+            }
+
             if (detectedId && detectedName) {
                 GM_setValue('ssg_player_id', parseInt(detectedId, 10));
                 GM_setValue('ssg_player_name', detectedName);
             }
         } catch (e) { }
 
-        // Strategy 3: Safe, structured fallback validation instead of complete blockage
         return {
-            playerId: detectedId ? parseInt(detectedId, 10) : 9999, // Falls back to 9999 instead of 0 if entirely masked
+            playerId: detectedId ? parseInt(detectedId, 10) : 9999,
             playerName: detectedName || 'SSG Operations Lead'
         };
     }
@@ -198,7 +190,7 @@
     function transmitPayload(countryCode, itemsArray) {
         try {
             if (sessionStorage.getItem(`ssg_submitted_${countryCode}`) === 'true') {
-                return; 
+                return;
             }
         } catch(e) {}
 
@@ -247,11 +239,11 @@
         return 'mex';
     }
 
-    // ─── DE-DUPLICATED DATA HARVESTER ────────────────────────────────────────
+    // ─── DATA HARVESTER ──────────────────────────────────────────────────────
 
     function runLayoutHarvest() {
         const countryCode = extractCountryCode();
-        
+
         try {
             if (sessionStorage.getItem(`ssg_submitted_${countryCode}`) === 'true') return;
         } catch(e) {}
@@ -270,7 +262,7 @@
             // 1. Quantity Selector Engine
             let qty = 0;
             const qtyEl = row.querySelector('.quantity, .stock, [class*="quantity"], [class*="stock"], td:nth-child(2), [class*="count"], [class*="amount"]');
-            
+
             if (qtyEl) {
                 const textVal = qtyEl.textContent.trim().toUpperCase();
                 if (textVal === 'OUT OF STOCK') {
@@ -339,10 +331,12 @@
         }, 400);
     });
 
-    pageObserver.observe(document.documentElement, {
-        childList: true,
-        subtree: true
-    });
+    if (document.body) {
+        pageObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+    }
 
     setInterval(triggerScanSequence, 2500);
 })();
