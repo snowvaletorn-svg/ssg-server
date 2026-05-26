@@ -4426,6 +4426,3 @@ function downloadTestCsv() {
   a.click();
   URL.revokeObjectURL(url);
 }
-
-
-

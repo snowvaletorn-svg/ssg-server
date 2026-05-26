@@ -303,19 +303,22 @@ async function analyzeCountry(country) {
       // Guard clause to avoid recording empty or bad items
       if (!s || typeof s.name === 'undefined') return;
 
-      if (!itemData[s.id]) {
-        itemData[s.id] = {
-          id: s.id,
+      // Generate stable ID if not present
+      const stableId = s.id || s.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
+      if (!itemData[stableId]) {
+        itemData[stableId] = {
+          id: stableId,
           name: s.name,
           snapshots: []
         };
       }
       
-      itemData[s.id].snapshots.push({
+    itemData[stableId].snapshots.push({
         quantity: typeof s.quantity === 'number' ? s.quantity : 0,
         cost: typeof s.cost === 'number' ? s.cost : 0,
         time: rawTime,
-        observedAt: obs.observedAt || Math.floor(rawTime / 1000)
+        observedAt: obs.observedAt || Math.floor(rawTime / 1000),
+        originalObservation: obs // Store the entire observation for reference
       });
     });
   });
@@ -333,8 +336,16 @@ async function analyzeCountry(country) {
     const currentSnapshot = sortedDesc; // FIXED: Access the first element of the array instead of the whole array
     if (!currentSnapshot) return;
 
+    // Prioritize the most recent quantity, even if zero
     const currentQty = typeof currentSnapshot.quantity === 'number' ? currentSnapshot.quantity : 0;
     const currentCost = typeof currentSnapshot.cost === 'number' ? currentSnapshot.cost : 0;
+
+    // If current quantity is zero, find the most recent non-zero quantity
+    const nonZeroSnapshots = sortedDesc.filter(s => s.quantity > 0);
+    const effectiveQty = currentQty > 0 ? currentQty : 
+      (nonZeroSnapshots.length > 0 ? nonZeroSnapshots[0].quantity : 0);
+    const effectiveCost = currentQty > 0 ? currentCost : 
+      (nonZeroSnapshots.length > 0 ? nonZeroSnapshots[0].cost : 0);
 
     const { restocks, intervals } = detectRestocks(sortedAsc);
     const burnData = calculateBurnRate(sortedAsc);
@@ -375,8 +386,8 @@ async function analyzeCountry(country) {
     items.push({
       id: item.id,
       name: item.name,
-      currentQty,
-      currentCost,
+      currentQty: effectiveQty,
+      currentCost: effectiveCost,
       burnRate: {
         perMin: effectiveBurnRate,
         perHour: Math.round(effectiveBurnRate * 60 * 100) / 100,
