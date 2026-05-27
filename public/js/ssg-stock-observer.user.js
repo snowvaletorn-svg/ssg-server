@@ -29,7 +29,7 @@
 
     const SSG_SERVER = 'https://ssg-server.onrender.com';
     const MIN_SUBMIT_INTERVAL_MS = 6000;
-    const FOREIGN_COUNTRIES = ['mexico', 'cayman', 'canada', 'hawaii', 'uk', 'argentina', 'switzerland', 'japan', 'china', 'uae', 'south_africa'];
+    const FOREIGN_COUNTRIES = ['mexico', 'cayman', 'cayman-islands', 'canada', 'hawaii', 'uk', 'argentina', 'switzerland', 'japan', 'china', 'uae', 'south_africa'];
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
@@ -40,10 +40,10 @@
 
     // Mapping of Torn country names → short codes
     const COUNTRY_MAP = {
-        'mexico': 'mex', 'cayman': 'cay', 'canada': 'can',
-        'hawaii': 'haw', 'uk': 'uni', 'argentina': 'arg',
-        'switzerland': 'swi', 'japan': 'jap', 'china': 'chi',
-        'uae': 'uae', 'south_africa': 'sou'
+        'mexico': 'mex', 'cayman': 'cay', 'cayman-islands': 'cay',
+        'canada': 'can', 'hawaii': 'haw', 'uk': 'uni',
+        'argentina': 'arg', 'switzerland': 'swi', 'japan': 'jap',
+        'china': 'chi', 'uae': 'uae', 'south_africa': 'sou'
     };
 
     function log(msg) {
@@ -187,8 +187,8 @@
                 if (raw.includes('"id"') && (raw.includes('player') || raw.includes('user') || raw.includes('name'))) {
                     try {
                         const data = JSON.parse(raw.replace(/'/g, '"'));
-                        if (data.id && typeof data.id === 'number') {
-                            pid = data.id;
+                        if (data.id) {
+                            pid = parseInt(data.id, 10) || 1337;
                             pname = data.playername || data.playerName || data.username || data.name || pname;
                             log(`Player: ${pname} (ID: ${pid})`);
                             found = true;
