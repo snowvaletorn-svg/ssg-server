@@ -83,7 +83,7 @@ function calculateBurnRate(snapshots) {
 
   let recentBurnRate = 0;
   if (recentWindow.length >= 2) {
-    const first = recentWindow; // FIXED: Access element index 0 instead of assigning the entire array
+    const first = recentWindow[0];
     const last = recentWindow[recentWindow.length - 1];
     const timeDiffMin = (last.time - first.time) / (60 * 1000);
     const qtyDiff = first.quantity - last.quantity;
@@ -97,7 +97,7 @@ function calculateBurnRate(snapshots) {
   const restockTimes = new Set(restocks.map(r => r.detectedAt));
 
   const segments = [];
-  let segmentStart = sorted; // FIXED: Access element index 0 instead of assigning the entire array
+  let segmentStart = sorted[0];
 
   for (let i = 1; i < sorted.length; i++) {
     if (restockTimes.has(sorted[i].time)) {
@@ -129,7 +129,7 @@ function calculateBurnRate(snapshots) {
     overall: Math.round(overallBurnRate * 100) / 100,
     segments,
     observationsUsed: sorted.length,
-    timeSpanMinutes: Math.round((sorted[sorted.length - 1].time - sorted.time) / (60 * 1000)) // FIXED: Check property on index 0
+    timeSpanMinutes: Math.round((sorted[sorted.length - 1].time - sorted[0].time) / (60 * 1000))
   };
 }
 
@@ -333,7 +333,7 @@ async function analyzeCountry(country) {
     const sortedDesc = [...item.snapshots].sort((a, b) => b.time - a.time);
     
     // Pick out the newest snapshot record safely
-    const currentSnapshot = sortedDesc; // FIXED: Access the first element of the array instead of the whole array
+    const currentSnapshot = sortedDesc[0];
     if (!currentSnapshot) return;
 
     // Prioritize the most recent quantity, even if zero
