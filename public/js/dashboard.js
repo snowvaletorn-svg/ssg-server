@@ -3242,8 +3242,22 @@ function renderTravelProfits() {
       let recHtml = '<span style="color:#555;">—</span>';
       if (analytics && analytics.optimalArrival && analytics.optimalArrival.departureRecommendation) {
         const rec = analytics.optimalArrival.departureRecommendation;
-        const recColor = rec.action && rec.action.includes('now') ? '#4caf50' : '#f0a500';
-        recHtml = `<span style="color:${recColor};font-size:0.75rem;">${rec.action}<br><small style="color:#888;">${rec.reason}</small></span>`;
+        const isDoNotTravel = rec.action && rec.action.includes('Do not travel');
+        const isDepartNow = rec.action && rec.action.includes('Depart now');
+        const isDepartAt = rec.action && rec.action.includes('Depart at');
+        const recColor = isDepartNow ? '#4caf50' : isDepartAt ? '#4a90e2' : isDoNotTravel ? '#e74c3c' : '#f0a500';
+        // Format the action text with UTC badge if a time is present
+        let actionHtml = rec.action;
+        if (isDepartAt && rec.departAt) {
+          const depDate = new Date(rec.departAt);
+          const utcStr = depDate.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+          actionHtml = `<span style="color:#4a90e2;">✈️ Leave at ${utcStr}</span>`;
+        } else if (isDepartNow && rec.arriveAt) {
+          const arrDate = new Date(rec.arriveAt);
+          const utcStr = arrDate.toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+          actionHtml = `<span style="color:#4caf50;">✈️ Depart now</span><br><small style="color:#888;">Arrive ~${utcStr}</small>`;
+        }
+        recHtml = `<span style="color:${recColor};font-size:0.75rem;">${actionHtml}<br><small style="color:#888;">${rec.reason || ''}</small></span>`;
       }
 
       // Confidence
@@ -3254,7 +3268,7 @@ function renderTravelProfits() {
       }
 
       const isOos = item.outOfStock;
-      const rowStyle = isOos ? 'opacity:0.4;' : '';
+      const rowStyle = '';
       const qtyDisplay = isOos ? '<span style="color:#ff4444;font-size:0.75rem;">OUT OF STOCK</span>' : item.quantity.toLocaleString();
       const profitColor = item.profit > 0 ? '#4caf50' : '#ff4444';
 
@@ -3274,6 +3288,38 @@ function renderTravelProfits() {
           <td style="text-align:center;">${confHtml}</td>
         </tr>`;
     }).join('');
+
+    // Calculate overall country departure: latest departAt among all items with restock data
+    let latestDepartUTC = null;
+    let soonestArriveUTC = null;
+    let hasAnyRec = false;
+    items.forEach(item => {
+      let analytics = stockAnalyticsCache[`${item.country}::${(item.name || '').toLowerCase().trim()}`];
+      if (!analytics && stockAnalyticsCache._byName) {
+        analytics = stockAnalyticsCache._byName[(item.name || '').toLowerCase().trim()];
+      }
+      if (analytics && analytics.optimalArrival && analytics.optimalArrival.departureRecommendation) {
+        const rec = analytics.optimalArrival.departureRecommendation;
+        hasAnyRec = true;
+        if (rec.departAt) {
+          const depTime = new Date(rec.departAt).getTime();
+          if (!latestDepartUTC || depTime > latestDepartUTC) latestDepartUTC = depTime;
+        }
+        if (rec.arriveAt) {
+          const arrTime = new Date(rec.arriveAt).getTime();
+          if (!soonestArriveUTC || arrTime < soonestArriveUTC) soonestArriveUTC = arrTime;
+        }
+      }
+    });
+    let overallBanner = '';
+    if (hasAnyRec && latestDepartUTC) {
+      const depStr = new Date(latestDepartUTC).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+      overallBanner = `<div style="background:#1a1919;border-top:1px solid #2a2828;padding:0.6rem 1rem;display:flex;align-items:center;gap:0.5rem;">
+        <span style="font-size:0.85rem;">✈️</span>
+        <span style="font-size:0.8rem;color:#4a90e2;font-weight:600;">Recommended departure: ${depStr}</span>
+        <span style="font-size:0.75rem;color:#888;">(to restock all items)</span>
+      </div>`;
+    }
 
     html += `
       <div class="card" style="margin-bottom:1rem;">
@@ -3304,6 +3350,7 @@ function renderTravelProfits() {
             <tbody>${rows}</tbody>
           </table>
         </div>
+        ${overallBanner}
       </div>`;
   });
 

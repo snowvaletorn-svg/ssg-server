@@ -400,10 +400,51 @@ async function analyzeCountry(country) {
 
     // CRITICAL LIVE MONITORING OVERRIDES
     if (currentQty <= 0) {
-      optimalArrival.departureRecommendation = {
-        action: 'Do not travel',
-        reason: 'Item is entirely out of stock.'
-      };
+      // Only override if calculateOptimalArrival didn't already produce a good recommendation
+      const existingRec = optimalArrival.departureRecommendation;
+      const hasRestockRec = existingRec && existingRec.action && 
+        (existingRec.action.includes('Depart now') || existingRec.action.includes('Wait'));
+
+      if (!hasRestockRec) {
+        // No restock-based recommendation available
+        if (nextRestock && nextRestock.nextRestockInMinutes) {
+          const restockIn = nextRestock.nextRestockInMinutes;
+          const departInMin = Math.max(0, restockIn - flightTime);
+          const departUTC = new Date(Date.now() + departInMin * 60 * 1000);
+          const arriveUTC = new Date(Date.now() + (departInMin + flightTime) * 60 * 1000);
+          optimalArrival.departureRecommendation = {
+            action: departInMin <= 0 ? 'Depart now' : `Depart at ${departUTC.toISOString().slice(11, 16)} UTC`,
+            reason: restockIn <= flightTime
+              ? `Restock in ~${restockIn} min (before you land)`
+              : `Restock in ~${restockIn} min; arrive in ${flightTime} min`,
+            departAt: departUTC.toISOString(),
+            arriveAt: arriveUTC.toISOString()
+          };
+        } else {
+          optimalArrival.departureRecommendation = {
+            action: 'Do not travel',
+            reason: 'Item is entirely out of stock. Awaiting restock data.'
+          };
+        }
+      } else {
+        // calculateOptimalArrival already gave a recommendation — enrich it with UTC times
+        const rec = existingRec;
+        if (rec.action && rec.action.includes('Wait')) {
+          const waitMatch = rec.reason && rec.reason.match(/Next restock in (\d+) min/);
+          if (waitMatch) {
+            const restockIn = parseInt(waitMatch[1]);
+            const departInMin = Math.max(0, restockIn - flightTime);
+            const departUTC = new Date(Date.now() + departInMin * 60 * 1000);
+            const arriveUTC = new Date(Date.now() + (departInMin + flightTime) * 60 * 1000);
+            rec.action = departInMin <= 0 ? 'Depart now' : `Depart at ${departUTC.toISOString().slice(11, 16)} UTC`;
+            rec.departAt = departUTC.toISOString();
+            rec.arriveAt = arriveUTC.toISOString();
+          }
+        } else if (rec.action === 'Depart now') {
+          rec.departAt = new Date().toISOString();
+          rec.arriveAt = new Date(Date.now() + flightTime * 60 * 1000).toISOString();
+        }
+      }
     } 
     // STALE OVERRIDE: Using your customized 24-hour limit safety fallback
     else if (cleanFreshness > 1440 || cleanFreshness < 0) {
