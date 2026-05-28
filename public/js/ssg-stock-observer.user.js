@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.7.0
+// @version      2.7.1
 // @description  Precision Data Harvesting Engine - Travel Page Only
 // @author       SSG
 // @match        *://*.torn.com/page.php?sid=travel*
@@ -159,7 +159,7 @@
     function transmit(countryCode, items) {
         try {
             if (sessionStorage.getItem(`ssg_submitted_${countryCode}`) === 'true') {
-                log(`Skipping: already submitted for ${countryCode} this visit`);
+                log(`Skipping: already submitted for ${countryCode} this visit. Thanks for your input.`);
                 return;
             }
         } catch(e) {}
