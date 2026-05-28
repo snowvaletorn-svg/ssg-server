@@ -2559,12 +2559,20 @@ app.post('/api/stock-observe', express.json(), async (req, res) => {
       playerName: playerName || '',
       country: country.toLowerCase(),
       observedAt: observedAt || Math.floor(Date.now() / 1000),
-      stocks: cleanStocks.map(s => ({
-        id: s.id || 0, // Fallback safely to 0 if the item doesn't pass a unique internal ID
-        name: s.name,
-        quantity: s.quantity,
-        cost: s.cost
-      }))
+      stocks: cleanStocks.map(s => {
+        // If the userscript sends id "0" or 0 (no real item ID), generate a stable
+        // name-based ID so items are not all collapsed under the same key during analysis.
+        const hasRealId = s.id && s.id !== '0' && s.id !== 0;
+        const stableId = hasRealId
+          ? String(s.id)
+          : (s.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
+        return {
+          id: stableId,
+          name: s.name,
+          quantity: s.quantity,
+          cost: s.cost
+        };
+      })
     });
 
     await observation.save();

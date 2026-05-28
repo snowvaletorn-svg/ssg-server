@@ -332,7 +332,11 @@ async function analyzeCountry(country) {
       if (itemName.length < 2 || itemName.length > 60) return;
 
       // Generate stable ID if not present
-      const stableId = s.id || itemName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
+      // NOTE: s.id may be "0" (string) when the userscript has no real item ID — treat "0" and 0 as absent
+      const hasRealId = s.id && s.id !== '0' && s.id !== 0;
+      const stableId = hasRealId
+        ? String(s.id)
+        : itemName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
       if (!itemData[stableId]) {
         itemData[stableId] = {
           id: stableId,
