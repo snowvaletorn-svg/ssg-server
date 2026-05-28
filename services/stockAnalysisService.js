@@ -303,8 +303,36 @@ async function analyzeCountry(country) {
       // Guard clause to avoid recording empty or bad items
       if (!s || typeof s.name === 'undefined') return;
 
+      // ─── FILTER: Reject false positives scraped by userscript ─────
+      const itemName = (s.name || '').trim();
+
+      // Skip country names that look like stock items
+      const COUNTRY_NAMES = ['mexico', 'cayman islands', 'canada', 'hawaii', 'uk', 'united kingdom', 
+        'argentina', 'switzerland', 'japan', 'china', 'uae', 'south africa',
+        'mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'sou'];
+      if (COUNTRY_NAMES.includes(itemName.toLowerCase())) return;
+
+      // Skip timestamps (e.g., "22:09:02 - 25/05/26")
+      if (/^\d{1,2}:\d{2}:\d{2}/.test(itemName)) return;
+
+      // Skip date-like strings (e.g., "18:17:00 - 22/05/26")
+      if (/\d{2}:\d{2}:\d{2}.*\d{2}\/\d{2}\/\d{2}/.test(itemName)) return;
+
+      // Skip percentage strings (e.g., "3.21%")
+      if (/^[\d.]+%$/.test(itemName)) return;
+
+      // Skip purely numeric names
+      if (/^\d{2,}$/.test(itemName.replace(/\s/g, ''))) return;
+
+      // Skip country code names (e.g., "mex", "cay", "uae")
+      const COUNTRY_CODES = ['mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'uae', 'sou'];
+      if (COUNTRY_CODES.includes(itemName.toLowerCase())) return;
+
+      // Skip very short or very long names - unlikely real items
+      if (itemName.length < 2 || itemName.length > 60) return;
+
       // Generate stable ID if not present
-      const stableId = s.id || s.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
+      const stableId = s.id || itemName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
       if (!itemData[stableId]) {
         itemData[stableId] = {
           id: stableId,
@@ -313,12 +341,12 @@ async function analyzeCountry(country) {
         };
       }
       
-    itemData[stableId].snapshots.push({
+      itemData[stableId].snapshots.push({
         quantity: typeof s.quantity === 'number' ? s.quantity : 0,
         cost: typeof s.cost === 'number' ? s.cost : 0,
         time: rawTime,
         observedAt: obs.observedAt || Math.floor(rawTime / 1000),
-        originalObservation: obs // Store the entire observation for reference
+        originalObservation: obs
       });
     });
   });
@@ -381,7 +409,7 @@ async function analyzeCountry(country) {
       };
     }
 
-    console.log(`[ADVISOR] Item: ${item.name.padEnd(20)} | Qty: ${String(currentQty).padEnd(6)} | Freshness: ${cleanFreshness}m | Rec: ${optimalArrival.departureRecommendation.action}`);
+    //console.log(`[ADVISOR] Item: ${item.name.padEnd(20)} | Qty: ${String(currentQty).padEnd(6)} | Freshness: ${cleanFreshness}m | Rec: ${optimalArrival.departureRecommendation.action}`);
 
     items.push({
       id: item.id,

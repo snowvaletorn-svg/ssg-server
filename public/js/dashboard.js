@@ -1382,10 +1382,8 @@ async function fetchTravelProfits() {
         console.log(`[Travel Profits] Analytics response for ${country}:`, aData.status, 'items:', aData.items?.length);
         if (aRes.ok && aData.items) {
           aData.items.forEach(item => {
-            // Store analytics keyed by both string and number for robust matching
-            //analyticsMap[String(item.id)] = item;
-            //analyticsMap[item.id] = item;
-            analyticsMap[`${country}::${item.name}`] = item;
+            // Store analytics keyed by normalized country+name for case-insensitive matching
+            analyticsMap[`${country}::${(item.name || '').toLowerCase().trim()}`] = item;
           });
         }
       } catch (e) {
@@ -1398,7 +1396,7 @@ async function fetchTravelProfits() {
     // Build a name-based lookup as fallback (stock observer uses fake negative IDs)
     const analyticsByName = {};
     Object.values(analyticsMap).forEach(item => {
-      analyticsByName[item.name] = item;
+      analyticsByName[(item.name || '').toLowerCase().trim()] = item;
     });
 
     // Count how many travel profit items actually match analytics data
@@ -1406,8 +1404,9 @@ async function fetchTravelProfits() {
     let nameMatchCount = 0;
     if (data.profits.length > 0) {
       data.profits.forEach(p => {
-        if (analyticsMap[String(p.id)]) matchCount++;
-        if (analyticsByName[p.name]) nameMatchCount++;
+        const lookupKey = `${p.country}::${(p.name || '').toLowerCase().trim()}`;
+        if (analyticsMap[lookupKey]) matchCount++;
+        if (analyticsByName[(p.name || '').toLowerCase().trim()]) nameMatchCount++;
       });
       console.log('[Travel Profits] ID matches:', matchCount, '| Name matches:', nameMatchCount, 'out of', data.profits.length, 'profit items');
 
@@ -3212,10 +3211,11 @@ function renderTravelProfits() {
 
     const rows = items.map(item => {
       const profitPerRun = (item.profit * quantity) - flightCost;
-      // Try ID match first, then fall back to name match (stock observer uses fake IDs)
-      let analytics = stockAnalyticsCache[`${item.country}::${item.name}`]
-             || stockAnalyticsCache[String(item.id)];
-
+      // Try normalized country+name match first, then fall back to name-only match (case-insensitive)
+      let analytics = stockAnalyticsCache[`${item.country}::${(item.name || '').toLowerCase().trim()}`];
+      if (!analytics && stockAnalyticsCache._byName) {
+        analytics = stockAnalyticsCache._byName[(item.name || '').toLowerCase().trim()];
+      }
       // Burn Rate
       let burnRateHtml = '<span style="color:#555;">—</span>';
       if (analytics && analytics.burnRate && analytics.burnRate.perHour > 0) {
