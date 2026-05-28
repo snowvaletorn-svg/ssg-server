@@ -1037,7 +1037,10 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
       let travelCell = '🏠 Torn';
 
       if (m.status?.state === 'Traveling') {
-        const isReturning = m.status?.description?.toLowerCase().includes('returning');
+        // Check multiple sources for returning status: description text, OR travel destination
+        const isReturning = m.status?.description?.toLowerCase().includes('returning')
+          || (travelInfo?.travel?.destination === 'Torn')
+          || (travelInfo?.description?.toLowerCase().includes('returning'));
         if (travelInfo?.travel?.time_left > 0) {
           travelCell = isReturning
             ? `🔄 ${formatTimeLeft(travelInfo.travel.time_left)}`
@@ -1162,7 +1165,10 @@ async function fetchTravel() {
 }
 
 function renderTravelStatus(t) {
-  if (!t || t.destination === 'Torn') {
+  // User is truly in Torn only if travel data is absent OR destination is Torn AND time_left is 0
+  const isTraveling = t && ((t.time_left && t.time_left > 0) || (t.timestamp && t.timestamp > 0 && t.timestamp > Math.floor(Date.now() / 1000)));
+
+  if (!t || (t.destination === 'Torn' && !isTraveling)) {
     return `
       <div class="card">
         <div class="card-body">
@@ -1174,18 +1180,21 @@ function renderTravelStatus(t) {
       </div>`;
   }
 
-  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
+  // User is traveling — destination could be Torn (returning) or a foreign country (departing)
   const isReturning = t.destination === 'Torn';
+  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
+  const timeLeft = t.time_left ? formatTimeLeft(t.time_left) : '';
 
   return `
     <div class="card">
-      <div class="card-header">✈️ Currently Traveling</div>
+      <div class="card-header">${isReturning ? '🔄 Returning to Torn' : '✈️ Currently Traveling'}</div>
       <div class="card-body">
         <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-          ${infoBadge('Destination', t.destination || 'Unknown')}
+          ${infoBadge('Destination', isReturning ? '🏠 Torn (Home)' : (t.destination || 'Unknown'))}
           ${infoBadge('Departure', t.departed || 'Unknown')}
           ${infoBadge('Arriving', arrivalTime)}
-          ${infoBadge('Direction', isReturning ? '🏠 Returning' : '✈️ Departing')}
+          ${timeLeft ? infoBadge('Time Left', timeLeft) : ''}
+          ${infoBadge('Direction', isReturning ? '🔄 Returning' : '✈️ Departing')}
         </div>
       </div>
     </div>`;
