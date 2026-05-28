@@ -98,7 +98,23 @@
               </div>
             </div>
 
-            <!-- Torn Email -->
+            <!-- Announcement Block (all members) -->
+            <div id="announcement-card" class="card mt-2" style="border-left: 4px solid #3498db; display:none;">
+              <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <span>📢 Message Board</span>
+              </div>
+              <div class="card-body" id="announcement-body">
+                <div id="announcement-loading" class="empty-state" style="padding:0.5rem;">
+                  <p class="muted" style="font-size:0.85rem;">Loading announcements...</p>
+                </div>
+                <div id="announcement-list" style="display:none;color:#888;"></div>
+                <div id="announcement-empty" class="empty-state" style="display:none;padding:0.5rem;">
+                  <p class="muted" style="font-size:0.85rem;">No announcements yet.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Torn Email
             <div class="card mt-2">
               <div class="card-header">📧 Torn Email Address</div>
               <% if (isOwner || isLeadership) { %>
@@ -112,7 +128,7 @@
                 </div>
                 <% } %>
                   <div class="card-body">
-                  </div>
+                  </div>-->
 
                   <!-- Personal Torn API Key -->
                   <div class="card mt-2">
@@ -190,33 +206,56 @@
                               </strong> role</span>
                             <% } %>
                         </div>
-                        <p class="hint mt-1">This changes what channels, training materials, and features are visible.
+                        <p class="hint mt-1">This changes what training materials and features are visible.
                           Does not affect your actual permissions.</p>
                       </div>
                     </div>
                     <% } %>
-
-                      <!-- Ownership Notification Card (bottom of profile) -->
-                      <% if (isOwner) { %>
-                        <div id="notification-card" class="card mt-2"
-                          style="border-left: 4px solid var(--ownership-color, #e67e22); display:none;">
+                      <!-- Leadership: Post Announcement -->
+                      <% if (isOwner || isLeadership) { %>
+                        <div id="announcement-form-card" class="card mt-2" style="border-left: 4px solid #2ecc71;">
                           <div class="card-header"
                             style="display:flex;justify-content:space-between;align-items:center;">
-                            <span id="notification-title">📬 Notifications</span>
-                            <span id="notification-badge"
-                              style="background:#e74c3c;color:white;border-radius:12px;padding:2px 8px;font-size:0.75rem;display:none;">0</span>
+                            <span>📝 Post to Message Board</span>
+                            <button class="btn btn-small btn-outline" onclick="toggleAnnouncementForm()"
+                              style="font-size:0.75rem;">+ New</button>
                           </div>
-                          <div class="card-body" id="notification-body">
-                            <div id="notification-loading" class="empty-state" style="padding:0.5rem;">
-                              <p class="muted" style="font-size:0.85rem;">Loading notifications...</p>
+                          <div class="card-body" id="announcement-form-body" style="display:none;">
+                            <textarea id="announcement-input" class="form-input" rows="3"
+                              placeholder="Enter announcement message for all faction members..."
+                              style="width:100%;resize:vertical;"></textarea>
+                            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center;">
+                              <button class="btn btn-primary btn-small" onclick="submitAnnouncement()">📢 Post</button>
+                              <button class="btn btn-small btn-outline"
+                                onclick="toggleAnnouncementForm()">Cancel</button>
+                              <span id="announcement-status" style="font-size:0.8rem;"></span>
                             </div>
-                            <div id="notification-list" style="display:none;"></div>
-                            <div id="notification-empty" class="empty-state" style="display:none;padding:0.5rem;">
-                              <p class="muted" style="font-size:0.85rem;">No recent notifications.</p>
-                            </div>
+                            <div id="announcement-history" style="margin-top:1rem;color:#888;"></div>
                           </div>
                         </div>
                         <% } %>
+
+                          <!-- Ownership Notification Card (ownership only) -->
+                          <% if (isOwner) { %>
+                            <div id="notification-card" class="card mt-2"
+                              style="border-left: 4px solid var(--ownership-color, #e67e22); display:none;">
+                              <div class="card-header"
+                                style="display:flex;justify-content:space-between;align-items:center;">
+                                <span id="notification-title">📬 Notifications</span>
+                                <span id="notification-badge"
+                                  style="background:#e74c3c;color:white;border-radius:12px;padding:2px 8px;font-size:0.75rem;display:none;">0</span>
+                              </div>
+                              <div class="card-body" id="notification-body">
+                                <div id="notification-loading" class="empty-state" style="padding:0.5rem;">
+                                  <p class="muted" style="font-size:0.85rem;">Loading notifications...</p>
+                                </div>
+                                <div id="notification-list" style="display:none;"></div>
+                                <div id="notification-empty" class="empty-state" style="display:none;padding:0.5rem;">
+                                  <p class="muted" style="font-size:0.85rem;">No recent notifications.</p>
+                                </div>
+                              </div>
+                            </div>
+                            <% } %>
           </section>
 
 

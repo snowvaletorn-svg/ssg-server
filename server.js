@@ -31,6 +31,7 @@ const {
 } = require('./services/snapshotService');
 const { sendEmail } = require('./services/emailService');
 const AppNotification = require('./models/AppNotification');
+const Announcement = require('./models/Announcement');
 const StockObservation = require('./models/StockObservation');
 const { startScheduler } = require('./services/schedulerService');
 const {
@@ -2322,6 +2323,98 @@ app.delete('/api/notifications/:id', isAuthenticated, isOwnership, async (req, r
     const result = await AppNotification.findByIdAndDelete(req.params.id);
     if (!result) {
       return res.status(404).json({ error: 'Notification not found' });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANNOUNCEMENTS API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── API: Get latest announcement (all authenticated members) ────────────────
+app.get('/api/announcements/latest', isAuthenticated, async (req, res) => {
+  try {
+    const announcement = await Announcement.findOne()
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json(announcement || null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get all announcements (all authenticated members) ──────────────────
+app.get('/api/announcements', isAuthenticated, async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
+    const announcements = await Announcement.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json(announcements);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Create announcement (Leadership/Ownership only) ────────────────────
+app.post('/api/announcements', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Announcement message is required.' });
+    }
+
+    const announcement = new Announcement({
+      message: message.trim(),
+      authorId: parseInt(req.session.userId),
+      authorName: req.session.user.username || req.session.user.tornName
+    });
+
+    await announcement.save();
+
+    res.json({ success: true, announcement });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Update announcement (Leadership/Ownership only) ────────────────────
+app.put('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Announcement message is required.' });
+    }
+
+    const announcement = await Announcement.findById(req.params.id);
+    if (!announcement) {
+      return res.status(404).json({ error: 'Announcement not found.' });
+    }
+
+    announcement.message = message.trim();
+    announcement.updatedAt = new Date();
+    await announcement.save();
+
+    res.json({ success: true, announcement });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Delete announcement (Leadership/Ownership only) ────────────────────
+app.delete('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const result = await Announcement.findByIdAndDelete(req.params.id);
+    if (!result) {
+      return res.status(404).json({ error: 'Announcement not found.' });
     }
     res.json({ success: true });
   } catch (err) {

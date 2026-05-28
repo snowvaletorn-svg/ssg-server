@@ -4426,3 +4426,163 @@ function downloadTestCsv() {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ANNOUNCEMENTS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function fetchAnnouncement() {
+  const card = document.getElementById('announcement-card');
+  const loading = document.getElementById('announcement-loading');
+  const list = document.getElementById('announcement-list');
+  const empty = document.getElementById('announcement-empty');
+
+  if (!card) return;
+
+  try {
+    const res = await fetch('/api/announcements?limit=5');
+    if (!res.ok) throw new Error('Failed to fetch announcements');
+
+    const announcements = await res.json();
+
+    loading.style.display = 'none';
+
+    if (announcements && announcements.length > 0) {
+      card.style.display = 'block';
+      list.style.display = 'block';
+      empty.style.display = 'none';
+
+      list.innerHTML = announcements.map((a, i) => `
+        <div style="padding:0.5rem 0;${i < announcements.length - 1 ? 'border-bottom:1px solid #2a2828;' : ''}">
+          <p style="white-space:pre-wrap;margin-bottom:0.25rem;font-size:0.85rem;">${escapeHtml(a.message)}</p>
+          <span style="font-size:0.7rem;color:#666;">Posted by ${escapeHtml(a.authorName)} — ${new Date(a.createdAt).toLocaleString()}</span>
+        </div>
+      `).join('');
+    } else {
+      card.style.display = 'block';
+      list.style.display = 'none';
+      empty.style.display = 'block';
+    }
+  } catch (err) {
+    console.error('Error fetching announcements:', err);
+    loading.style.display = 'none';
+    empty.style.display = 'block';
+    card.style.display = 'block';
+  }
+}
+
+function toggleAnnouncementForm() {
+  const formBody = document.getElementById('announcement-form-body');
+  const input = document.getElementById('announcement-input');
+  if (formBody.style.display === 'none' || !formBody.style.display) {
+    formBody.style.display = 'block';
+    input.value = '';
+    document.getElementById('announcement-status').textContent = '';
+    fetchAnnouncementHistory();
+  } else {
+    formBody.style.display = 'none';
+  }
+}
+
+async function submitAnnouncement() {
+  const input = document.getElementById('announcement-input');
+  const statusEl = document.getElementById('announcement-status');
+  const message = input.value.trim();
+
+  if (!message) {
+    statusEl.innerHTML = '<span style="color:#e74c3c;">Please enter a message.</span>';
+    return;
+  }
+
+  statusEl.innerHTML = '<span class="muted">Posting...</span>';
+
+  try {
+    const res = await fetch('/api/announcements', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.innerHTML = `<span style="color:#e74c3c;">❌ ${data.error}</span>`;
+      return;
+    }
+
+    statusEl.innerHTML = '<span class="success-text">✅ Announcement posted!</span>';
+    input.value = '';
+    fetchAnnouncement();
+    fetchAnnouncementHistory();
+  } catch (err) {
+    statusEl.innerHTML = `<span style="color:#e74c3c;">❌ Error: ${err.message}</span>`;
+  }
+}
+
+async function fetchAnnouncementHistory() {
+  const historyEl = document.getElementById('announcement-history');
+  if (!historyEl) return;
+
+  try {
+    const res = await fetch('/api/announcements?limit=10');
+    if (!res.ok) throw new Error('Failed to fetch history');
+
+    const announcements = await res.json();
+
+    if (announcements.length === 0) {
+      historyEl.innerHTML = '<p class="muted" style="font-size:0.8rem;">No previous announcements.</p>';
+      return;
+    }
+
+    historyEl.innerHTML = `
+      <div style="font-size:0.8rem;color:#888;margin-bottom:0.5rem;">Recent Announcements:</div>
+      ${announcements.map(a => `
+        <div style="background:#1a1919;border:1px solid #2a2828;border-radius:4px;padding:0.5rem;margin-bottom:0.4rem;">
+          <p style="font-size:0.8rem;white-space:pre-wrap;margin-bottom:0.25rem;">${escapeHtml(a.message)}</p>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:0.7rem;color:#666;">${a.authorName} — ${new Date(a.createdAt).toLocaleString()}</span>
+            <button class="btn btn-small btn-outline" onclick="deleteAnnouncement('${a._id}')" style="font-size:0.65rem;padding:1px 6px;">🗑️</button>
+          </div>
+        </div>
+      `).join('')}
+    `;
+  } catch (err) {
+    console.error('Error fetching announcement history:', err);
+  }
+}
+
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete this announcement?')) return;
+
+  try {
+    const res = await fetch(`/api/announcements/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(`Error: ${data.error}`);
+      return;
+    }
+
+    fetchAnnouncement();
+    fetchAnnouncementHistory();
+  } catch (err) {
+    alert(`Error: ${err.message}`);
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ── Initialize profile section features on page load ──────────────────────────
+(function initProfileFeatures() {
+  // Fetch announcement for all members
+  fetchAnnouncement();
+
+  // Fetch notifications for ownership (uses existing fetchNotifications)
+  if (IS_OWNER) {
+    fetchNotifications();
+  }
+})();
