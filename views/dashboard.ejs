@@ -27,6 +27,14 @@
     </div>
   </div>
 
+  <!-- ── PERSISTENT IMPERSONATION BANNER ── -->
+  <% if (isImpersonating) { %>
+  <div class="impersonation-banner">
+    <span>🔍 You are currently viewing as <strong><%= impersonatedRole %></strong> role</span>
+    <button class="btn btn-small btn-outline" onclick="clearRoleView()" style="border-color:#f0c040;color:#f0c040;">✕ Return to My View</button>
+  </div>
+  <% } %>
+
   <div class="container">
     <div class="dashboard">
       <div class="dashboard-layout">
@@ -36,6 +44,7 @@
           <nav class="sidebar-nav">
             <a href="#profile" class="nav-item active" onclick="showSection('profile', this)">👤 Profile</a>
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Personal Stats</a>
+            <a href="#targets" class="nav-item" onclick="showSection('targets', this)">🎯 Targets</a>
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
@@ -97,24 +106,45 @@
                       <% } %>
               </div>
             </div>
-
-            <!-- Announcement Block (all members) -->
-            <div id="announcement-card" class="card mt-2" style="border-left: 4px solid #3498db; display:none;">
-              <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-                <span>📢 Message Board</span>
-              </div>
-              <div class="card-body" id="announcement-body">
-                <div id="announcement-loading" class="empty-state" style="padding:0.5rem;">
-                  <p class="muted" style="font-size:0.85rem;">Loading announcements...</p>
+            <!-- Leadership: Post Announcement -->
+            <% if (isOwner || isLeadership) { %>
+              <div id="announcement-form-card" class="card mt-2" style="border-left: 4px solid #2ecc71;">
+                <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                  <span>📝 Post to Message Board</span>
+                  <button class="btn btn-small btn-outline" onclick="toggleAnnouncementForm()"
+                    style="font-size:0.75rem;">+ New</button>
                 </div>
-                <div id="announcement-list" style="display:none;color:#888;"></div>
-                <div id="announcement-empty" class="empty-state" style="display:none;padding:0.5rem;">
-                  <p class="muted" style="font-size:0.85rem;">No announcements yet.</p>
+                <div class="card-body" id="announcement-form-body" style="display:none;">
+                  <textarea id="announcement-input" class="form-input" rows="3"
+                    placeholder="Enter announcement message for all faction members..."
+                    style="width:100%;resize:vertical;"></textarea>
+                  <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center;">
+                    <button class="btn btn-primary btn-small" onclick="submitAnnouncement()">📢 Post</button>
+                    <button class="btn btn-small btn-outline" onclick="toggleAnnouncementForm()">Cancel</button>
+                    <span id="announcement-status" style="font-size:0.8rem;"></span>
+                  </div>
+                  <div id="announcement-history" style="margin-top:1rem;color:#888;"></div>
                 </div>
               </div>
-            </div>
+              <% } %>
 
-            <!-- Torn Email
+                <!-- Announcement Block (all members) -->
+                <div id="announcement-card" class="card mt-2" style="border-left: 4px solid #3498db; display:none;">
+                  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <span>📢 Message Board</span>
+                  </div>
+                  <div class="card-body" id="announcement-body">
+                    <div id="announcement-loading" class="empty-state" style="padding:0.5rem;">
+                      <p class="muted" style="font-size:0.85rem;">Loading announcements...</p>
+                    </div>
+                    <div id="announcement-list" style="display:none;color:#888;"></div>
+                    <div id="announcement-empty" class="empty-state" style="display:none;padding:0.5rem;">
+                      <p class="muted" style="font-size:0.85rem;">No announcements yet.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Torn Email
             <div class="card mt-2">
               <div class="card-header">📧 Torn Email Address</div>
               <% if (isOwner || isLeadership) { %>
@@ -130,132 +160,111 @@
                   <div class="card-body">
                   </div>-->
 
-                  <!-- Personal Torn API Key -->
+                <!-- Personal Torn API Key -->
+                <div class="card mt-2">
+                  <div class="card-header">🔑 Torn API Key</div>
+                  <div class="card-body">
+                    <% if (tornApiKey) { %>
+                      <p class="success-text">✅ Torn API key is saved.</p>
+                      <button class="btn btn-small btn-outline" onclick="showKeyForm()">Update Key</button>
+                      <% } else { %>
+                        <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
+                        <% } %>
+                          <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
+                            <div class="input-group mt-1">
+                              <input type="text" id="torn-key-input" class="form-input"
+                                placeholder="Enter your Torn API key..." />
+                              <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
+                            </div>
+                            <p class="hint">
+                              Get your key at
+                              <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">
+                                torn.com → Preferences → API
+                              </a>— set access level to <strong style="color:#c0bcbc;">Full Access</strong>.
+                            </p>
+                          </div>
+                          <div id="key-status" class="mt-1"></div>
+                  </div>
+                </div>
+
+                <!-- Faction API Key (Ownership only) -->
+                <% if (isOwner) { %>
                   <div class="card mt-2">
-                    <div class="card-header">🔑 Torn API Key</div>
+                    <div class="card-header">🏰 Faction API Key <span
+                        style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
                     <div class="card-body">
-                      <% if (tornApiKey) { %>
-                        <p class="success-text">✅ Torn API key is saved.</p>
-                        <button class="btn btn-small btn-outline" onclick="showKeyForm()">Update Key</button>
+                      <% if (hasFactionKey) { %>
+                        <p class="success-text">✅ Faction API key is configured.</p>
+                        <button class="btn btn-small btn-outline" onclick="showFactionKeyForm()">Update Key</button>
                         <% } else { %>
-                          <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
+                          <p class="muted">No faction API key set. Configure one to enable faction features for all
+                            members.
+                          </p>
                           <% } %>
-                            <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
+                            <div id="faction-key-form" class="<%= hasFactionKey ? 'hidden' : '' %>">
                               <div class="input-group mt-1">
-                                <input type="text" id="torn-key-input" class="form-input"
-                                  placeholder="Enter your Torn API key..." />
-                                <button class="btn btn-primary" onclick="saveTornKey()">Save Key</button>
+                                <input type="text" id="faction-key-input" class="form-input"
+                                  placeholder="Enter faction Torn API key..." />
+                                <button class="btn btn-primary" onclick="saveFactionKey()">Save Key</button>
                               </div>
-                              <p class="hint">
-                                Get your key at
-                                <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">
-                                  torn.com → Preferences → API
-                                </a>— set access level to <strong style="color:#c0bcbc;">Full Access</strong>.
+                              <p class="hint">Use a faction leader/co-leader's Torn API key with faction permissions.
                               </p>
                             </div>
-                            <div id="key-status" class="mt-1"></div>
+                            <div id="faction-key-status" class="mt-1"></div>
                     </div>
                   </div>
+                  <% } %>
 
-                  <!-- Faction API Key (Ownership only) -->
-                  <% if (isOwner) { %>
-                    <div class="card mt-2">
-                      <div class="card-header">🏰 Faction API Key <span
-                          style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
-                      <div class="card-body">
-                        <% if (hasFactionKey) { %>
-                          <p class="success-text">✅ Faction API key is configured.</p>
-                          <button class="btn btn-small btn-outline" onclick="showFactionKeyForm()">Update Key</button>
-                          <% } else { %>
-                            <p class="muted">No faction API key set. Configure one to enable faction features for all
-                              members.
-                            </p>
-                            <% } %>
-                              <div id="faction-key-form" class="<%= hasFactionKey ? 'hidden' : '' %>">
-                                <div class="input-group mt-1">
-                                  <input type="text" id="faction-key-input" class="form-input"
-                                    placeholder="Enter faction Torn API key..." />
-                                  <button class="btn btn-primary" onclick="saveFactionKey()">Save Key</button>
-                                </div>
-                                <p class="hint">Use a faction leader/co-leader's Torn API key with faction permissions.
-                                </p>
-                              </div>
-                              <div id="faction-key-status" class="mt-1"></div>
+                  <!-- Role View Selector (visible based on actual permissions, not impersonated role) -->
+                  <% if (realIsOwner) { %>
+                  <div class="card mt-2">
+                    <div class="card-header">👁️ View As Role <span
+                        style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
+                    <div class="card-body">
+                      <p class="muted mb-1">Preview the dashboard exactly as other roles would see it:</p>
+                      <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                        <select id="role-view-selector" class="channel-dropdown" style="min-width:180px;">
+                          <option value="" <%=!isImpersonating ? 'selected' : '' %>>— My Normal View —</option>
+                          <% availableRoles.forEach(function(role) { %>
+                            <option value="<%= role %>" <%=impersonatedRole===role ? 'selected' : '' %>><%=
+                                role.charAt(0).toUpperCase() + role.slice(1) %>
+                            </option>
+                            <% }); %>
+                        </select>
+                        <button class="btn btn-primary btn-small" onclick="switchRoleView()">Apply View</button>
+                        <% if (isImpersonating) { %>
+                          <span class="success-text" style="font-size:0.85rem;">✅ Currently viewing as <strong>
+                              <%= impersonatedRole %>
+                            </strong> role</span>
+                          <% } %>
                       </div>
+                      <p class="hint mt-1">This changes what training materials and features are visible.
+                        Does not affect your actual permissions.</p>
                     </div>
+                  </div>
+                  <% } %>
 
-                    <!-- Role View Selector (Ownership only) -->
-                    <div class="card mt-2">
-                      <div class="card-header">👁️ View As Role <span
-                          style="font-size:0.75rem;color:#666;font-weight:400;">(Ownership only)</span></div>
-                      <div class="card-body">
-                        <p class="muted mb-1">Preview the dashboard exactly as other roles would see it:</p>
-                        <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-                          <select id="role-view-selector" class="channel-dropdown" style="min-width:180px;">
-                            <option value="" <%=!isImpersonating ? 'selected' : '' %>>— My Normal View —</option>
-                            <% availableRoles.forEach(function(role) { %>
-                              <option value="<%= role %>" <%=impersonatedRole===role ? 'selected' : '' %>><%=
-                                  role.charAt(0).toUpperCase() + role.slice(1) %>
-                              </option>
-                              <% }); %>
-                          </select>
-                          <button class="btn btn-primary btn-small" onclick="switchRoleView()">Apply View</button>
-                          <% if (isImpersonating) { %>
-                            <span class="success-text" style="font-size:0.85rem;">✅ Currently viewing as <strong>
-                                <%= impersonatedRole %>
-                              </strong> role</span>
-                            <% } %>
+
+                    <!-- Ownership Notification Card (ownership only) -->
+                    <% if (isOwner) { %>
+                      <div id="notification-card" class="card mt-2"
+                        style="border-left: 4px solid var(--ownership-color, #e67e22); display:none;">
+                        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                          <span id="notification-title">📬 Notifications</span>
+                          <span id="notification-badge"
+                            style="background:#e74c3c;color:white;border-radius:12px;padding:2px 8px;font-size:0.75rem;display:none;">0</span>
                         </div>
-                        <p class="hint mt-1">This changes what training materials and features are visible.
-                          Does not affect your actual permissions.</p>
-                      </div>
-                    </div>
-                    <% } %>
-                      <!-- Leadership: Post Announcement -->
-                      <% if (isOwner || isLeadership) { %>
-                        <div id="announcement-form-card" class="card mt-2" style="border-left: 4px solid #2ecc71;">
-                          <div class="card-header"
-                            style="display:flex;justify-content:space-between;align-items:center;">
-                            <span>📝 Post to Message Board</span>
-                            <button class="btn btn-small btn-outline" onclick="toggleAnnouncementForm()"
-                              style="font-size:0.75rem;">+ New</button>
+                        <div class="card-body" id="notification-body">
+                          <div id="notification-loading" class="empty-state" style="padding:0.5rem;">
+                            <p class="muted" style="font-size:0.85rem;">Loading notifications...</p>
                           </div>
-                          <div class="card-body" id="announcement-form-body" style="display:none;">
-                            <textarea id="announcement-input" class="form-input" rows="3"
-                              placeholder="Enter announcement message for all faction members..."
-                              style="width:100%;resize:vertical;"></textarea>
-                            <div style="display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center;">
-                              <button class="btn btn-primary btn-small" onclick="submitAnnouncement()">📢 Post</button>
-                              <button class="btn btn-small btn-outline"
-                                onclick="toggleAnnouncementForm()">Cancel</button>
-                              <span id="announcement-status" style="font-size:0.8rem;"></span>
-                            </div>
-                            <div id="announcement-history" style="margin-top:1rem;color:#888;"></div>
+                          <div id="notification-list" style="display:none;"></div>
+                          <div id="notification-empty" class="empty-state" style="display:none;padding:0.5rem;">
+                            <p class="muted" style="font-size:0.85rem;">No recent notifications.</p>
                           </div>
                         </div>
-                        <% } %>
-
-                          <!-- Ownership Notification Card (ownership only) -->
-                          <% if (isOwner) { %>
-                            <div id="notification-card" class="card mt-2"
-                              style="border-left: 4px solid var(--ownership-color, #e67e22); display:none;">
-                              <div class="card-header"
-                                style="display:flex;justify-content:space-between;align-items:center;">
-                                <span id="notification-title">📬 Notifications</span>
-                                <span id="notification-badge"
-                                  style="background:#e74c3c;color:white;border-radius:12px;padding:2px 8px;font-size:0.75rem;display:none;">0</span>
-                              </div>
-                              <div class="card-body" id="notification-body">
-                                <div id="notification-loading" class="empty-state" style="padding:0.5rem;">
-                                  <p class="muted" style="font-size:0.85rem;">Loading notifications...</p>
-                                </div>
-                                <div id="notification-list" style="display:none;"></div>
-                                <div id="notification-empty" class="empty-state" style="display:none;padding:0.5rem;">
-                                  <p class="muted" style="font-size:0.85rem;">No recent notifications.</p>
-                                </div>
-                              </div>
-                            </div>
-                            <% } %>
+                      </div>
+                      <% } %>
           </section>
 
 
@@ -326,6 +335,99 @@
               <div class="empty-state">
                 <span class="empty-icon">🏎️</span>
                 <p>Set a limit and click Load to fetch your racing stats.</p>
+              </div>
+            </div>
+          </section>
+
+          <!-- ── TARGETS ── -->
+          <section id="targets" class="section">
+            <div class="section-header">
+              <h3>🎯 Target Finder</h3>
+              <button class="btn btn-primary btn-small" onclick="fetchTargets()">↻ Load Targets</button>
+              <button class="btn btn-small btn-outline" onclick="openHelp('targets')">❓ Help</button>
+            </div>
+
+            <!-- FFScouter API Key Card -->
+            <div class="card mt-2">
+              <div class="card-header">🔑 FFScouter API Key</div>
+              <div class="card-body">
+                <p class="muted" style="font-size:0.85rem;">
+                  Enter your FFScouter API key to enable the target finder. Get one at
+                  <a href="https://ffscouter.com/" target="_blank" rel="noopener" style="color:#00ADB5;">ffscouter.com</a>
+                  (generate a custom API key in your profile settings).
+                </p>
+                <div id="ffscouter-key-status" class="mt-1"></div>
+                <div id="ffscouter-key-form">
+                  <div class="input-group mt-1">
+                    <input type="text" id="ffscouter-key-input" class="form-input"
+                      placeholder="Enter your 16-character FFScouter API key..." />
+                    <button class="btn btn-primary" onclick="saveFFScouterKey()">Save Key</button>
+                  </div>
+                  <p class="hint" style="font-size:0.78rem;">
+                    Your key is stored securely and never exposed to the browser. Used only to call FFScouter APIs.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-body">
+                <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Preset</label>
+                    <select id="target-preset" class="channel-dropdown" style="min-width:160px;" onchange="togglePresetFilters()">
+                      <option value="">Custom Filters</option>
+                      <option value="respect">🎯 Respect Preset</option>
+                      <option value="level">📊 Level Preset</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Min Level</label>
+                    <input type="number" id="target-minlevel" class="form-input" value="1" min="1" max="100" style="width:70px;" />
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Max Level</label>
+                    <input type="number" id="target-maxlevel" class="form-input" value="100" min="1" max="100" style="width:70px;" />
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Min FF</label>
+                    <input type="number" id="target-minff" class="form-input" value="1" min="1" step="0.1" style="width:70px;" />
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Max FF</label>
+                    <input type="number" id="target-maxff" class="form-input" value="3" min="1" step="0.1" style="width:70px;" />
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Limit</label>
+                    <input type="number" id="target-limit" class="form-input" value="25" min="1" max="50" style="width:70px;" />
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">&nbsp;</label>
+                    <label style="display:flex;align-items:center;gap:0.3rem;cursor:pointer;font-size:0.85rem;color:#888">
+                      <input type="checkbox" id="target-factionless" /> Factionless only
+                    </label>
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">&nbsp;</label>
+                    <div style="display:flex;gap:0.5rem;">
+                      <button class="btn btn-primary btn-small" onclick="fetchTargets()">🔍 Find Targets</button>
+                      <button class="btn btn-small btn-outline" onclick="resetTargetFilters()">Reset</button>
+                    </div>
+                  </div>
+                </div>
+                <p class="hint mt-1" style="font-size:0.78rem;">
+                  Inactive players (14+ days) are shown by default. Results are based on your battle stats via FFScouter.
+                </p>
+              </div>
+            </div>
+
+            <!-- Results -->
+            <div id="targets-data" class="mt-2">
+              <div class="empty-state">
+                <span class="empty-icon">🎯</span>
+                <p>Click <strong>Load Targets</strong> or <strong>Find Targets</strong> to find inactive players you can attack.</p>
+                <p class="muted">Make sure your FFScouter API key is saved above.</p>
               </div>
             </div>
           </section>
@@ -536,6 +638,7 @@
               <h3>🏦 Bank Rates</h3>
               <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-small" onclick="fetchBankRates()">↻ Refresh</button>
+                <button class="btn btn-small btn-outline" onclick="openHelp('bankRates')">❓ Help</button>
                 <span class="muted" style="font-size:0.75rem;">Updated hourly</span>
               </div>
             </div>
@@ -662,6 +765,7 @@
           <section id="scripts" class="section">
             <div class="section-header">
               <h3>📜 Helpful Scripts to Install</h3>
+              <button class="btn btn-small btn-outline" onclick="openHelp('scripts')">❓ Help</button>
             </div>
             <div class="card mt-2">
               <div class="card-header">
@@ -754,6 +858,7 @@
               <h3>🏢 Company Management</h3>
               <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
                 <button class="btn btn-primary btn-small" onclick="fetchCompanies()">↻ Refresh</button>
+                <button class="btn btn-small btn-outline" onclick="openHelp('companies')">❓ Help</button>
                 <% if (isOwner) { %>
                   <button class="btn btn-small btn-outline" onclick="showAddCompanyForm()">➕ Add Company</button>
                   <% } %>

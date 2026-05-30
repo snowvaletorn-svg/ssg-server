@@ -95,6 +95,15 @@ const POSITIONS = {
   growth: ['Team Growth', 'Recruit'],
 };
 
+// Helper to format numbers (for display in API responses)
+function formatNumHelper(n) {
+  if (n == null) return '—';
+  if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
 // Map faction position to permission group
 function getPositionGroup(position) {
   for (const [group, positions] of Object.entries(POSITIONS)) {
@@ -557,6 +566,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
 
   // Calculate permissions based on EFFECTIVE impersonated role
   const isOwner = positionGroup === 'ownership';
+  const realIsOwner = hasPositionGroup(req.session.user, 'ownership');
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
 
@@ -577,6 +587,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     tornApiKey: user?.tornApiKey || null,
     userEmail: user?.email || null,
     isOwner,
+    realIsOwner,
     isLeadership,
     isWarlord: isWarlordRole,
     hasFactionKey: !!factionKey,
@@ -654,6 +665,116 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
     res.json({ success: true, faction: tornRes.data });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Save FFScouter API key ──────────────────────────────────────────────
+app.post('/api/user/ffscouter-key', isAuthenticated, async (req, res) => {
+  const { ffScouterKey } = req.body;
+
+  if (!ffScouterKey || ffScouterKey.trim() === '') {
+    return res.status(400).json({ error: 'FFScouter API key is required' });
+  }
+
+  // Basic validation: must be at least 8 characters (FFScouter keys vary)
+  const trimmedKey = ffScouterKey.trim();
+
+  try {
+    // Save the key directly - validation happens when fetching targets
+    await User.findOneAndUpdate(
+      { tornPlayerId: req.session.userId },
+      {
+        ffScouterKey: trimmedKey,
+        updatedAt: new Date()
+      },
+      { returnDocument: 'after' }
+    );
+
+    console.log(`FFScouter key saved for user ${req.session.userId}`);
+    res.json({ success: true, message: 'FFScouter API key saved successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save FFScouter key: ' + err.message });
+  }
+});
+
+// ─── API: Fetch FFScouter targets ─────────────────────────────────────────────
+app.get('/api/ffscouter/targets', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
+    if (!dbUser?.ffScouterKey) {
+      return res.status(400).json({ error: 'No FFScouter API key saved. Please add your key in the Targets section first.' });
+    }
+
+    const { inactiveonly, minlevel, maxlevel, minff, maxff, factionless, limit, preset } = req.query;
+
+    // Build params for FFScouter API
+    const params = { key: dbUser.ffScouterKey };
+
+    // FFScouter spec: when preset is specified, only 'key' and 'limit' are allowed
+    if (preset && preset !== '') {
+      params.preset = preset;
+      if (limit) params.limit = Math.min(parseInt(limit), 50);
+    } else {
+      // Custom filters - include inactiveonly and other params
+      if (inactiveonly !== undefined) params.inactiveonly = inactiveonly;
+      else params.inactiveonly = 1; // default to inactive players
+
+      if (minlevel) params.minlevel = parseInt(minlevel);
+      if (maxlevel) params.maxlevel = parseInt(maxlevel);
+      if (minff) params.minff = parseFloat(minff);
+      if (maxff) params.maxff = parseFloat(maxff);
+      if (factionless !== undefined) params.factionless = parseInt(factionless);
+      if (limit) params.limit = Math.min(parseInt(limit), 50);
+    }
+
+    //console.log(`[Targets] Calling FFScouter with params:`, JSON.stringify(params));
+
+    let ffRes;
+    try {
+      ffRes = await axios.get('https://ffscouter.com/api/v1/get-targets', {
+        params,
+        timeout: 15000
+      });
+    } catch (axiosErr) {
+      console.log(`[Targets] FFScouter error:`, axiosErr.response?.data || axiosErr.message);
+      const errData = axiosErr.response?.data;
+      if (errData?.error) {
+        return res.status(axiosErr.response?.status || 400).json({ error: 'FFScouter: ' + errData.error });
+      }
+      throw axiosErr;
+    }
+
+    if (ffRes.data?.error) {
+      return res.status(400).json({ error: 'FFScouter API error: ' + ffRes.data.error });
+    }
+
+    let targets = ffRes.data.targets || ffRes.data || [];
+
+    res.json({
+      targets,
+      filterThreshold: null
+    });
+  } catch (err) {
+    if (err.response?.status === 401) {
+      return res.status(401).json({ error: 'Invalid FFScouter API key. Please update your key in the Targets section.' });
+    }
+    if (err.response?.status === 404) {
+      return res.json({ targets: [], message: 'No targets found matching the specified criteria.', filterThreshold: null });
+    }
+    if (err.code === 'ECONNABORTED') {
+      return res.status(504).json({ error: 'FFScouter API timed out. Please try again.' });
+    }
+    res.status(500).json({ error: 'Failed to fetch targets: ' + err.message });
+  }
+});
+
+// ─── API: Check FFScouter key status ─────────────────────────────────────────
+app.get('/api/user/check-ffscouter-key', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId }, 'ffScouterKey');
+    res.json({ hasKey: !!dbUser?.ffScouterKey });
+  } catch (err) {
+    res.json({ hasKey: false });
   }
 });
 

@@ -1,0 +1,2178 @@
+Find Targets</a>
+                </div>
+            </div>
+        </div>
+
+        
+        <div id="get-stats" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Player Stats Endpoint</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Get Player Stats Endpoint</h3>
+                
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">GET /api/v1/get-stats</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">targets</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Comma-separated list of player IDs to fetch</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">26755763,14263181</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate Limiting</h4>
+                    <p class="text-[#EEEEEE]">20 requests per minute per IP address</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-stats?key=abc123def456ghi&targets=2675763,1426381"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>[
+  {
+    "player_id": 267456763,
+    "fair_fight": 5.39,
+    "bs_estimate": 2989885521,
+    "bs_estimate_human": "2.99b",
+    "bss_public": 123456,
+    "last_updated": 1747333361,
+    "source": "premium",
+    "premium_insights_available": true,
+    "distribution": {
+      "last_updated": 1747333361,
+      "distribution_human": "STR (60%) SPD (30%)",
+      "stats_percentage": {
+        "strength": 60,
+        "speed": 30
+      }
+    }
+  },
+  {
+    "player_id": 142625381,
+    "fair_fight": null,
+    "bs_estimate": null,
+    "bs_estimate_human": null,
+    "bss_public": null,
+    "last_updated": null,
+    "source": "bss",
+    "distribution": null,
+    "premium_insights_available": false
+  }
+]</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Premium Distribution Field</h4>
+                    <p class="text-[#EEEEEE]">
+                        Premium callers receive <code class="bg-[#222831] px-1 rounded">distribution</code> when a latest usable data is available for that target. The nested
+                        <code class="bg-[#222831] px-1 rounded">last_updated</code> value is the source timestamp in Unix seconds, <code class="bg-[#222831] px-1 rounded">distribution_human</code>
+                        is a short summary string, and <code class="bg-[#222831] px-1 rounded">stats_percentage</code> contains the top two stats as rounded percentages of the total.
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Premium insights flag</h4>
+                    <p class="text-[#EEEEEE]">
+                        Each object includes <code class="bg-[#222831] px-1 rounded">premium_insights_available</code> (boolean). When <code class="bg-[#222831] px-1 rounded">true</code>,
+                        FFScouter has qualifying insights for that target: stat distribution and/or enhanced estimates when your key has premium access.
+                        Premium subscribers may already see those fields in the same response; non-premium callers see the flag without the underlying data.
+                        It is <code class="bg-[#222831] px-1 rounded">false</code> when no such insights is available for that target.
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing API Key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 1,
+  "error": "API key is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API Key Format</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 2,
+  "error": "Invalid API key format. Key must be 16 alphanumeric characters"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing Targets</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 3,
+  "error": "The targets parameter is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Number of Targets</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 4,
+  "error": "At least one target ID is required and no more than 205"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Target IDs</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 5,
+  "error": "All target IDs must be positive integers"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API Key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 6,
+  "error": "Invalid API key. Please sign up at ffscouter.com to use this service"
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format. Key must be 16 alphanumeric characters</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">3</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">The targets parameter is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">4</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">At least one target ID is required and no more than 205</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">5</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">All target IDs must be positive integers</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">6</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key. Please sign up at ffscouter.com to use this service</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">401</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>All player IDs must be valid Torn player IDs</li>
+                        <li>The API key must be active and have the necessary permissions</li>
+                        <li>Some data may be cached for up to 5 minutes to improve performance</li>
+                        <li>Up to 205 player IDs can be requested per request</li>
+                        <li>Each object includes <code class="bg-[#222831] px-1 rounded">source</code>: <code class="bg-[#222831] px-1 rounded">"bss"</code> for public battle-stat data, or <code class="bg-[#222831] px-1 rounded">"premium"</code> when the caller has premium and that data overrides apply for that target.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+         
+        <div id="stats-history" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Player Stats History Endpoint</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Get Player Stats History Endpoint</h3>
+                
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">GET /api/v1/get-stats-history</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Single player ID to fetch history for</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1844049</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Optional Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Default</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">limit</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Number of summarized buckets to return (1-100). Each bucket is a 6-hour window; values are median-smoothed.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">100</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">from</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp start (inclusive)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">null</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">to</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp end (inclusive)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">null</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">sort</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Sort order for history timestamps ("asc" or "desc")</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">desc</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-stats-history?key=abc123def456ghi&target=1844049&limit=3"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "player_id": 1844049,
+  "bucket_window_seconds": 21600,
+  "first_estimate_timestamp": 1710000000,
+  "most_recent_timestamp": 1769295473,
+  "history": [
+    {
+      "timestamp": 1769292000,
+      "bss_public": 87438,
+      "bs_estimate": 1987805000,
+      "bs_estimate_human": "1.99b",
+      "source": "bss"
+    }
+  ]
+}</code></pre>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>History is summarized in 6-hour windows (bucket_window_seconds: 21600). Each entry's timestamp is the window start; bss_public and bs_estimate are the median of all raw values in that window, matching the player view on the website.</li>
+                        <li>Each bucket in <code class="bg-[#222831] px-1 rounded">history</code> includes <code class="bg-[#222831] px-1 rounded">source</code>, always <code class="bg-[#222831] px-1 rounded">"bss"</code> for stored public estimates</li>
+                        <li>Results are ordered from most recent to oldest by default (use sort=asc for oldest first)</li>
+                        <li>History is limited to a maximum of 100 buckets per request</li>
+                        <li>History collection started on 1st Feb 2026, so estimate timestamps before this date are not available</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+
+        <div id="player-flights" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Player Flights Endpoint (Premium)</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Current trip and recent completed flights</h3>
+                <p class="text-[#EEEEEE] mb-4">Returns one player’s in-progress flight (if any) and up to ten completed trips. You must call this with a registered API key whose owner has <strong>active premium</strong>. Timelines and travel-type labels are <strong>estimates</strong> derived from public game data, not official Torn values.</p>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">GET /api/v1/player-flights</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your FFScouter API key (16 alphanumeric characters).</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">The Torn player ID to fetch flights for</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1844049</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate limiting</h4>
+                    <p class="text-[#EEEEEE]">Up to <strong>100 requests per minute</strong> per premium account (all keys tied to the same user share this limit). This endpoint does not use the same per-IP throttle as most other routes. A small allowlist of owning player IDs (site configuration) may bypass this limit entirely.</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Caching</h4>
+                    <p class="text-[#EEEEEE]">Successful responses are cached for <strong>10 seconds</strong> per <code class="bg-[#222831] px-1 rounded">target</code> player ID.</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/player-flights?key=abc123def456ghi&target=1844049"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "player_id": 1844049,
+  "current": {
+    "takeoff_time": 1710000000,
+    "status_description": "Traveling to Japan",
+    "earliest_arrival_time": 1710007200,
+    "latest_arrival_time": 1710010800,
+    "travel_method": "Airline",
+    "book_likely_being_used": true
+  },
+  "recent_flights": [
+    {
+      "takeoff_time": 1709900000,
+      "status_description": "Traveling to China",
+      "earliest_arrival_time": 1709905000,
+      "latest_arrival_time": 1709909000,
+      "travel_method": "PI",
+      "book_likely_being_used": false,
+      "approx_landing_time": 1709912000
+    }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Top-level response</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Field</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">player_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Same as the <code class="bg-[#393E46] px-1 rounded">target</code> you requested</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">current</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">object|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">The active trip, if one is known; otherwise <code class="bg-[#393E46] px-1 rounded">null</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">recent_flights</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">array</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Up to ten completed trips, newest first</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Fields on each flight object</h4>
+                    <p class="text-[#EEEEEE] mb-2 text-sm">Objects under <code class="bg-[#222831] px-1 rounded">current</code> and <code class="bg-[#222831] px-1 rounded">recent_flights</code> share the fields below, except where noted.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Field</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">takeoff_time</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp (seconds) for when the trip started; if a more precise takeoff time is unavailable, an earlier observation time may be used</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">status_description</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Travel status text from the game when the trip was observed</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">earliest_arrival_time</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp (seconds), lower bound of the estimated arrival window</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">latest_arrival_time</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp (seconds), upper bound of the estimated arrival window</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">travel_method</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">How the trip was classified for timing: <code class="bg-[#393E46] px-1 rounded">PI</code>, <code class="bg-[#393E46] px-1 rounded">Airline</code>, <code class="bg-[#393E46] px-1 rounded">WLT</code>, <code class="bg-[#393E46] px-1 rounded">BCT</code>, or <code class="bg-[#393E46] px-1 rounded">Unknown</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">book_likely_being_used</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">boolean|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">For an <strong>in-progress</strong> trip, whether the Book perk was treated as active when estimating arrival times. For <strong>completed</strong> trips, our best yes/no after the flight finished; <code class="bg-[#393E46] px-1 rounded">null</code> when we cannot tell.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">approx_landing_time</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><strong>Completed trips only.</strong> Unix timestamp (seconds) for when the landing was observed (approximate). Omitted on <code class="bg-[#393E46] px-1 rounded">current</code>.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing API key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 1,
+  "error": "API key is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API key format</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 2,
+  "error": "Invalid API key format. Key must be 16 alphanumeric characters"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing target</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 7,
+  "error": "The target parameter is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid target</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 8,
+  "error": "The target must be a single positive integer"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Unknown API key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 6,
+  "error": "Invalid API key. Please sign up at ffscouter.com to use this service"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Premium required</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 19,
+  "error": "Active premium subscription required to use this endpoint"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Rate limit exceeded</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 20,
+  "error": "Rate limit exceeded. Maximum 100 requests per minute per account.",
+  "retry_after_seconds": 45
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Flight data unavailable</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 22,
+  "error": "Flight data is currently unavailable.",
+  "detail": "Flight tracking is not available."
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format. Key must be 16 alphanumeric characters</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">7</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">The target parameter is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">8</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">The target must be a single positive integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">6</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key. Please sign up at ffscouter.com to use this service</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">401</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">19</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Active premium subscription required to use this endpoint</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">403</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">20</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Rate limit exceeded. Maximum 100 requests per minute per account. (Body includes <code class="bg-[#393E46] px-1 rounded">retry_after_seconds</code>.)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">429</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">22</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Flight data is currently unavailable. (Body may include <code class="bg-[#393E46] px-1 rounded">detail</code>.)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">503</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>An in-progress trip may still appear if a landing was not detected yet; treat windows as approximate.</li>
+                        <li>Not every in-game flight may appear in the response.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="activity-tracker" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Activity Tracker (Premium)</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <p class="text-[#EEEEEE] mb-4">Time-bucketed activity from FFScouter’s scanner data (five-minute observations aggregated into your chosen bucket size). Requires <strong>active premium</strong> on the API key owner. Timestamps are Unix seconds in UTC (TCT). Each response returns at most <strong>5,000 buckets</strong>.</p>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoints</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Method</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Path</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Purpose</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">GET</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">/api/v1/activity/player</code></td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">One player’s activity score per bucket</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">GET</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">/api/v1/activity/faction</code></td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Faction aggregate: active members per bucket</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters (both endpoints)</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your FFScouter API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">start</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Range start, Unix timestamp (seconds), inclusive. Must not be in the future or before tracking began.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1710000000</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">end</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Range end, Unix timestamp (seconds), exclusive. Must be greater than <code class="bg-[#393E46] px-1 rounded">start</code>.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1710086400</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint-specific required parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Endpoint</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Player</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Torn player ID</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Faction</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">faction_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Torn faction ID (uses stored roster membership)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Optional Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Default</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">bucket</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Bucket width in seconds: <code class="bg-[#393E46] px-1 rounded">300</code> (5 min), <code class="bg-[#393E46] px-1 rounded">900</code> (15 min), or <code class="bg-[#393E46] px-1 rounded">3600</code> (1 hour). Buckets align from <code class="bg-[#393E46] px-1 rounded">start</code>.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">300</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate limiting</h4>
+                    <p class="text-[#EEEEEE] mb-2">Per premium account (all keys for the same owner share the bucket):</p>
+                    <ul class="list-disc list-inside text-[#EEEEEE] text-sm space-y-1">
+                        <li><strong>Player activity:</strong> 60 requests per minute</li>
+                        <li><strong>Faction activity:</strong> 10 requests per minute</li>
+                    </ul>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request (player)</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/activity/player?key=abc123def456ghi&target=1844049&start=1710000000&end=1710086400&bucket=900"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response (player)</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 0,
+  "meta": {
+    "subject_type": "player",
+    "subject_id": 1844049,
+    "start": 1710000000,
+    "end": 1710086400,
+    "bucket_seconds": 900,
+    "bucket_count": 96,
+    "truncated": false
+  },
+  "buckets": [
+    { "ts": 1710000000, "activity_score": 1 },
+    { "ts": 1710000900, "activity_score": 0 }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request (faction)</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/activity/faction?key=abc123def456ghi&faction_id=89&start=1710000000&end=1710010800&bucket=3600"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response (faction)</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 0,
+  "meta": {
+    "subject_type": "faction",
+    "subject_id": 89,
+    "start": 1710000000,
+    "end": 1710010800,
+    "bucket_seconds": 3600,
+    "bucket_count": 3,
+    "truncated": false,
+    "member_count": 92
+  },
+  "buckets": [
+    {
+      "ts": 1710000000,
+      "activity_score": 41,
+      "active_players": 41,
+      "active_ratio": 0.4457
+    }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Response fields</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Field</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">code</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">0</code> on success</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">meta.subject_type</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">player</code> or <code class="bg-[#393E46] px-1 rounded">faction</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">meta.subject_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Same as <code class="bg-[#393E46] px-1 rounded">target</code> or <code class="bg-[#393E46] px-1 rounded">faction_id</code></td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">meta.member_count</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Faction endpoint only: roster size used for ratios</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">buckets[].ts</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><strong>Start</strong> of the bucket (Unix seconds, UTC/TCT). The bucket covers <code class="bg-[#393E46] px-1 rounded">[ts, ts + bucket_seconds)</code>; it is not the end time.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">buckets[].activity_score</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Player: <code class="bg-[#393E46] px-1 rounded">0</code> or <code class="bg-[#393E46] px-1 rounded">1</code> (no activity vs at least one observation in the bucket). Faction: count of distinct members active in the bucket.</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">buckets[].active_players</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Faction endpoint only (same value as <code class="bg-[#393E46] px-1 rounded">activity_score</code>)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">buckets[].active_ratio</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">float</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Faction endpoint only: <code class="bg-[#393E46] px-1 rounded">active_players / member_count</code></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">6</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">401</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">7</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Missing <code class="bg-[#393E46] px-1 rounded">target</code> or <code class="bg-[#393E46] px-1 rounded">faction_id</code></td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">8</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid subject id</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">19</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Premium required</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">403</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">20</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Rate limit exceeded</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">429</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">31</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Missing or invalid <code class="bg-[#393E46] px-1 rounded">start</code></td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">32</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Missing or invalid <code class="bg-[#393E46] px-1 rounded">end</code></td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">33</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">start</code> must be less than <code class="bg-[#393E46] px-1 rounded">end</code></td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">34</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Timestamps cannot be in the future</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">35</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Before activity tracking began</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">36</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid <code class="bg-[#393E46] px-1 rounded">bucket</code> (must be 300, 900, or 3600)</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">37</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">More than 5000 buckets requested</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td></tr>
+                                <tr><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">38</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Activity data unavailable</td><td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">503</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside text-[#EEEEEE] text-sm space-y-1">
+                        <li>Each bucket’s <code class="bg-[#222831] px-1 rounded">ts</code> is the <strong>start</strong> of that interval. The bucket ends at <code class="bg-[#222831] px-1 rounded">ts + meta.bucket_seconds</code> (exclusive), matching the request range <code class="bg-[#222831] px-1 rounded">[start, end)</code>.</li>
+                        <li>Player <code class="bg-[#222831] px-1 rounded">activity_score</code> is on/off per bucket (like a heatmap cell), not a count of underlying five-minute observations.</li>
+                        <li>A set bit in storage means at least one scanner observation in that five-minute window, not continuous online time.</li>
+                        <li>Bucket count is computed from <code class="bg-[#222831] px-1 rounded">start</code>, <code class="bg-[#222831] px-1 rounded">end</code>, and <code class="bg-[#222831] px-1 rounded">bucket</code>; the API rejects ranges that would exceed 5,000 buckets.</li>
+                        <li>Faction membership comes from the stored FFScouter roster snapshot, not a live Torn call.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="hit-calling" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Hit Calling Endpoints (Premium)</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Faction target claims</h3>
+                <p class="text-[#EEEEEE] mb-4">
+                    Hit Calling lets premium players mark Torn targets they intend to hit and share that queue with everyone in their faction.
+                    You must use a registered API key whose owner has <strong>active premium</strong> and is currently in a tracked faction on FFScouter.
+                    Each claim shows who called the target, when the claim was made, and when it expires. Faction leaders can set how long claims last (from 30 seconds up to 15 minutes) on the My Faction dashboard; until that is changed, the maximum is 15 minutes.
+                </p>
+                <p class="text-[#EEEEEE] mb-4">
+                    Poll <code class="bg-[#222831] px-1 rounded">GET /api/v1/hit-calling/claims</code> to see every active claim in your faction.
+                    The response groups them under <code class="bg-[#222831] px-1 rounded">claims.faction</code>, keyed by target player ID.
+                    Multiple members may claim the same target; claims for one target are always returned in call order (first claim first).
+                    The same member may claim the same target more than once—each call adds another queue entry at the back (they can appear multiple times in the list for that target).
+                </p>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoints</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Method</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Path</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Purpose</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">GET</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">/api/v1/hit-calling/claims</code></td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">List all active faction claims</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">POST</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">/api/v1/hit-calling/claim</code></td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Claim a target (adds a new queue entry; repeat claims on the same target append at the back)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">POST</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">/api/v1/hit-calling/unclaim</code></td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Release your claim(s) on one target, or one specific claim by ID</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">POST</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">/api/v1/hit-calling/wipe</code></td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Release every claim you have placed</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required parameters</h4>
+                    <p class="text-[#EEEEEE] mb-2 text-sm">All four routes require your API <code class="bg-[#222831] px-1 rounded">key</code> (query string or JSON body). <strong>POST /claim</strong> requires <code class="bg-[#222831] px-1 rounded">target_player_id</code>. <strong>POST /unclaim</strong> requires either <code class="bg-[#222831] px-1 rounded">target_player_id</code> (release all of your claims on that target) or <code class="bg-[#222831] px-1 rounded">claim_id</code> (release one claim), or both when you want to verify the claim belongs to that target.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your FFScouter API key (16 alphanumeric characters).</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target_player_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Required for <strong>POST /claim</strong>. For <strong>POST /unclaim</strong>, releases every active claim you hold on that target when used alone.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">555111</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">claim_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string (UUID)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Optional for <strong>POST /unclaim</strong>. When provided (with or without <code class="bg-[#393E46] px-1 rounded">target_player_id</code>), removes only that claim if it belongs to you.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2f84b4fb-8f26-4e79-8be3-8f0e9d988f26</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate limiting</h4>
+                    <p class="text-[#EEEEEE]">
+                        <strong>GET /claims</strong> is limited to <strong>60 requests per minute</strong> per premium account.
+                        <strong>POST /claim</strong> is limited to <strong>30 requests per minute</strong> per premium account.
+                        <strong>POST /unclaim</strong> is limited to <strong>30 requests per minute</strong> per premium account.
+                        <strong>POST /wipe</strong> is limited to <strong>10 requests per minute</strong> per premium account.
+                        All keys tied to the same user share the limit for each endpoint type.
+                        You may hold at most <strong>30 active claims</strong> at the same time (each queue entry counts, including multiple claims on the same target).
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">List claims — example request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/hit-calling/claims?key=abc123def456ghi"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">List claims — example response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "configuration": {
+    "claim_ttl_seconds": 900
+  },
+  "claims": {
+    "faction": {
+      "555111": [
+        {
+          "claim_id": "a0f2e8a3-39f1-4a4f-88d0-7fdf8bde4b37",
+          "created_at": 1770000000,
+          "expires_at": 1770000900,
+          "claimer": {
+            "player_id": 100001,
+            "name": "Alpha"
+          },
+          "target": {
+            "player_id": 555111,
+            "name": "Target One"
+          }
+        }
+      ]
+    }
+  }
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Place claim — example request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X POST "https://ffscouter.com/api/v1/hit-calling/claim?key=abc123def456ghi" \
+  -H "Content-Type: application/json" \
+  -d '{"target_player_id": 555111}'</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Place claim — example response</h4>
+                    <p class="text-[#EEEEEE] mb-2 text-sm">
+                        Each successful claim adds a new queue entry. Claiming the same target again does not remove your earlier claims; you are appended at the back with a fresh expiry.
+                        <code class="bg-[#222831] px-1 rounded">position</code> is your place in line for that target (1 = first).
+                        <code class="bg-[#222831] px-1 rounded">other_claims_for_target</code> lists everyone else currently claiming that target, in order, each with their queue <code class="bg-[#222831] px-1 rounded">position</code>.
+                    </p>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "configuration": {
+    "claim_ttl_seconds": 900
+  },
+  "claim": {
+    "claim_id": "2f84b4fb-8f26-4e79-8be3-8f0e9d988f26",
+    "created_at": 1770000030,
+    "expires_at": 1770000930,
+    "claimer": {
+      "player_id": 100003,
+      "name": "Charlie"
+    },
+    "target": {
+      "player_id": 555111,
+      "name": "Target One"
+    }
+  },
+  "position": 2,
+  "other_claims_for_target": [
+    {
+      "claim_id": "a0f2e8a3-39f1-4a4f-88d0-7fdf8bde4b37",
+      "position": 1,
+      "created_at": 1770000000,
+      "expires_at": 1770000900,
+      "claimer": {
+        "player_id": 100001,
+        "name": "Alpha"
+      }
+    }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Release all your claims on one target — example request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X POST "https://ffscouter.com/api/v1/hit-calling/unclaim?key=abc123def456ghi" \
+  -H "Content-Type: application/json" \
+  -d '{"target_player_id": 555111}'</code></pre>
+                    <p class="text-[#EEEEEE] mb-2 text-sm mt-2">Removes every active claim you hold on that target. Response includes <code class="bg-[#222831] px-1 rounded">released_count</code> (0 if you had none).</p>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "configuration": { "claim_ttl_seconds": 900 },
+  "released": true,
+  "released_count": 2,
+  "target_player_id": 555111,
+  "released_at": 1770000120
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Release one claim by ID — example request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X POST "https://ffscouter.com/api/v1/hit-calling/unclaim?key=abc123def456ghi" \
+  -H "Content-Type: application/json" \
+  -d '{"claim_id": "2f84b4fb-8f26-4e79-8be3-8f0e9d988f26"}'</code></pre>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "configuration": { "claim_ttl_seconds": 900 },
+  "released": true,
+  "released_count": 1,
+  "target_player_id": 555111,
+  "claim_id": "2f84b4fb-8f26-4e79-8be3-8f0e9d988f26",
+  "released_at": 1770000135
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Configuration</h4>
+                    <p class="text-[#EEEEEE] mb-2 text-sm">Every successful Hit Calling response includes a top-level <code class="bg-[#222831] px-1 rounded">configuration</code> object.</p>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Field</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">claim_ttl_seconds</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">How long new and refreshed claims last for your faction (30–900 seconds). New claims use this value for <code class="bg-[#393E46] px-1 rounded">expires_at</code>; existing claims keep their original expiry until they expire or are released.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Fields on each claim object</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Field</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">claim_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unique ID for this claim</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">created_at</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp (seconds) when the claim was placed</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">expires_at</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp (seconds) when the claim expires</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">claimer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">object</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">player_id</code> and <code class="bg-[#393E46] px-1 rounded">name</code> of the member who placed the claim</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">object</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#393E46] px-1 rounded">player_id</code> and <code class="bg-[#393E46] px-1 rounded">name</code> of the claimed target; <code class="bg-[#393E46] px-1 rounded">name</code> may be <code class="bg-[#393E46] px-1 rounded">null</code> if FFScouter does not have that player on file yet</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing API key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 1,
+  "error": "API key is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API key format</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 2,
+  "error": "Invalid API key format. Key must be 16 alphanumeric characters"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Unknown API key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 6,
+  "error": "Invalid API key. Please sign up at ffscouter.com to use this service"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Premium required</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 19,
+  "error": "Active premium subscription required to use this endpoint"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Not in a faction</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 25,
+  "error": "You must be in a faction to use Hit Calling."
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing target_player_id</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 27,
+  "error": "target_player_id is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid target_player_id</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 26,
+  "error": "target_player_id must be a positive integer"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Claim rate limit exceeded</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 20,
+  "error": "Too many claim requests. Please retry shortly.",
+  "retry_after_seconds": 12
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Unclaim rate limit exceeded</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 20,
+  "error": "Too many unclaim requests. Please retry shortly.",
+  "retry_after_seconds": 12
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Wipe rate limit exceeded</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 20,
+  "error": "Too many wipe requests. Please retry shortly.",
+  "retry_after_seconds": 12
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Too many active targets for your account</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 28,
+  "error": "You may only have 30 active claims at once. Release a claim before adding another target."
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">List claims rate limit exceeded</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 20,
+  "error": "Too many requests to list claims. Please retry shortly.",
+  "retry_after_seconds": 8
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Faction claim cap reached</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 23,
+  "error": "Faction claim limit reached (1000). Release claims before adding more."
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Claims busy (retry)</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 24,
+  "error": "Claims are being updated. Please retry.",
+  "retry_after_seconds": 1
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format. Key must be 16 alphanumeric characters</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">6</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key. Please sign up at ffscouter.com to use this service</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">401</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">19</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Active premium subscription required to use this endpoint</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">403</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">25</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">You must be in a faction to use Hit Calling.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">403</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">23</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Faction claim limit reached (1000). Release claims before adding more.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">403</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">28</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">You may only have 30 active claims at once. Release a claim before adding another target.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">403</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">26</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target_player_id must be a positive integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">27</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">target_player_id or claim_id is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">20</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Too many claim or list requests. Please retry shortly. (Body includes <code class="bg-[#393E46] px-1 rounded">retry_after_seconds</code>.)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">429</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">24</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Claims are being updated. Please retry. (Body includes <code class="bg-[#393E46] px-1 rounded">retry_after_seconds</code>.)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">409</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>Only you can remove your own claims (via unclaim or wipe). Other faction members can see them but cannot clear them for you.</li>
+                        <li>You may actively hold at most <strong>30 claims</strong> at once (each queue entry counts); unclaim or wipe to free slots before adding more.</li>
+                        <li>A faction may hold at most <strong>1,000</strong> active claims in total across all members.</li>
+                        <li>Player names come from FFScouter’s database when available; unknown targets may show <code class="bg-[#222831] px-1 rounded">null</code> until we learn the name.</li>
+                        <li>If faction claims are being updated by another request at the same moment, the server will wait up to <strong>2 seconds</strong> before returning error code <strong>24</strong>.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        
+        <div id="check-key" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Check Key Endpoint</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Check API Key Status Endpoint</h3>
+                
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">GET /api/v1/check-key</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate Limiting</h4>
+                    <p class="text-[#EEEEEE]">10 requests per minute per IP address</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/check-key?key=abc123def456ghi"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "key": "abc123def456ghi",
+  "is_registered": true,
+  "registered_at": 1640995200,
+  "last_used": 1747333361,
+  "policy_version": 2,
+  "policy_update_required": false,
+  "is_premium": true,
+  "premium_expires_at": 1740000000,
+  "faction_id": null,
+  "faction_premium_expires_at": null,
+  "premium_entitlement_source": "personal"
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Response Fields</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Field</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">The API key that was provided in the request</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">is_registered</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">boolean</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Whether the API key is registered in the system</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">registered_at</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp of when the key was registered (null if not registered)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">last_used</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix timestamp of last successful usage for battle stat predictions (null if never used)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">policy_version</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Data policy version for this key (null if not registered)</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">policy_update_required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">boolean</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">True when the client should re-accept the current data policy</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">is_premium</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">boolean</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">True when the key owner has active premium: personal subscription, faction-wide grant, or server-side global override—false when not registered</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">premium_expires_at</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix seconds when <strong>account</strong> (paid/admin) premium ends; null if none. May be in the past while <code class="bg-[#222831] px-1 rounded">is_premium</code> is still true if faction or override applies</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">faction_id</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Owner’s current Torn faction id from FFScouter’s cached profile when known; null if not in a faction or not registered</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">faction_premium_expires_at</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer|null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Unix seconds when the <strong>shared</strong> faction premium grant ends for that faction (same value for all members); null if no grant or not registered</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">premium_entitlement_source</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]"><code class="bg-[#222831] px-1 rounded">none</code> | <code class="bg-[#222831] px-1 rounded">personal</code> | <code class="bg-[#222831] px-1 rounded">faction</code> | <code class="bg-[#222831] px-1 rounded">personal_and_faction</code> | <code class="bg-[#222831] px-1 rounded">global_override</code> — which rule makes <code class="bg-[#222831] px-1 rounded">is_premium</code> true (override wins when enabled)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing API Key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 1,
+  "error": "API key is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API Key Format</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 2,
+  "error": "Invalid API key format. Key must be 16 alphanumeric characters"
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format. Key must be 16 alphanumeric characters</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>This endpoint checks if an API key is registered with FFScouter</li>
+                        <li>The last_used timestamp is updated whenever the key is successfully used in get-stats or get-targets endpoints</li>
+                        <li>registered_at shows when the API key was first added to the system</li>
+                        <li>All timestamps are Unix timestamps (seconds since epoch)</li>
+                        <li>This endpoint does not consume API usage or make external requests</li>
+                        <li>Using this endpoint does not register an API key to FFScouter</li>
+                        <li><code class="bg-[#222831] px-1 rounded">is_premium</code> reflects account expiry, faction-wide grant, or global override (see <code class="bg-[#222831] px-1 rounded">premium_entitlement_source</code>). <code class="bg-[#222831] px-1 rounded">premium_expires_at</code> is only the personal account end time; <code class="bg-[#222831] px-1 rounded">faction_premium_expires_at</code> is the shared faction grant end when applicable</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        
+        <div id="register-key" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Register API Key Endpoint</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Register API Key Endpoint</h3>
+                
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">POST /api/v1/register</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghij</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">agree_to_data_policy</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">boolean</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Must be true to confirm you have read the data policy and terms</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">true</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">signup_source</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Name of the script/tool registering the user (3-30 alphanumeric characters, no spaces). Make it as descriptive and unique as possible. "FFScouterWebsite" is reserved for the homepage.</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">MyTool</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate Limiting</h4>
+                    <p class="text-[#EEEEEE]">3 requests per minute per IP address</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Developer Actions</h4>
+                    <p class="text-[#EEEEEE]">When registering a user with FFScouter, you MUST provide them with a link to the FFScouter homepage to read the Data Policy and Terms and Conditions. This is required by the rules of Torn. Failing to do so is breaking a Torn rule. You should prompt the user to read this and have them tick a box or click a button in some way to confirm they have done this before submitting a register request.</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X POST "https://ffscouter.com/api/v1/register" -H "Content-Type: application/json" -d "{\"key\":\"abc123def456ghij\",\"agree_to_data_policy\":true,\"signup_source\":\"MyTool\"}"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "success": true,
+  "key": "abc123def456ghij",
+  "message": "API key successfully registered."
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing API Key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 1,
+  "error": "API key is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API Key Format</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 2,
+  "error": "Invalid API key format. Key must be 16 alphanumeric characters"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Confirmation Required</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 3,
+  "error": "You must confirm agree_to_data_policy to register"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing signup_source</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 4,
+  "error": "signup_source is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid signup_source</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 5,
+  "error": "signup_source must be 3-30 alphanumeric characters with no spaces"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Reserved signup_source</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 9,
+  "error": "signup_source is reserved for FFScouter website registrations"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Registration Failed</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 6,
+  "error": "API key is invalid, please check your API key and try again."
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Too Many Attempts</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 7,
+  "error": "Too many attempts. Please try again in 45 seconds."
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Already Registered</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 8,
+  "error": "API key is already registered"
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format. Key must be 16 alphanumeric characters</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">3</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">agree_to_data_policy must be true</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">4</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">signup_source is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">5</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid signup_source format</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">6</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Registration failed (invalid key or API error)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">7</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Too many attempts</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">429</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">8</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is already registered</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">409</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">9</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">signup_source is reserved for FFScouter website registrations</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>This endpoint validates your API key permissions by contacting the Torn API</li>
+                        <li>agree_to_data_policy must be true or registration will be rejected</li>
+                        <li>signup_source should match the script/tool name and be descriptive and unique</li>
+                        <li>FFScouterWebsite is reserved for homepage registrations and is rejected on the API endpoint</li>
+                        <li>If a key is already registered, remove it first before attempting to register again</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        
+        <div id="find-targets" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Find Targets Endpoint</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Get Target Players Endpoint</h3>
+                
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">GET /api/v1/get-targets</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Optional Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Default</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">preset</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">null</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Preset mode for quick filtering
+                                                                                    (&quot;respect&quot;, &quot;level&quot;)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">minlevel</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Minimum player level (inclusive). If provided without maxlevel, filters level &gt;= minlevel
+                                                                                    (1-100)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">maxlevel</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">100</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Maximum player level (inclusive). If provided without minlevel, filters level &lt;= maxlevel
+                                                                                    (1-100)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">inactiveonly</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Filter for inactive players only (14+ days since last action)
+                                                                                    (0 or 1)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">minff</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">float</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1.00</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Minimum fair fight value (inclusive). If provided without maxff, filters FF &gt;= minff
+                                                                                    (≥1.0)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">maxff</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">float</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">3.00</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Maximum fair fight value (inclusive). If provided without minff, filters FF &lt;= maxff
+                                                                                    (≥1.0)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">limit</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">20</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Maximum number of targets to return
+                                                                                    (1-50)
+                                                                            </td>
+                                </tr>
+                                                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">factionless</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">integer</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">0</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">
+                                        Filter for factionless players only
+                                                                                    (0 or 1)
+                                                                            </td>
+                                </tr>
+                                                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Preset Modes</h4>
+                    <div class="space-y-4">
+                        <div class="bg-[#222831] p-4 rounded">
+                            <h5 class="font-semibold text-[#00ADB5] mb-2">Respect Preset</h5>
+                            <p class="text-[#EEEEEE] mb-2">Optimized for gaining maximum respect per attack. When using this preset:</p>
+                            <ul class="list-disc list-inside text-[#EEEEEE] space-y-1">
+                                <li>Only "key" and "limit" parameters are allowed</li>
+                                <li>Automatically filters for fair fight range 2.00-3.00</li>
+                                <li>Shows only inactive players (14+ days since last action)</li>
+                                <li>Results ordered by battle stat score (descending)</li>
+                            </ul>
+                        </div>
+                        <div class="bg-[#222831] p-4 rounded">
+                            <h5 class="font-semibold text-[#00ADB5] mb-2">Level Preset</h5>
+                            <p class="text-[#EEEEEE] mb-2">Optimized for level-based targeting. When using this preset:</p>
+                            <ul class="list-disc list-inside text-[#EEEEEE] space-y-1">
+                                <li>Only "key" and "limit" parameters are allowed</li>
+                                <li>Automatically filters for fair fight ≤ 3.00</li>
+                                <li>No minimum fair fight restriction</li>
+                                <li>Results ordered by level (descending)</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate Limiting</h4>
+                    <p class="text-[#EEEEEE]">5 requests per minute per IP address</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Requests</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE] mb-2">Basic Request (Randomized Results)</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-targets?key=abc123def456ghi"</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE] mb-2">Respect Preset</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-targets?key=abc123def456ghi&preset=respect"</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE] mb-2">Level Preset</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-targets?key=abc123def456ghi&preset=level"</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE] mb-2">Custom Filter</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-targets?key=abc123def456ghi&minlevel=20&maxlevel=50&minff=1.5&maxff=2.5&inactiveonly=1&limit=25"</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE] mb-2">Factionless Players Only</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-targets?key=abc123def456ghi&factionless=1"</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "parameters": {
+    "key": "abc123def456ghi",
+    "preset": null,
+    "minlevel": 1,
+    "maxlevel": 100,
+    "inactiveonly": 1,
+    "minff": 1.00,
+    "maxff": 3.00,
+    "limit": 20,
+    "factionless": 0,
+    "generated_at": 1640995200
+  },
+  "targets": [
+    {
+      "player_id": 12345,
+      "name": "PlayerName",
+      "level": 25,
+      "fair_fight": 1.8,
+      "bss_public": 50000,
+      "bss_public_timestamp": 1640995000,
+      "bs_estimate": 6750000,
+      "bs_estimate_human": "6.75m",
+      "last_action": 1640994000,
+      "source": "bss"
+    },
+    {
+      "player_id": 67890,
+      "name": "AnotherPlayer",
+      "level": 42,
+      "fair_fight": 2.1,
+      "bss_public": 75000,
+      "bss_public_timestamp": 1640994800,
+      "bs_estimate": 10125000,
+      "bs_estimate_human": "10.13m",
+      "last_action": 1640993000,
+      "source": "bss"
+    }
+  ]
+}</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">No Targets Found</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 17,
+  "error": "No targets found matching the specified criteria"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Preset with Extra Parameters</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 15,
+  "error": "When preset is specified, only \"key\" and \"limit\" parameters are allowed"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Level Range</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 10,
+  "error": "minlevel cannot be greater than maxlevel"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Limit Range</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 16,
+  "error": "limit must be an integer between 1 and 50"
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Codes Reference</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Code</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">HTTP Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">API key is required</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">2</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key format. Key must be 16 alphanumeric characters</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">6</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid API key. Please sign up at ffscouter.com to use this service</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">401</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">7</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Invalid preset value. Must be "respect" or "level"</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">8</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">minlevel must be an integer between 1 and 100</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">9</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">maxlevel must be an integer between 1 and 100</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">10</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">minlevel cannot be greater than maxlevel</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">11</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">inactiveonly must be 0 or 1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">12</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">minff must be a number greater than or equal to 1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">13</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">maxff must be a number greater than or equal to 1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">14</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">minff cannot be greater than maxff</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">15</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">When preset is specified, only "key" and "limit" parameters are allowed</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">16</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">limit must be an integer between 1 and 50</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">17</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">No targets found matching the specified criteria</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">404</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">18</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">factionless must be 0 or 1</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">400</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Notes</h4>
+                    <ul class="list-disc list-inside space-y-2 text-[#EEEEEE]">
+                        <li>Default queries return randomized results for variety</li>
+                        <li>Custom queries return results ordered by battle stat score (descending)</li>
+                        <li>Inactive players are those with no activity for 14+ days</li>
+                        <li>Fair fight values are calculated based on your private battle stat score</li>
+                        <li>Some data may be cached for up to 5 minutes to improve performance</li>
+                        <li>Up to 50 targets can be requested per request</li>
+                        <li>last_action is a Unix timestamp of the player's last activity</li>
+                        <li>Each object in <code class="bg-[#222831] px-1 rounded">targets</code> includes <code class="bg-[#222831] px-1 rounded">source</code> (always <code class="bg-[#222831] px-1 rounded">"bss"</code>)</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+
+
+        
+        
+        <footer class="mt-12 pt-6 border-t border-[#393E46] text-center">
+    <a href="/privacy" class="text-[10px] text-[#6B7280] hover:text-[#00ADB5] transition-colors">Privacy Policy</a>

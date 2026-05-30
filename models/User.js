@@ -24,7 +24,10 @@ const userSchema = new mongoose.Schema({
   // Faction member profile fields
   bloodType: { type: String, default: null },
   timeZone: { type: String, default: null },
-  email: { type: String, default: null }
+  email: { type: String, default: null },
+
+  // FFScouter API key (per-user, for target finder feature)
+  ffScouterKey: { type: String, default: null }
 });
 
 userSchema.pre('save', function(next) {

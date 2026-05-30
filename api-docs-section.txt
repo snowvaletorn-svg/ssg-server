@@ -1,0 +1,155 @@
+find-targets" class="bg-[#222831] px-3 py-2 rounded text-[#EEEEEE] hover:text-[#00ADB5]">Find Targets</a>
+                </div>
+            </div>
+        </div>
+
+        
+        <div id="get-stats" class="mt-8">
+            <h2 class="text-2xl font-bold mb-4 text-[#00ADB5]">Player Stats Endpoint</h2>
+            <div class="bg-[#393E46] shadow rounded-lg p-6 overflow-x-auto">
+                <h3 class="text-xl font-semibold mb-4 text-[#EEEEEE]">Get Player Stats Endpoint</h3>
+                
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Endpoint</h4>
+                    <code class="bg-[#222831] p-2 rounded text-[#EEEEEE]">GET /api/v1/get-stats</code>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Required Parameters</h4>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full bg-[#222831] rounded-lg overflow-hidden">
+                            <thead>
+                                <tr class="bg-[#393E46]">
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Parameter</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Type</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Description</th>
+                                    <th class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Example</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">key</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Your API key (16 alphanumeric characters)</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">abc123def456ghi</td>
+                                </tr>
+                                <tr>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">targets</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">string</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">Comma-separated list of player IDs to fetch</td>
+                                    <td class="px-4 py-2 border border-[#4A4F57] text-[#EEEEEE]">26755763,14263181</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Rate Limiting</h4>
+                    <p class="text-[#EEEEEE]">20 requests per minute per IP address</p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Request</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>curl -X GET "https://ffscouter.com/api/v1/get-stats?key=abc123def456ghi&targets=2675763,1426381"</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Example Response</h4>
+                    <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>[
+  {
+    "player_id": 267456763,
+    "fair_fight": 5.39,
+    "bs_estimate": 2989885521,
+    "bs_estimate_human": "2.99b",
+    "bss_public": 123456,
+    "last_updated": 1747333361,
+    "source": "premium",
+    "premium_insights_available": true,
+    "distribution": {
+      "last_updated": 1747333361,
+      "distribution_human": "STR (60%) SPD (30%)",
+      "stats_percentage": {
+        "strength": 60,
+        "speed": 30
+      }
+    }
+  },
+  {
+    "player_id": 142625381,
+    "fair_fight": null,
+    "bs_estimate": null,
+    "bs_estimate_human": null,
+    "bss_public": null,
+    "last_updated": null,
+    "source": "bss",
+    "distribution": null,
+    "premium_insights_available": false
+  }
+]</code></pre>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Premium Distribution Field</h4>
+                    <p class="text-[#EEEEEE]">
+                        Premium callers receive <code class="bg-[#222831] px-1 rounded">distribution</code> when a latest usable data is available for that target. The nested
+                        <code class="bg-[#222831] px-1 rounded">last_updated</code> value is the source timestamp in Unix seconds, <code class="bg-[#222831] px-1 rounded">distribution_human</code>
+                        is a short summary string, and <code class="bg-[#222831] px-1 rounded">stats_percentage</code> contains the top two stats as rounded percentages of the total.
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Premium insights flag</h4>
+                    <p class="text-[#EEEEEE]">
+                        Each object includes <code class="bg-[#222831] px-1 rounded">premium_insights_available</code> (boolean). When <code class="bg-[#222831] px-1 rounded">true</code>,
+                        FFScouter has qualifying insights for that target: stat distribution and/or enhanced estimates when your key has premium access.
+                        Premium subscribers may already see those fields in the same response; non-premium callers see the flag without the underlying data.
+                        It is <code class="bg-[#222831] px-1 rounded">false</code> when no such insights is available for that target.
+                    </p>
+                </div>
+
+                <div class="mb-6">
+                    <h4 class="font-medium mb-2 text-[#EEEEEE]">Error Responses</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing API Key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 1,
+  "error": "API key is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API Key Format</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 2,
+  "error": "Invalid API key format. Key must be 16 alphanumeric characters"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Missing Targets</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 3,
+  "error": "The targets parameter is required"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Number of Targets</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 4,
+  "error": "At least one target ID is required and no more than 205"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid Target IDs</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 5,
+  "error": "All target IDs must be positive integers"
+}</code></pre>
+                        </div>
+                        <div>
+                            <h5 class="font-medium text-[#EEEEEE]">Invalid API Key</h5>
+                            <pre class="bg-[#222831] p-4 rounded overflow-x-auto text-[#EEEEEE]"><code>{
+  "code": 6,
+  "error": "Invalid API key. Please sign up at ffscouter.com to use this service"
+}</code></pre>
+                        </div>

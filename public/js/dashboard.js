@@ -10,6 +10,7 @@ function showSection(sectionId, el) {
   if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
   if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); }
+  if (sectionId === 'targets') { checkFFScouterKeyStatus(); fetchTargets(); }
 }
 
 // ── Personal Torn API Key ─────────────────────────────────────────────────────
@@ -68,6 +69,28 @@ async function switchRoleView() {
     window.location.reload();
   } catch (err) {
     alert(`Error switching role view: ${err.message}`);
+  }
+}
+
+// ── Clear Role View / Return to Default ──────────────────────────────────────
+async function clearRoleView() {
+  try {
+    const res = await fetch('/api/user/impersonate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: null })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`Error: ${data.error}`);
+      return;
+    }
+
+    // Reload page to restore the normal view
+    window.location.reload();
+  } catch (err) {
+    alert(`Error clearing role view: ${err.message}`);
   }
 }
 
@@ -2210,27 +2233,6 @@ const HELP_CONTENT = {
       }
     ]
   },
-  channels: {
-    title: '💬 Channels',
-    sections: [
-      {
-        heading: 'Viewing Discord Channels',
-        content: `
-          <p class="help-text">The Channels page lets you read recent messages from your accessible SSG Discord channels directly in the dashboard — no need to open Discord.</p>
-          <img src="/images/channelsimage.png" alt="Channels feed" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
-        `
-      },
-      {
-        heading: 'How To Use',
-        content: `
-          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select a channel from the dropdown at the top</div></div>
-          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">The last 10 messages will load automatically</div></div>
-          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to load the latest messages</div></div>
-          <div class="help-callout">💡 You can only see channels that your SSG role gives you access to. Contact leadership if you think you're missing access.</div>
-        `
-      }
-    ]
-  },
   torn: {
     title: '🎮 Torn Stats',
     sections: [
@@ -2325,6 +2327,113 @@ const HELP_CONTENT = {
         content: `
           <p class="help-text">Shows your current travel status — whether you're in Torn, departing, or returning from abroad.</p>
           <img src="/images/travelimage.png" alt="Travel status" style="width:100%;border-radius:6px;margin:0.75rem 0;border:1px solid #2a2828;">
+        `
+      },
+      {
+        heading: 'SSG Stock Observer',
+        content: `
+          <p class="help-text">The Stock Observer is a userscript that automatically submits stock data to the server when you visit the Torn travel page while abroad. This data powers the Travel Profits analytics.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">📥 Install/Update Userscript</strong> to install via Tampermonkey (PC) or Torn PDA (mobile)</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">The script runs automatically when you visit torn.com/travel.php while abroad</div></div>
+          <div class="help-callout">💡 Multiple members running the Stock Observer helps keep stock data fresh for everyone's profit calculations.</div>
+        `
+      },
+      {
+        heading: 'Travel Profits',
+        content: `
+          <p class="help-text">Shows profitable items to buy abroad and resell on the Torn market. Each item shows buy price, market value, and profit calculations for your chosen travel method and quantity.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Select your <strong style="color:#c0bcbc;">Travel Method</strong>: Standard (pays flight costs), Airstrip, or Private Jet (free travel)</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Choose <strong style="color:#c0bcbc;">Item Types</strong> to include in calculations (Plushies, Flowers, Drugs, Other)</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Set your <strong style="color:#c0bcbc;">Quantity</strong> (5-29 items per trip)</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Use the <strong style="color:#c0bcbc;">Country</strong> and <strong style="color:#c0bcbc;">Sort</strong> dropdowns to filter results</div></div>
+          <div class="help-step"><div class="help-step-num">5</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Load</strong> to fetch current market prices and profit calculations</div></div>
+          <div class="help-callout">💡 Profit/Run = (Profit per item × Quantity) − Flight cost. Airstrip/Private Jet have no flight cost.</div>
+          <div class="help-callout">💡 The table includes columns for burn rate, stockout prediction, next restock, and departure recommendations when stock analytics data is available.</div>
+        `
+      },
+      {
+        heading: 'Travel Configuration',
+        content: `
+          <p class="help-text">The Travel Configuration panel lets you customize profit calculations:</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text"><strong style="color:#c0bcbc;">Travel Method</strong>: Standard pays flight costs per trip; Airstrip and Private Jet have no flight cost</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text"><strong style="color:#c0bcbc;">Item Types</strong>: Toggle which item categories show in the profit tables</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text"><strong style="color:#c0bcbc;">Quantity</strong>: Set how many items you can carry per trip (5-29)</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text"><strong style="color:#c0bcbc;">Sort By</strong>: Sort results by Profit/Run, Profit/Item, Profit %, or Country</div></div>
+          <div class="help-callout">💡 All calculations update live when you change any configuration without needing to reload data.</div>
+        `
+      }
+    ]
+  },
+  targets: {
+    title: '🎯 Targets',
+    sections: [
+      {
+        heading: 'Target Finder',
+        content: `
+          <p class="help-text">Find inactive Torn players you can attack based on your battle stats. Uses FFScouter to identify targets within a fair fight range.</p>
+          <div class="help-callout warning">⚠️ Requires an FFScouter API key saved in the Targets section.</div>
+        `
+      },
+      {
+        heading: 'Setting Up FFScouter',
+        content: `
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Go to <a href="https://ffscouter.com/" target="_blank" style="color:#a78df5;">ffscouter.com</a> and click "Generate Custom API Key"</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Copy the generated key and paste it into the FFScouter API Key field on this page</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Save Key</strong> to store it securely</div></div>
+          <div class="help-callout">💡 See the Scripts section for a link to install the Fair Fight Script which integrates with FFScouter.</div>
+        `
+      },
+      {
+        heading: 'Finding Targets',
+        content: `
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Choose a <strong style="color:#c0bcbc;">Preset</strong> (Respect or Level) for quick filtering, or use Custom Filters</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Adjust <strong style="color:#c0bcbc;">Level Range</strong>, <strong style="color:#c0bcbc;">Fair Fight Range</strong>, and <strong style="color:#c0bcbc;">Limit</strong> as needed</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Check <strong style="color:#c0bcbc;">Factionless only</strong> to exclude players in factions</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Find Targets</strong> or <strong style="color:#c0bcbc;">Load Targets</strong> to get results</div></div>
+          <div class="help-callout">💡 Results show Fair Fight rating, estimated battle stats, last action time, and faction info. Green FF ≥ 3 is a safe fight.</div>
+          <div class="help-callout">💡 Inactive players (14+ days offline) are shown by default. Results are filtered based on your personal battle stats.</div>
+        `
+      }
+    ]
+  },
+  companies: {
+    title: '🏢 Companies',
+    sections: [
+      {
+        heading: 'Company Management',
+        content: `
+          <p class="help-text">View and manage faction-owned companies. Shows company type, star rating, director, daily income, and employee details with work stats.</p>
+          <div class="help-callout warning">⚠️ This section is only visible to company directors and Leadership.</div>
+        `
+      },
+      {
+        heading: 'Viewing Company Details',
+        content: `
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to load your accessible companies</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click on any company card to view detailed employee information</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Employee details include work stats (Manual, Intelligence, Endurance) and addiction levels</div></div>
+          <div class="help-callout">💡 Ownership can add new companies using the <strong style="color:#c0bcbc;">➕ Add Company</strong> button with the company ID and director's Torn ID.</div>
+        `
+      }
+    ]
+  },
+  scripts: {
+    title: '📜 Scripts',
+    sections: [
+      {
+        heading: 'Helpful Scripts',
+        content: `
+          <p class="help-text">The Scripts section provides links to useful Tampermonkey userscripts for Torn City, along with setup instructions.</p>
+        `
+      },
+      {
+        heading: 'Available Scripts',
+        content: `
+          <div class="help-step"><div class="help-step-num">🎯</div><div class="help-step-text"><strong style="color:#c0bcbc;">Fair Fight Script</strong> — Shows Fair Fight ratings on attack pages. Requires FFScouter setup — generate an API key at ffscouter.com.</div></div>
+          <div class="help-step"><div class="help-step-num">🛒</div><div class="help-step-text"><strong style="color:#c0bcbc;">Bazaar Items in Market</strong> — Shows bazaar listings directly in the item market. Requires a Torn API key.</div></div>
+          <div class="help-step"><div class="help-step-num">💰</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crime Profitability</strong> — Displays value per nerve on the crimes page to help you choose the most profitable crimes.</div></div>
+          <div class="help-step"><div class="help-step-num">✈️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Warn Before Flights</strong> — Alerts you if an active Organized Crime would be impacted by your flight, preventing accidental OC disruption.</div></div>
+          <div class="help-callout">💡 All scripts work with Tampermonkey on PC browsers. Install by clicking the script link, then click "Install" in Tampermonkey.</div>
         `
       }
     ]
@@ -4630,6 +4739,249 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// FF SCOUTER TARGET FINDER
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ── Check FFScouter key status on section load ───────────────────────────────
+async function checkFFScouterKeyStatus() {
+  const statusEl = document.getElementById('ffscouter-key-status');
+  try {
+    const res = await fetch('/api/user/check-ffscouter-key');
+    const data = await res.json();
+    if (res.ok && data.hasKey) {
+      statusEl.innerHTML = '<p class="success-text">✅ FFScouter API key is saved.</p>';
+    } else {
+      statusEl.innerHTML = '<p class="muted">No FFScouter API key saved yet.</p>';
+    }
+  } catch {
+    // Silently fail - the key status will show on first fetch attempt
+    statusEl.innerHTML = '';
+  }
+}
+
+// ── Save FFScouter API Key ───────────────────────────────────────────────────
+async function saveFFScouterKey() {
+  const input = document.getElementById('ffscouter-key-input');
+  const statusEl = document.getElementById('ffscouter-key-status');
+  const key = input.value.trim();
+
+  if (!key) {
+    statusEl.innerHTML = '<p style="color:#ff4444;">Please enter an FFScouter API key.</p>';
+    return;
+  }
+
+  statusEl.innerHTML = '<p class="muted">Validating key...</p>';
+
+  try {
+    const res = await fetch('/api/user/ffscouter-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ffScouterKey: key })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.innerHTML = `<p style="color:#ff4444;">❌ ${data.error}</p>`;
+      return;
+    }
+
+    statusEl.innerHTML = '<p class="success-text">✅ FFScouter API key saved successfully!</p>';
+    input.value = '';
+  } catch (err) {
+    statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;
+  }
+}
+
+// ── Toggle custom filter inputs when a preset is selected ─────────────────────
+function togglePresetFilters() {
+  const preset = document.getElementById('target-preset')?.value;
+  const disabled = preset && preset !== '';
+  const customInputs = ['target-minlevel', 'target-maxlevel', 'target-minff', 'target-maxff', 'target-factionless'];
+  customInputs.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = disabled;
+      el.style.opacity = disabled ? '0.4' : '1';
+      el.style.pointerEvents = disabled ? 'none' : 'auto';
+    }
+  });
+}
+
+// ── Reset Target Filters to Defaults ─────────────────────────────────────────
+function resetTargetFilters() {
+  togglePresetFilters();
+  document.getElementById('target-preset').value = '';
+  document.getElementById('target-minlevel').value = 1;
+  document.getElementById('target-maxlevel').value = 100;
+  document.getElementById('target-minff').value = 1;
+  document.getElementById('target-maxff').value = 3.5;
+  document.getElementById('target-limit').value = 25;
+  document.getElementById('target-factionless').checked = false;
+}
+
+// ── Fetch Targets from FFScouter ─────────────────────────────────────────────
+async function fetchTargets() {
+  const container = document.getElementById('targets-data');
+  container.innerHTML = '<div class="channel-loading">🎯 FINDING TARGETS...</div>';
+
+  // Get filter values
+  const minlevel = document.getElementById('target-minlevel').value || 1;
+  const maxlevel = document.getElementById('target-maxlevel').value || 100;
+  const minff = document.getElementById('target-minff').value || 1;
+  const maxff = document.getElementById('target-maxff').value || 3.5;
+  const limit = Math.min(parseInt(document.getElementById('target-limit').value) || 25, 50);
+  const factionless = document.getElementById('target-factionless').checked ? 1 : 0;
+  const preset = document.getElementById('target-preset')?.value || '';
+
+    try {
+      const params = new URLSearchParams();
+      params.set('limit', limit);
+
+      // If a preset is selected, only send preset + limit (FFScouter spec: only key + limit allowed with preset)
+      if (preset && preset !== '') {
+        params.set('preset', preset);
+      } else {
+        // Custom filters — include inactiveonly
+        params.set('inactiveonly', 1);
+        params.set('minlevel', minlevel);
+        params.set('maxlevel', maxlevel);
+        params.set('minff', minff);
+        params.set('maxff', maxff);
+        params.set('factionless', factionless);
+      }
+
+    const res = await fetch(`/api/ffscouter/targets?${params}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      // Check if it's a "no FFScouter key" error
+      if (res.status === 400 && data.error && data.error.includes('No FFScouter API key')) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <span class="empty-icon">🔑</span>
+            <p>You need to save your FFScouter API key first.</p>
+            <p class="muted">Enter your key in the field above and click Save.</p>
+          </div>`;
+        return;
+      }
+      container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`;
+      return;
+    }
+
+    const targets = data.targets || [];
+
+    if (targets.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <span class="empty-icon">🎯</span>
+          <p>No targets found matching your criteria.</p>
+          <p class="muted">Try adjusting your filters (level range, fair fight range, etc.).</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = renderTargets(targets, data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+// ── Render Targets Table ─────────────────────────────────────────────────────
+function renderTargets(targets, meta) {
+  // Build stats summary banner if meta data is available
+  let statsBanner = '';
+  if (meta && meta.userTotalStatsHuman && meta.filterThreshold) {
+    const thresholdPct = Math.round((1 - meta.filterThreshold) * 100);
+    statsBanner = `
+      <div class="card" style="margin-bottom:1rem;background:#1a1919;border:1px solid #2a2828;">
+        <div class="card-body" style="padding:0.75rem 1rem;">
+          <div style="display:flex;flex-wrap:wrap;gap:0.75rem;align-items:center;">
+            <span style="font-size:0.85rem;color:#888;">📊 <strong style="color:#c0bcbc;">Your Total Stats:</strong> ${meta.userTotalStatsHuman}</span>
+            <span style="font-size:0.85rem;color:#888;">🔻 <strong style="color:#f0a500;">Max Target BS:</strong> ${meta.maxBsEstimate ? formatNumFull(meta.maxBsEstimate) : '—'}</span>
+            <span style="font-size:0.85rem;color:#888;">🎯 <strong style="color:#4caf50;">Showing targets up to ${thresholdPct}% below your stats</strong></span>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  const rows = targets.map((t, i) => {
+    // Format last action time
+    let lastActionDisplay = '—';
+    if (t.last_action) {
+      const now = Math.floor(Date.now() / 1000);
+      const diff = now - t.last_action;
+      const days = Math.floor(diff / 86400);
+      const hours = Math.floor((diff % 86400) / 3600);
+      if (days > 0) lastActionDisplay = `${days}d ${hours}h ago`;
+      else if (hours > 0) lastActionDisplay = `${hours}h ago`;
+      else lastActionDisplay = `${Math.floor(diff / 60)}m ago`;
+    }
+
+    // Format battle stat estimate
+    const bsDisplay = t.bs_estimate_human || (t.bs_estimate ? formatNumFull(t.bs_estimate) : '—');
+
+    // FF color coding
+    let ffColor = '#888';
+    if (t.fair_fight !== null) {
+      if (t.fair_fight >= 3) ffColor = '#4caf50';
+      else if (t.fair_fight >= 2) ffColor = '#f0a500';
+      else ffColor = '#e74c3c';
+    }
+
+    // Faction display
+    const factionDisplay = t.faction_name
+      ? `<a href="https://www.torn.com/factions.php?step=profile&ID=${t.faction_id}" target="_blank" style="color:#888;text-decoration:none;">${escapeHtml(t.faction_name)}</a>`
+      : '<span style="color:#555;">—</span>';
+
+    return `<tr>
+      <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
+      <td>
+        <a href="https://www.torn.com/profiles.php?XID=${t.player_id}" target="_blank" rel="noopener"
+          style="color:#a78df5;text-decoration:none;font-weight:500;">
+          ${escapeHtml(t.name || `Player ${t.player_id}`)}
+        </a>
+      </td>
+      <td style="text-align:center;">${t.level || '—'}</td>
+      <td style="text-align:center;color:${ffColor};font-weight:600;">${t.fair_fight !== null ? t.fair_fight.toFixed(2) : '—'}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${bsDisplay}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;font-size:0.85rem;color:${t.bss_public ? '#c0bcbc' : '#555'};">${t.bss_public ? t.bss_public.toLocaleString() : '—'}</td>
+      <td style="text-align:center;font-size:0.85rem;">${lastActionDisplay}</td>
+      <td style="text-align:center;font-size:0.85rem;">${factionDisplay}</td>
+      <td style="text-align:center;">
+        <a href="https://www.torn.com/profiles.php?XID=${t.player_id}" target="_blank" class="btn btn-small btn-primary" style="text-decoration:none;padding:2px 8px;font-size:0.75rem;">🔍 View</a>
+      </td>
+    </tr>`;
+  }).join('');
+
+
+  return `${statsBanner}
+    <div class="card">
+      <div class="card-header">
+        🎯 Targets Found
+        <span style="float:right;font-size:0.8rem;color:#888;">${targets.length} targets</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="members-table" style="min-width:800px;">
+          <thead>
+            <tr>
+              <th style="text-align:center;width:40px;">#</th>
+              <th>Name</th>
+              <th style="text-align:center;">Lvl</th>
+              <th style="text-align:center;">Fair Fight</th>
+              <th style="text-align:center;">BS Estimate</th>
+              <th style="text-align:center;">BSS Public</th>
+              <th style="text-align:center;">Last Action</th>
+              <th style="text-align:center;">Faction</th>
+              <th style="text-align:center;width:60px;">Profile</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ── Initialize profile section features on page load ──────────────────────────

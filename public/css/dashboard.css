@@ -1,3 +1,21 @@
+/* ── Impersonation Banner ──────────────────────────────────────────────── */
+.impersonation-banner {
+  background: #2a2410;
+  border-bottom: 2px solid #f0c040;
+  padding: 0.6rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  color: #f0c040;
+}
+.impersonation-banner strong {
+  color: #fff;
+  text-transform: capitalize;
+}
+
 /* ── Dashboard Layout ──────────────────────────────────────────────────── */
 .dashboard {
   padding: 2rem 0 4rem;
