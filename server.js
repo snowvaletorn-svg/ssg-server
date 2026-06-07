@@ -1221,6 +1221,73 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: War debug - raw data inspection ────────────────────────────────────
+app.get('/api/torn/wars-debug', isAuthenticated, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    const warsRes = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`);
+    const warData = warsRes.data;
+    const rankedWar = warData.wars?.ranked;
+    const warStart = rankedWar?.start || 0;
+    const warEnd = rankedWar?.end || null;
+    const warFactions = rankedWar?.factions || [];
+    const enemyFaction = warFactions.find(f => f.id !== SSG_FACTION_ID);
+    const enemyFactionId = enemyFaction?.id || null;
+
+    // Fetch attacks during the war window and show result distribution
+    let warAttacks = [];
+    let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
+    let reachedWarStart = false;
+    let pageCount = 0;
+
+    while (nextUrl && !reachedWarStart && pageCount < 5) {
+      const attacksRes = await axios.get(nextUrl);
+      const attacks = attacksRes.data.attacks || [];
+      const prevLink = attacksRes.data._metadata?.links?.prev;
+      pageCount++;
+
+      for (const attack of attacks) {
+        if (attack.started < warStart) { reachedWarStart = true; break; }
+        if (warEnd && attack.started > warEnd) continue;
+        if (attack.is_ranked_war && attack.attacker?.faction?.id === SSG_FACTION_ID) {
+          const defFactionId = attack.defender?.faction?.id ?? null;
+          if (!enemyFactionId || defFactionId === enemyFactionId) {
+            warAttacks.push({
+              id: attack.id,
+              attacker: attack.attacker?.name,
+              defender: attack.defender?.name,
+              defenderFaction: attack.defender?.faction,
+              result: attack.result,
+              respect_gain: attack.respect_gain,
+              is_ranked_war: attack.is_ranked_war,
+              started: attack.started
+            });
+          }
+        }
+      }
+      nextUrl = !reachedWarStart && prevLink ? prevLink + `&key=${factionKey}` : null;
+    }
+
+    // Count result types
+    const resultCounts = {};
+    warAttacks.forEach(a => {
+      resultCounts[a.result] = (resultCounts[a.result] || 0) + 1;
+    });
+
+    res.json({
+      rankedWar: rankedWar || null,
+      enemyFactionId,
+      warAttackCount: warAttacks.length,
+      resultDistribution: resultCounts,
+      sampleWarAttacks: warAttacks.slice(0, 10)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: War hits tracking ───────────────────────────────────────────────────
 app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
   try {
@@ -1229,11 +1296,18 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
 
     const warsRes = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`);
     const warData = warsRes.data;
-    const warStart = warData.wars?.ranked?.start || 0;
+    const rankedWar = warData.wars?.ranked;
+    const warStart = rankedWar?.start || 0;
+    const warEnd = rankedWar?.end || null; // null means war is still ongoing
 
     if (!warStart) {
       return res.json({ war: null, memberHits: [], totalWarAttacks: 0 });
     }
+
+    // Determine the enemy faction ID from the war data (factions is an array)
+    const warFactions = rankedWar?.factions || [];
+    const enemyFaction = warFactions.find(f => f.id !== SSG_FACTION_ID);
+    const enemyFactionId = enemyFaction?.id || null;
 
     let allAttacks = [];
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
@@ -1245,9 +1319,24 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
       const prevLink = attacksRes.data._metadata?.links?.prev;
 
       for (const attack of attacks) {
+        // Stop once we've gone past the war start time
         if (attack.started < warStart) { reachedWarStart = true; break; }
-        if (attack.is_ranked_war && attack.attacker?.faction?.id === SSG_FACTION_ID) {
-          allAttacks.push(attack);
+
+        // Skip attacks that happened after the war ended (post-war attacks)
+        if (warEnd && attack.started > warEnd) continue;
+
+        // Only count: ranked war attacks, by SSG members, against the enemy faction
+        const defenderFactionId = attack.defender?.faction?.id ?? null;
+        const isValidTarget = attack.is_ranked_war &&
+          attack.attacker?.faction?.id === SSG_FACTION_ID &&
+          (!enemyFactionId || defenderFactionId === enemyFactionId);
+
+        if (isValidTarget) {
+          const isWin = attack.result === 'Attacked' || attack.result === 'Hospitalized';
+          const isAssist = attack.result === 'Assist';
+          if (isWin || isAssist) {
+            allAttacks.push({ ...attack, _isAssist: isAssist });
+          }
         }
       }
 
@@ -1258,15 +1347,21 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
     allAttacks.forEach(a => {
       const id = a.attacker.id;
       const name = a.attacker.name;
-      if (!hitCounts[id]) hitCounts[id] = { id, name, hits: 0, respect: 0 };
-      hitCounts[id].hits++;
-      hitCounts[id].respect += a.respect_gain || 0;
+      if (!hitCounts[id]) hitCounts[id] = { id, name, hits: 0, assists: 0, respect: 0 };
+      if (a._isAssist) {
+        hitCounts[id].assists++;
+      } else {
+        hitCounts[id].hits++;
+        hitCounts[id].respect += a.respect_gain || 0;
+      }
     });
+
+    const memberHits = Object.values(hitCounts).sort((a, b) => b.hits - a.hits || b.assists - a.assists);
 
     res.json({
       war: warData.wars?.ranked || null,
-      memberHits: Object.values(hitCounts).sort((a, b) => b.hits - a.hits),
-      totalWarAttacks: allAttacks.length
+      memberHits,
+      totalWarAttacks: memberHits.reduce((sum, m) => sum + m.hits, 0)
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
