@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.7.1
+// @version      2.7.2
 // @description  Precision Data Harvesting Engine - Travel Page Only
 // @author       SSG
 // @match        *://*.torn.com/page.php?sid=travel*
@@ -64,7 +64,7 @@
 
         const header = document.createElement('div');
         header.style.cssText = 'display:flex;justify-content:space-between;margin-bottom:15px;border-bottom:1px solid #2c3e50;padding-bottom:10px;';
-        header.innerHTML = '<span style="font-weight:bold;color:#fff;">SSG Stock Observer v2.7.0 - Logs</span>';
+        header.innerHTML = '<span style="font-weight:bold;color:#fff;">SSG Stock Observer v2.7.2 - Logs</span>';
         const closeBtn = document.createElement('button');
         closeBtn.textContent = 'Close';
         closeBtn.style.cssText = 'background:#e74c3c;color:white;border:none;padding:5px 10px;cursor:pointer;border-radius:4px;';
