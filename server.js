@@ -34,6 +34,8 @@ const AppNotification = require('./models/AppNotification');
 const Announcement = require('./models/Announcement');
 const StockObservation = require('./models/StockObservation');
 const { startScheduler } = require('./services/schedulerService');
+const stockAnalysisService = require('./services/stockAnalysisService');
+const stockDataSourceService = require('./services/stockDataSourceService');
 const {
   addCompany,
   getCompanyData,
@@ -2913,9 +2915,9 @@ app.get('/api/stockout-estimates', async (req, res) => {
 });
 
 // ─── API: Stock analysis for restock times and predictions ───────────────────
-const { analyzeCountry, getTravelRecommendations } = require('./services/stockAnalysisService');
+// (stockAnalysisService and stockDataSourceService already required at top of file)
 
-// ─── API: Get detailed stock analysis for a country ─────────────────────────
+// ─── API: Get detailed stock analysis for a country (hybrid: YATA + userscript) ─
 app.get('/api/restock-analysis', async (req, res) => {
   try {
     const country = req.query.country?.toLowerCase();
@@ -2923,12 +2925,12 @@ app.get('/api/restock-analysis', async (req, res) => {
       return res.status(400).json({ error: 'Country parameter is required' });
     }
 
-    const analysis = await analyzeCountry(country);
+    const analysis = await stockAnalysisService.analyzeCountry(country);
     if (analysis.status === 'no_data') {
       return res.json({
         country,
         status: 'no_data',
-        message: 'Not enough observations yet. As more users visit this country, data will accumulate.',
+        message: 'No stock data available. YATA/Prometheus may be unavailable and no userscript observations exist.',
         items: []
       });
     }
@@ -2944,7 +2946,7 @@ app.get('/api/restock-analysis', async (req, res) => {
 app.get('/api/travel-recommendations', async (req, res) => {
   try {
     const maxItems = parseInt(req.query.max) || 20;
-    const recommendations = await getTravelRecommendations(maxItems);
+    const recommendations = await stockAnalysisService.getTravelRecommendations(maxItems);
     res.json({
       generatedAt: new Date().toISOString(),
       count: recommendations.length,
@@ -2954,6 +2956,57 @@ app.get('/api/travel-recommendations', async (req, res) => {
     console.error('Travel recommendations error:', err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ─── API: Stock Advisory - hybrid YATA + userscript data ─────────────────────
+// Returns per-country stock data with deterministic restock countdown,
+// burn rates from userscript observations, and departure recommendations.
+app.get('/api/stock/advisory', isAuthenticated, async (req, res) => {
+  try {
+    const country = req.query.country?.toLowerCase();
+
+    if (country) {
+      // Single country advisory
+      const analysis = await stockAnalysisService.analyzeCountry(country);
+      const restockCountdown = stockDataSourceService.getRestockCountdown();
+
+      return res.json({
+        ...analysis,
+        restockCountdown,
+        generatedAt: new Date().toISOString(),
+      });
+    }
+
+    // All countries advisory
+    const countries = ['mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'uae', 'sou'];
+    const restockCountdown = stockDataSourceService.getRestockCountdown();
+    const results = {};
+
+    await Promise.allSettled(
+      countries.map(async (c) => {
+        try {
+          results[c] = await stockAnalysisService.analyzeCountry(c);
+        } catch (err) {
+          results[c] = { country: c, status: 'error', error: err.message, items: [] };
+        }
+      })
+    );
+
+    res.json({
+      countries: results,
+      restockCountdown,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('Stock advisory error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Restock countdown (deterministic, no auth needed for polling) ───────
+app.get('/api/stock/restock-countdown', isAuthenticated, (req, res) => {
+  const countdown = stockDataSourceService.getRestockCountdown();
+  res.json(countdown);
 });
 
 module.exports = app;

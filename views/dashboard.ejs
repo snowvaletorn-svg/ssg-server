@@ -567,6 +567,11 @@
             <div class="section-header" style="margin-top:2rem;">
               <h3>💰 Travel Profits</h3>
               <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <!-- Restock Countdown + Data Source Badge -->
+                <div style="display:flex;align-items:center;gap:0.5rem;background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.3rem 0.75rem;">
+                  <span style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;">🔁 Restock in</span>
+                  <span id="restock-countdown-display" style="font-family:'Share Tech Mono',monospace;font-size:0.9rem;font-weight:600;color:#4caf50;min-width:40px;">—</span>
+                </div>
                 <select id="travel-country-select" class="channel-dropdown" onchange="renderTravelProfits()"
                   style="min-width:180px;">
                   <option value="">— All Countries —</option>

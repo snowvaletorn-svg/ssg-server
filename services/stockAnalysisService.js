@@ -1,9 +1,11 @@
 const StockObservation = require('../models/StockObservation');
+const stockDataSource = require('./stockDataSourceService');
 
 /**
- * Stock Analysis Service
- * * Analyzes historical stock observations to detect restock events,
- * calculate burn rates, and predict future stock levels and restocks.
+ * Stock Analysis Service (Hybrid)
+ * 
+ * Uses YATA/Prometheus for real-time stock quantities + deterministic restock timing,
+ * and userscript observations for burn rate (depletion) calculations.
  */
 
 // Items that are commonly sought for profit (plushies, flowers, drugs)
@@ -17,7 +19,7 @@ const CONFIDENCE = {
   INSUFFICIENT: 'insufficient_data'
 };
 
-// Torn Flight Times Lookup (Base times in minutes)
+// Torn Flight Times Lookup (Base times in minutes - airstrip)
 const FLIGHT_TIMES = {
   mex: 18,  // Mexico
   cay: 25,  // Cayman Islands
@@ -34,13 +36,13 @@ const FLIGHT_TIMES = {
 
 /**
  * Detect restock events from a time-series of stock observations for a single item.
+ * Used for burn rate calculation (identifying segments between restocks).
  */
 function detectRestocks(snapshots) {
   if (!snapshots || snapshots.length < 2) return { restocks: [], intervals: [] };
 
   const sorted = [...snapshots].sort((a, b) => a.time - b.time);
   const restocks = [];
-  const intervals = [];
 
   for (let i = 1; i < sorted.length; i++) {
     const prev = sorted[i - 1];
@@ -56,19 +58,15 @@ function detectRestocks(snapshots) {
         increase: qtyDiff,
         timeSinceLastObservation: timeDiff
       });
-
-      if (restocks.length >= 2) {
-        const prevRestock = restocks[restocks.length - 2];
-        intervals.push(curr.time - prevRestock.detectedAt);
-      }
     }
   }
 
-  return { restocks, intervals };
+  return { restocks, intervals: [] }; // Intervals aren't needed - restocks are deterministic
 }
 
 /**
  * Calculate burn rate using multiple methods for better accuracy.
+ * Keeps the existing algorithms - this is purely userscript-derived data.
  */
 function calculateBurnRate(snapshots) {
   if (!snapshots || snapshots.length < 2) return null;
@@ -92,7 +90,7 @@ function calculateBurnRate(snapshots) {
     }
   }
 
-  // Method 2: Overall trend (all historical data across the 7-day segment)
+  // Method 2: Overall trend (all historical data)
   const { restocks } = detectRestocks(sorted);
   const restockTimes = new Set(restocks.map(r => r.detectedAt));
 
@@ -143,88 +141,74 @@ function predictStockout(currentQty, burnRate) {
 }
 
 /**
- * Predict when the next restock will happen based on observed intervals.
+ * Get the deterministic restock timing.
+ * Torn restocks ALL foreign stock at :00 and :30 every hour.
  */
-function predictNextRestock(intervals, lastRestockTime) {
-  if (!intervals || intervals.length === 0 || !lastRestockTime) {
-    return null;
+function getDeterministicRestockInfo(now = Date.now()) {
+  const date = new Date(now);
+  const minutes = date.getMinutes();
+  const seconds = date.getSeconds();
+
+  // Current cycle start (previous restock)
+  let currentCycleStart;
+  if (minutes < 30) {
+    currentCycleStart = new Date(date);
+    currentCycleStart.setMinutes(0, 0, 0);
+  } else {
+    currentCycleStart = new Date(date);
+    currentCycleStart.setMinutes(30, 0, 0);
   }
 
-  const avgInterval = intervals.reduce((sum, i) => sum + i, 0) / intervals.length;
-  const stdDev = Math.sqrt(
-    intervals.reduce((sum, i) => sum + Math.pow(i - avgInterval, 2), 0) / intervals.length
-  );
+  // Next restock
+  let nextRestock;
+  if (minutes < 30) {
+    nextRestock = new Date(date);
+    nextRestock.setMinutes(30, 0, 0);
+  } else {
+    nextRestock = new Date(date);
+    nextRestock.setMinutes(0, 0, 0);
+    nextRestock.setHours(nextRestock.getHours() + 1);
+  }
 
-  const cv = avgInterval > 0 ? stdDev / avgInterval : 1;
-
-  let confidence = CONFIDENCE.HIGH;
-  if (intervals.length < 2) confidence = CONFIDENCE.LOW;
-  else if (intervals.length < 4) confidence = CONFIDENCE.MEDIUM;
-  else if (cv > 0.5) confidence = CONFIDENCE.LOW;
+  const totalSeconds = (nextRestock.getTime() - now) / 1000;
 
   return {
-    avgInterval: Math.round(avgInterval / (60 * 1000)),
-    avgIntervalMs: Math.round(avgInterval),
-    stdDevMs: Math.round(stdDev),
-    nextRestockTime: new Date(lastRestockTime + avgInterval).toISOString(),
-    nextRestockInMinutes: Math.round(avgInterval / (60 * 1000)),
-    intervalsObserved: intervals.length,
-    confidence,
-    variability: Math.round(cv * 100) / 100
-  };
-}
-
-/**
- * Get stockout time estimate considering upcoming restocks.
- */
-function getEffectiveStockout(currentQty, burnRate, nextRestockPrediction) {
-  const stockoutMin = predictStockout(currentQty, burnRate);
-
-  if (!stockoutMin) {
-    return { willStockOut: false, stockoutInMinutes: null };
-  }
-
-  if (nextRestockPrediction && nextRestockPrediction.nextRestockInMinutes) {
-    if (nextRestockPrediction.nextRestockInMinutes < stockoutMin) {
-      return {
-        willStockOut: false,
-        stockoutInMinutes: stockoutMin,
-        minimumBeforeMinutes: Math.round(currentQty / burnRate - stockoutMin * 0.1),
-        note: 'Restock expected before stockout'
-      };
-    }
-  }
-
-  return {
-    willStockOut: true,
-    stockoutInMinutes: stockoutMin,
-    predictedAt: new Date(Date.now() + stockoutMin * 60 * 1000).toISOString()
+    cycleStart: currentCycleStart.toISOString(),
+    cycleStartMs: currentCycleStart.getTime(),
+    nextRestock: nextRestock.toISOString(),
+    nextRestockMs: nextRestock.getTime(),
+    nextRestockInMinutes: Math.ceil(totalSeconds / 60),
+    nextRestockInSeconds: Math.round(totalSeconds),
+    minutesSinceLastRestock: Math.round((now - currentCycleStart.getTime()) / 60000),
   };
 }
 
 /**
  * Calculate the optimal arrival window for an item.
+ * Uses deterministic restock timing + burn rate.
  */
-function calculateOptimalArrival(currentQty, burnRate, nextRestockPrediction, flightTimeMinutes) {
+function calculateOptimalArrival(currentQty, burnRate, restockInfo, flightTimeMinutes) {
   if (currentQty <= 0) {
-    if (nextRestockPrediction && nextRestockPrediction.nextRestockInMinutes) {
-      const restockIn = nextRestockPrediction.nextRestockInMinutes;
-      if (restockIn <= flightTimeMinutes) {
-        return {
-          departureRecommendation: { action: 'Depart now', reason: `Restock expected in ${restockIn} min (before you land)` }
-        };
-      }
+    // Item is out of stock - wait for next restock
+    const restockIn = restockInfo.nextRestockInMinutes;
+    if (restockIn <= flightTimeMinutes) {
       return {
-        departureRecommendation: { action: `Wait ${Math.max(0, restockIn - flightTimeMinutes)} min`, reason: `Item is out of stock. Next restock in ${restockIn} min.` }
+        departureRecommendation: { action: 'Depart now', reason: `Restocks in ~${restockIn} min (before you land)` }
       };
     }
     return {
-      departureRecommendation: { action: 'Do not travel', reason: 'Item is out of stock with no restock data.' }
+      departureRecommendation: {
+        action: `Wait ${Math.max(0, restockIn - flightTimeMinutes)} min`,
+        reason: `Item is out of stock. Next restock in ~${restockIn} min.`
+      }
     };
   }
 
   if (!burnRate || burnRate <= 0) {
-    return { available: true, departureRecommendation: { action: 'Depart now', reason: 'Stock exists but depletion rate is unknown' } };
+    return {
+      available: true,
+      departureRecommendation: { action: 'Depart now', reason: 'Stock exists but depletion rate is unknown' }
+    };
   }
 
   const stockoutMin = predictStockout(currentQty, burnRate);
@@ -232,60 +216,82 @@ function calculateOptimalArrival(currentQty, burnRate, nextRestockPrediction, fl
     return { available: true, departureRecommendation: { action: 'Depart now', reason: 'Sufficient stock' } };
   }
 
-  if (nextRestockPrediction && nextRestockPrediction.nextRestockInMinutes) {
-    const restockIn = nextRestockPrediction.nextRestockInMinutes;
-    const windowAfterRestock = Math.round(currentQty / burnRate);
-
-    return {
-      currentStockWillLast: stockoutMin,
-      nextRestockIn: restockIn,
-      windowAfterRestock,
-      optimalArrivalWindows: [
-        { start: stockoutMin, end: restockIn + windowAfterRestock, label: 'After restock' }
-      ],
-      departureRecommendation: stockoutMin > flightTimeMinutes
-        ? { action: 'Depart now', reason: `Stock will last ${stockoutMin} min; you arrive in ${flightTimeMinutes} min` }
-        : { action: `Wait or arrive after restock`, reason: `Current stock sells out in ${stockoutMin} min; flight is ${flightTimeMinutes} min` }
-    };
-  }
-
-  const neededFlightBuffer = stockoutMin - flightTimeMinutes;
+  const restockIn = restockInfo.nextRestockInMinutes;
+  const windowAfterRestock = burnRate > 0 ? Math.round(currentQty / burnRate) : 999;
 
   return {
     currentStockWillLast: stockoutMin,
-    expiring: stockoutMin < 30,
-    departureRecommendation: neededFlightBuffer > 0
-      ? { action: 'Depart now', reason: `${neededFlightBuffer} min of stock remaining after arrival` }
-      : { action: 'Wait - stock critically low', reason: `Stock lasts ${stockoutMin} min, but flight takes ${flightTimeMinutes} min` }
+    nextRestockIn: restockIn,
+    windowAfterRestock,
+    optimalArrivalWindows: [
+      { start: stockoutMin, end: restockIn + windowAfterRestock, label: 'After restock' }
+    ],
+    departureRecommendation: stockoutMin > flightTimeMinutes
+      ? { action: 'Depart now', reason: `Stock will last ~${stockoutMin} min; you arrive in ${flightTimeMinutes} min` }
+      : {
+          action: `Wait or arrive after restock`,
+          reason: `Current stock sells out in ~${stockoutMin} min; next restock in ~${restockIn} min`
+        }
   };
 }
 
 /**
- * Full analysis for a single country (Evaluating a 7-day rolling window)
+ * Full analysis for a single country using the hybrid approach:
+ * - Stock data from YATA/Prometheus (live)
+ * - Burn rates from userscript observations
+ * - Restock timing from deterministic schedule
  */
 async function analyzeCountry(country) {
   const countryCode = country.toLowerCase();
-  const flightTime = FLIGHT_TIMES[countryCode] || 120; 
+  const flightTime = FLIGHT_TIMES[countryCode] || 120;
 
-  // 1. Compute timestamp threshold for 7 days ago
+  // Get current stock data from YATA/Prometheus/userscript
+  const stockResult = await stockDataSource.getCurrentStock(countryCode);
+  const currentStocks = stockResult.stocks || [];
+  const dataSource = stockResult.source;
+
+  // Get deterministic restock timing
+  const restockInfo = getDeterministicRestockInfo();
+
+  // Get userscript observations for burn rate calculations (7-day window)
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-
-  // Fetch all metrics inside our rolling window boundary
-  const observations = await StockObservation.find({ 
-      country: countryCode,
-      receivedAt: { $gte: sevenDaysAgo } 
-    })
+  const observations = await StockObservation.find({
+    country: countryCode,
+    receivedAt: { $gte: sevenDaysAgo }
+  })
     .sort({ receivedAt: -1 })
     .lean();
 
-  if (!observations || observations.length === 0) {
+  if (currentStocks.length === 0 && (!observations || observations.length === 0)) {
     return { country: countryCode, status: 'no_data', items: [] };
   }
 
+  // Build item data from YATA/Prometheus stocks
   const itemData = {};
 
-  observations.forEach(obs => {
-    // FORCE-CAST: Standardize rawTime to a pure millisecond numeric timestamp
+  // First, index by item ID from YATA/Prometheus
+  currentStocks.forEach(item => {
+    const stableId = item.id || item.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
+    if (!itemData[stableId]) {
+      itemData[stableId] = {
+        id: stableId,
+        name: item.name,
+        type: item.type || 'Other',
+        currentQty: item.quantity,
+        currentCost: item.cost,
+        yataId: item.id,
+        snapshots: [],
+      };
+    } else {
+      // Update with latest YATA data
+      itemData[stableId].currentQty = item.quantity;
+      itemData[stableId].currentCost = item.cost;
+      itemData[stableId].type = item.type || itemData[stableId].type;
+    }
+  });
+
+  // Now enrich with userscript observations for burn rate data
+  (observations || []).forEach(obs => {
     let rawTime = 0;
     if (obs.receivedAt instanceof Date) {
       rawTime = obs.receivedAt.getTime();
@@ -294,224 +300,200 @@ async function analyzeCountry(country) {
     } else if (obs.receivedAt) {
       rawTime = new Date(obs.receivedAt).getTime();
     }
-
-    if (!rawTime || isNaN(rawTime)) {
-      rawTime = Date.now();
-    }
+    if (!rawTime || isNaN(rawTime)) rawTime = Date.now();
 
     (obs.stocks || []).forEach(s => {
-      // Guard clause to avoid recording empty or bad items
       if (!s || typeof s.name === 'undefined') return;
 
-      // ─── FILTER: Reject false positives scraped by userscript ─────
       const itemName = (s.name || '').trim();
+      // Filter out false positives
+      if (!isValidItemName(itemName)) return;
 
-      // Skip country names that look like stock items
-      const COUNTRY_NAMES = ['mexico', 'cayman islands', 'canada', 'hawaii', 'uk', 'united kingdom', 
-        'argentina', 'switzerland', 'japan', 'china', 'uae', 'south africa',
-        'mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'sou'];
-      if (COUNTRY_NAMES.includes(itemName.toLowerCase())) return;
+      // Try to match with YATA item by name
+      const stableId = findMatchingItemId(itemData, s.name);
 
-      // Skip timestamps (e.g., "22:09:02 - 25/05/26")
-      if (/^\d{1,2}:\d{2}:\d{2}/.test(itemName)) return;
-
-      // Skip date-like strings (e.g., "18:17:00 - 22/05/26")
-      if (/\d{2}:\d{2}:\d{2}.*\d{2}\/\d{2}\/\d{2}/.test(itemName)) return;
-
-      // Skip percentage strings (e.g., "3.21%")
-      if (/^[\d.]+%$/.test(itemName)) return;
-
-      // Skip purely numeric names
-      if (/^\d{2,}$/.test(itemName.replace(/\s/g, ''))) return;
-
-      // Skip country code names (e.g., "mex", "cay", "uae")
-      const COUNTRY_CODES = ['mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'uae', 'sou'];
-      if (COUNTRY_CODES.includes(itemName.toLowerCase())) return;
-
-      // Skip very short or very long names - unlikely real items
-      if (itemName.length < 2 || itemName.length > 60) return;
-
-      // Generate stable ID if not present
-      // NOTE: s.id may be "0" (string) when the userscript has no real item ID — treat "0" and 0 as absent
-      const hasRealId = s.id && s.id !== '0' && s.id !== 0;
-      const stableId = hasRealId
-        ? String(s.id)
-        : itemName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
       if (!itemData[stableId]) {
-        itemData[stableId] = {
-          id: stableId,
-          name: s.name,
-          snapshots: []
-        };
+        // New item not in YATA data (unlikely but possible)
+        const newId = s.id && s.id !== '0' && s.id !== 0
+          ? String(s.id)
+          : itemName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_');
+        
+        if (!itemData[newId]) {
+          itemData[newId] = {
+            id: newId,
+            name: s.name,
+            type: stockDataSource.categorizeItem ? stockDataSource.categorizeItem(s.name) : 'Other',
+            currentQty: typeof s.quantity === 'number' ? s.quantity : 0,
+            currentCost: typeof s.cost === 'number' ? s.cost : 0,
+            snapshots: [],
+          };
+        }
       }
-      
-      itemData[stableId].snapshots.push({
-        quantity: typeof s.quantity === 'number' ? s.quantity : 0,
-        cost: typeof s.cost === 'number' ? s.cost : 0,
-        time: rawTime,
-        observedAt: obs.observedAt || Math.floor(rawTime / 1000),
-        originalObservation: obs
-      });
+
+      // Add snapshot for burn rate calculation
+      const targetId = stableId || (itemName.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/_+/g, '_'));
+      if (itemData[targetId]) {
+        itemData[targetId].snapshots.push({
+          quantity: typeof s.quantity === 'number' ? s.quantity : 0,
+          cost: typeof s.cost === 'number' ? s.cost : 0,
+          time: rawTime,
+        });
+      }
     });
   });
 
   const items = [];
 
   Object.values(itemData).forEach(item => {
-    if (!item.snapshots || item.snapshots.length === 0) return;
+    if (!item.name) return;
 
-    // Isolate a clean sorting sequence
     const sortedAsc = [...item.snapshots].sort((a, b) => a.time - b.time);
     const sortedDesc = [...item.snapshots].sort((a, b) => b.time - a.time);
-    
-    // Pick out the newest snapshot record safely
-    const currentSnapshot = sortedDesc[0];
-    if (!currentSnapshot) return;
 
-    // Prioritize the most recent quantity, even if zero
-    const currentQty = typeof currentSnapshot.quantity === 'number' ? currentSnapshot.quantity : 0;
-    const currentCost = typeof currentSnapshot.cost === 'number' ? currentSnapshot.cost : 0;
-
-    // If current quantity is zero, find the most recent non-zero quantity
-    const nonZeroSnapshots = sortedDesc.filter(s => s.quantity > 0);
-    const effectiveQty = currentQty > 0 ? currentQty : 
-      (nonZeroSnapshots.length > 0 ? nonZeroSnapshots[0].quantity : 0);
-    const effectiveCost = currentQty > 0 ? currentCost : 
-      (nonZeroSnapshots.length > 0 ? nonZeroSnapshots[0].cost : 0);
-
-    const { restocks, intervals } = detectRestocks(sortedAsc);
     const burnData = calculateBurnRate(sortedAsc);
-    const lastRestock = restocks.length > 0 ? restocks[restocks.length - 1] : null;
-    const nextRestock = predictNextRestock(
-      intervals,
-      lastRestock ? lastRestock.detectedAt : null
+    const effectiveBurnRate = burnData ? (burnData.overall || burnData.recent) : 0;
+
+    const stockout = predictStockout(item.currentQty, effectiveBurnRate);
+
+    // Calculate arrival recommendation
+    let optimalArrival = calculateOptimalArrival(
+      item.currentQty,
+      effectiveBurnRate,
+      restockInfo,
+      flightTime
     );
 
-    const effectiveBurnRate = burnData ? (burnData.overall || burnData.recent) : 0;
-    const stockout = getEffectiveStockout(currentQty, effectiveBurnRate, nextRestock);
-    
-    // Evaluate data freshness safely using clean numeric types
-    const lastSeen = currentSnapshot.time || Date.now();
-    const minutesSinceLastUpdate = (Date.now() - lastSeen) / (60 * 1000);
-    const cleanFreshness = isNaN(minutesSinceLastUpdate) ? 0 : Math.round(minutesSinceLastUpdate);
+    // Handle out-of-stock items
+    if (item.currentQty <= 0) {
+      const restockIn = restockInfo.nextRestockInMinutes;
+      const departInMin = Math.max(0, restockIn - flightTime);
+      const departUTC = new Date(Date.now() + departInMin * 60 * 1000);
+      const arriveUTC = new Date(Date.now() + (departInMin + flightTime) * 60 * 1000);
 
-    // Run our optimization tracker
-    let optimalArrival = calculateOptimalArrival(currentQty, effectiveBurnRate, nextRestock, flightTime);
-
-    // CRITICAL LIVE MONITORING OVERRIDES
-    if (currentQty <= 0) {
-      // Only override if calculateOptimalArrival didn't already produce a good recommendation
-      const existingRec = optimalArrival.departureRecommendation;
-      const hasRestockRec = existingRec && existingRec.action && 
-        (existingRec.action.includes('Depart now') || existingRec.action.includes('Wait'));
-
-      if (!hasRestockRec) {
-        // No restock-based recommendation available
-        if (nextRestock && nextRestock.nextRestockInMinutes) {
-          const restockIn = nextRestock.nextRestockInMinutes;
-          const departInMin = Math.max(0, restockIn - flightTime);
-          const departUTC = new Date(Date.now() + departInMin * 60 * 1000);
-          const arriveUTC = new Date(Date.now() + (departInMin + flightTime) * 60 * 1000);
-          optimalArrival.departureRecommendation = {
-            action: departInMin <= 0 ? 'Depart now' : `Depart at ${departUTC.toISOString().slice(11, 16)} UTC`,
-            reason: restockIn <= flightTime
-              ? `Restock in ~${restockIn} min (before you land)`
-              : `Restock in ~${restockIn} min; arrive in ${flightTime} min`,
-            departAt: departUTC.toISOString(),
-            arriveAt: arriveUTC.toISOString()
-          };
-        } else {
-          optimalArrival.departureRecommendation = {
-            action: 'Do not travel',
-            reason: 'Item is entirely out of stock. Awaiting restock data.'
-          };
-        }
-      } else {
-        // calculateOptimalArrival already gave a recommendation — enrich it with UTC times
-        const rec = existingRec;
-        if (rec.action && rec.action.includes('Wait')) {
-          const waitMatch = rec.reason && rec.reason.match(/Next restock in (\d+) min/);
-          if (waitMatch) {
-            const restockIn = parseInt(waitMatch[1]);
-            const departInMin = Math.max(0, restockIn - flightTime);
-            const departUTC = new Date(Date.now() + departInMin * 60 * 1000);
-            const arriveUTC = new Date(Date.now() + (departInMin + flightTime) * 60 * 1000);
-            rec.action = departInMin <= 0 ? 'Depart now' : `Depart at ${departUTC.toISOString().slice(11, 16)} UTC`;
-            rec.departAt = departUTC.toISOString();
-            rec.arriveAt = arriveUTC.toISOString();
-          }
-        } else if (rec.action === 'Depart now') {
-          rec.departAt = new Date().toISOString();
-          rec.arriveAt = new Date(Date.now() + flightTime * 60 * 1000).toISOString();
-        }
-      }
-    } 
-    // STALE OVERRIDE: Using your customized 24-hour limit safety fallback
-    else if (cleanFreshness > 1440 || cleanFreshness < 0) {
       optimalArrival.departureRecommendation = {
-        action: 'Wait - Data Stale',
-        reason: `Last update was ${cleanFreshness} min ago.`
+        action: departInMin <= 0 ? 'Depart now' : `Depart at ${departUTC.toISOString().slice(11, 16)} UTC`,
+        reason: restockIn <= flightTime
+          ? `Restocks in ~${restockIn} min (before you land)`
+          : `Restocks in ~${restockIn} min; arrive in ${flightTime} min`,
+        departAt: departUTC.toISOString(),
+        arriveAt: arriveUTC.toISOString()
       };
     }
 
-    //console.log(`[ADVISOR] Item: ${item.name.padEnd(20)} | Qty: ${String(currentQty).padEnd(6)} | Freshness: ${cleanFreshness}m | Rec: ${optimalArrival.departureRecommendation.action}`);
+    // Data freshness
+    const lastSeen = sortedDesc.length > 0 ? sortedDesc[0].time : Date.now();
+    const minutesSinceLastUpdate = (Date.now() - lastSeen) / (60 * 1000);
+
+    // Confidence reflects overall stock data reliability:
+    // - YATA/Prometheus gives authoritative real-time stock counts → HIGH
+    // - Userscript-only with good observation history → MEDIUM
+    // - Userscript-only with minimal data → LOW
+    const hasYataData = dataSource === 'yata' || dataSource === 'prometheus';
+    const hasRecentBurnRate = burnData && burnData.timeSpanMinutes >= 60 && burnData.observationsUsed >= 5;
+
+    let confidence = CONFIDENCE.LOW;
+    if (hasYataData) confidence = CONFIDENCE.HIGH;
+    else if (hasRecentBurnRate) confidence = CONFIDENCE.MEDIUM;
 
     items.push({
       id: item.id,
       name: item.name,
-      currentQty: effectiveQty,
-      currentCost: effectiveCost,
+      type: item.type,
+      currentQty: item.currentQty,
+      currentCost: item.currentCost,
+      dataSource,
       burnRate: {
         perMin: effectiveBurnRate,
         perHour: Math.round(effectiveBurnRate * 60 * 100) / 100,
         recentPerMin: burnData ? burnData.recent : 0,
-        overallPerMin: burnData ? burnData.overall : 0
+        overallPerMin: burnData ? burnData.overall : 0,
+        observationsUsed: burnData ? burnData.observationsUsed : 0,
+        timeSpanMinutes: burnData ? burnData.timeSpanMinutes : 0,
       },
-      restocks: {
-        detected: restocks.length,
-        intervals: intervals.length > 0 ? {
-          averageMinutes: Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length / (60 * 1000)),
-          count: intervals.length
-        } : null
+      stockout: {
+        willStockOut: stockout !== null,
+        stockoutInMinutes: stockout,
+        predictedAt: stockout ? new Date(Date.now() + stockout * 60 * 1000).toISOString() : null,
       },
-      stockout,
-      nextRestock: nextRestock ? {
-        inMinutes: nextRestock.nextRestockInMinutes,
-        confidence: nextRestock.confidence,
-        intervalsObserved: nextRestock.intervalsObserved,
-        variability: nextRestock.variability
-      } : null,
+      restock: {
+        nextInMinutes: restockInfo.nextRestockInMinutes,
+        nextRestockAt: restockInfo.nextRestock,
+        minutesSinceLastRestock: restockInfo.minutesSinceLastRestock,
+        cycleStart: restockInfo.cycleStart,
+      },
       optimalArrival,
-      dataFreshness: {
-        minutesSinceUpdate: cleanFreshness,
-        observationsUsed: item.snapshots.length,
-        timeSpanMinutes: burnData ? burnData.timeSpanMinutes : 0
-      },
-      confidence: burnData && burnData.timeSpanMinutes >= 1440 && item.snapshots.length >= 15
-        ? CONFIDENCE.HIGH
-        : (item.snapshots.length >= 5 ? CONFIDENCE.MEDIUM : CONFIDENCE.LOW)
+      confidence,
     });
   });
 
+  // Sort: items that will stock out soon first, then by profit potential
   items.sort((a, b) => {
-    if (a.stockout.willStockOut !== b.stockout.willStockOut) {
-      return a.stockout.willStockOut ? -1 : 1;
+    // Out of stock items go last
+    if (a.currentQty <= 0 && b.currentQty > 0) return 1;
+    if (a.currentQty > 0 && b.currentQty <= 0) return -1;
+
+    // Items that will stock out soon go first
+    if (a.stockout.willStockOut && b.stockout.willStockOut) {
+      return (a.stockout.stockoutInMinutes || 999) - (b.stockout.stockoutInMinutes || 999);
     }
-    if (a.stockout.stockoutInMinutes && b.stockout.stockoutInMinutes) {
-      return a.stockout.stockoutInMinutes - b.stockout.stockoutInMinutes;
-    }
+    if (a.stockout.willStockOut) return -1;
+    if (b.stockout.willStockOut) return 1;
+
+    // Highest confidence first
     const confOrder = { high: 0, medium: 1, low: 2, insufficient_data: 3 };
     return (confOrder[a.confidence] || 2) - (confOrder[b.confidence] || 2);
   });
 
   return {
     country: countryCode,
-    status: 'analyzed',
+    countryName: stockResult.countryName || countryCode,
+    status: items.length > 0 ? 'analyzed' : 'no_items',
+    dataSource,
     observationCount: observations.length,
     itemCount: items.length,
-    lastObservation: observations?.receivedAt,
-    items
+    restockCountdown: {
+      nextRestockInMinutes: restockInfo.nextRestockInMinutes,
+      nextRestockAt: restockInfo.nextRestock,
+      cycleMinute: restockInfo.minutesSinceLastRestock,
+    },
+    items,
   };
+}
+
+/**
+ * Helper: find matching item ID in existing data by name similarity.
+ */
+function findMatchingItemId(itemData, name) {
+  if (!name) return null;
+  const normalized = name.toLowerCase().trim();
+
+  for (const [id, item] of Object.entries(itemData)) {
+    if (item.name?.toLowerCase() === normalized) return id;
+    // Partial match
+    if (normalized.includes(item.name?.toLowerCase()) || item.name?.toLowerCase().includes(normalized)) return id;
+  }
+
+  return null;
+}
+
+/**
+ * Helper: validate item name (filter out false positives).
+ */
+function isValidItemName(itemName) {
+  const COUNTRY_NAMES = ['mexico', 'cayman islands', 'canada', 'hawaii', 'uk', 'united kingdom',
+    'argentina', 'switzerland', 'japan', 'china', 'uae', 'south africa',
+    'mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'sou'];
+  const COUNTRY_CODES = ['mex', 'cay', 'can', 'haw', 'uni', 'arg', 'swi', 'jap', 'chi', 'uae', 'sou'];
+
+  if (COUNTRY_NAMES.includes(itemName.toLowerCase())) return false;
+  if (/^\d{1,2}:\d{2}:\d{2}/.test(itemName)) return false;
+  if (/\d{2}:\d{2}:\d{2}.*\d{2}\/\d{2}\/\d{2}/.test(itemName)) return false;
+  if (/^[\d.]+%$/.test(itemName)) return false;
+  if (/^\d{2,}$/.test(itemName.replace(/\s/g, ''))) return false;
+  if (COUNTRY_CODES.includes(itemName.toLowerCase())) return false;
+  if (itemName.length < 2 || itemName.length > 60) return false;
+
+  return true;
 }
 
 /**
@@ -542,11 +524,11 @@ async function getTravelRecommendations(maxItems = 20) {
     const confDiff = (confOrder[a.confidence] || 2) - (confOrder[b.confidence] || 2);
     if (confDiff !== 0) return confDiff;
 
-    if (a.nextRestock && b.nextRestock) {
-      return a.nextRestock.inMinutes - b.nextRestock.inMinutes;
+    if (a.restock && b.restock) {
+      return a.restock.nextInMinutes - b.restock.nextInMinutes;
     }
-    if (a.nextRestock) return -1;
-    if (b.nextRestock) return 1;
+    if (a.restock) return -1;
+    if (b.restock) return 1;
 
     return 0;
   });
@@ -557,8 +539,8 @@ async function getTravelRecommendations(maxItems = 20) {
 module.exports = {
   analyzeCountry,
   getTravelRecommendations,
-  detectRestocks,
+  getDeterministicRestockInfo,
   calculateBurnRate,
   predictStockout,
-  predictNextRestock
+  calculateOptimalArrival,
 };

@@ -29,7 +29,7 @@
 
     const SSG_SERVER = 'https://ssg-server.onrender.com';
     const MIN_SUBMIT_INTERVAL_MS = 6000;
-    const FOREIGN_COUNTRIES = ['mexico', 'cayman', 'cayman-islands', 'canada', 'hawaii', 'uk', 'argentina', 'switzerland', 'japan', 'china', 'uae', 'south_africa'];
+    const FOREIGN_COUNTRIES = ['mexico', 'cayman', 'cayman-islands', 'canada', 'hawaii', 'uk', 'argentina', 'switzerland', 'japan', 'china', 'uae', 'south africa'];
 
     let lastSubmitTime = 0;
     let statusIndicator = null;
@@ -43,7 +43,7 @@
         'mexico': 'mex', 'cayman': 'cay', 'cayman-islands': 'cay',
         'canada': 'can', 'hawaii': 'haw', 'uk': 'uni',
         'argentina': 'arg', 'switzerland': 'swi', 'japan': 'jap',
-        'china': 'chi', 'uae': 'uae', 'south_africa': 'sou'
+        'china': 'chi', 'uae': 'uae', 'south africa': 'sou'
     };
 
     function log(msg) {

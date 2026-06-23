@@ -1382,14 +1382,21 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 // ── Travel Profit Analytics Engine ───────────────────────────────────────────
 let travelProfitsCache = null;
 let stockAnalyticsCache = {};
+let stockAdvisoryCache = null; // Cached advisory data from YATA/Prometheus
+let restockCountdownTimer = null; // Interval timer for countdown
 
 async function fetchTravelProfits() {
   const container = document.getElementById('travel-profits-data');
   container.innerHTML = '<div class="channel-loading">LOADING TRAVEL PROFITS...</div>';
   try {
-    const res = await fetch('/api/travel-profits');
-    const data = await res.json();
-    if (!res.ok) {
+    // Fetch travel profits and stock advisory in parallel
+    const [profitsRes, advisoryRes] = await Promise.all([
+      fetch('/api/travel-profits'),
+      fetch('/api/stock/advisory').catch(() => null)
+    ]);
+
+    const data = await profitsRes.json();
+    if (!profitsRes.ok) {
       let errorMsg = `<div class="channel-error">⚠️ ${data.error}</div>`;
       if (data.help) {
         errorMsg += `<div class="channel-error" style="margin-top:0.5rem;padding:0.75rem;background:#1a1919;border:1px solid #333;border-radius:4px;font-size:0.85rem;">
@@ -1403,53 +1410,106 @@ async function fetchTravelProfits() {
     }
     travelProfitsCache = data;
 
-    // Fetch stock analytics for all countries present in the profits data
-    const countries = [...new Set(data.profits.map(p => p.country))];
-    const analyticsMap = {};
-    console.log('[Travel Profits] Fetching analytics for countries:', countries);
-    await Promise.all(countries.map(async (country) => {
-      try {
-        const aRes = await fetch(`/api/restock-analysis?country=${country}`);
-        const aData = await aRes.json();
-        console.log(`[Travel Profits] Analytics response for ${country}:`, aData.status, 'items:', aData.items?.length);
-        if (aRes.ok && aData.items) {
-          aData.items.forEach(item => {
-            // Store analytics keyed by normalized country+name for case-insensitive matching
+    // Process advisory data (YATA/Prometheus + userscript hybrid)
+    if (advisoryRes && advisoryRes.ok) {
+      const advisoryData = await advisoryRes.json();
+      stockAdvisoryCache = advisoryData;
+
+      // Build analytics map from advisory data
+      const analyticsMap = {};
+      const countries = advisoryData.countries || {};
+      Object.entries(countries).forEach(([country, countryData]) => {
+        if (countryData.items) {
+          countryData.items.forEach(item => {
             analyticsMap[`${country}::${(item.name || '').toLowerCase().trim()}`] = item;
           });
         }
-      } catch (e) {
-        console.error(`[Travel Profits] Analytics error for ${country}:`, e.message);
-      }
-    }));
-    stockAnalyticsCache = analyticsMap;
-    console.log('[Travel Profits] Loaded analytics for', Object.keys(analyticsMap).length, 'items across', countries.length, 'countries');
-
-    // Build a name-based lookup as fallback (stock observer uses fake negative IDs)
-    const analyticsByName = {};
-    Object.values(analyticsMap).forEach(item => {
-      analyticsByName[(item.name || '').toLowerCase().trim()] = item;
-    });
-
-    // Count how many travel profit items actually match analytics data
-    let matchCount = 0;
-    let nameMatchCount = 0;
-    if (data.profits.length > 0) {
-      data.profits.forEach(p => {
-        const lookupKey = `${p.country}::${(p.name || '').toLowerCase().trim()}`;
-        if (analyticsMap[lookupKey]) matchCount++;
-        if (analyticsByName[(p.name || '').toLowerCase().trim()]) nameMatchCount++;
       });
-      console.log('[Travel Profits] ID matches:', matchCount, '| Name matches:', nameMatchCount, 'out of', data.profits.length, 'profit items');
 
-      // Store name lookup for use in render
+      // Build name-only fallback
+      const analyticsByName = {};
+      Object.values(analyticsMap).forEach(item => {
+        analyticsByName[(item.name || '').toLowerCase().trim()] = item;
+      });
       analyticsMap._byName = analyticsByName;
+      stockAnalyticsCache = analyticsMap;
+
+      console.log('[Travel Profits] Advisory loaded:', Object.keys(analyticsMap).length, 'items | Source:', advisoryData.countries ? Object.values(advisoryData.countries)[0]?.dataSource : 'unknown');
+
+      // Start restock countdown timer
+      startRestockCountdown(advisoryData.restockCountdown);
+    } else {
+      // Fallback: fetch analytics per-country from old endpoint
+      const countries = [...new Set(data.profits.map(p => p.country))];
+      const analyticsMap = {};
+      await Promise.all(countries.map(async (country) => {
+        try {
+          const aRes = await fetch(`/api/restock-analysis?country=${country}`);
+          const aData = await aRes.json();
+          if (aRes.ok && aData.items) {
+            aData.items.forEach(item => {
+              analyticsMap[`${country}::${(item.name || '').toLowerCase().trim()}`] = item;
+            });
+          }
+        } catch (e) {
+          console.error(`[Travel Profits] Analytics fallback error for ${country}:`, e.message);
+        }
+      }));
+      const analyticsByName = {};
+      Object.values(analyticsMap).forEach(item => {
+        analyticsByName[(item.name || '').toLowerCase().trim()] = item;
+      });
+      analyticsMap._byName = analyticsByName;
+      stockAnalyticsCache = analyticsMap;
     }
 
     renderTravelProfits();
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
+}
+
+// ── Restock Countdown Timer ───────────────────────────────────────────────────
+function startRestockCountdown(initialCountdown) {
+  // Clear any existing timer
+  if (restockCountdownTimer) clearInterval(restockCountdownTimer);
+
+  // Calculate the next restock time from the initial data
+  let nextRestockMs = initialCountdown?.nextRestockInSeconds
+    ? Date.now() + initialCountdown.nextRestockInSeconds * 1000
+    : null;
+
+  function updateCountdown() {
+    const el = document.getElementById('restock-countdown-display');
+    if (!el) return;
+
+    // Recalculate deterministically: restocks at :00 and :30 every hour
+    const now = new Date();
+    const minutes = now.getMinutes();
+    const seconds = now.getSeconds();
+    let totalSeconds;
+    if (minutes < 30) {
+      totalSeconds = (30 - minutes) * 60 - seconds;
+    } else {
+      totalSeconds = (60 - minutes) * 60 - seconds;
+    }
+
+    if (totalSeconds <= 0) {
+      el.textContent = 'RESTOCKING NOW';
+      el.style.color = '#4caf50';
+      // Re-render after a brief delay to pick up new stock data
+      setTimeout(() => fetchTravelProfits(), 3000);
+      return;
+    }
+
+    const m = Math.floor(totalSeconds / 60);
+    const s = totalSeconds % 60;
+    el.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    el.style.color = totalSeconds < 120 ? '#e74c3c' : totalSeconds < 300 ? '#f0a500' : '#4caf50';
+  }
+
+  updateCountdown();
+  restockCountdownTimer = setInterval(updateCountdown, 1000);
 }
 
 function getCountryName(code) {
@@ -1993,58 +2053,6 @@ function renderFactionLoans(members, totals, armoryItems) {
             <th style="text-align:center;width:11%;">Gloves</th>
             <th style="text-align:center;width:11%;">Pants</th>
             <th style="text-align:center;width:11%;">Boots</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-    <div style="margin-top:1rem;">
-      <div class="badge-label">📦 Armory Inventory</div>
-      ${renderArmoryInventory(armoryItems || [])}
-    </div>`;
-}
-
-function renderArmoryInventory(items) {
-  if (!items.length) return '<p class="muted">No armory items found.</p>';
-
-  // Sort by type then name
-  const sorted = [...items].sort((a, b) => {
-    if (a.type !== b.type) return a.type.localeCompare(b.type);
-    return a.name.localeCompare(b.name);
-  });
-
-  const rows = sorted.map(item => {
-    const loanedPct = item.total > 0 ? Math.round((item.loaned / item.total) * 100) : 0;
-    const barColor = loanedPct >= 80 ? '#e74c3c' : loanedPct >= 50 ? '#f0a500' : '#2ecc71';
-
-    return `<tr>
-      <td>${escapeHtml(item.name)}</td>
-      <td style="text-align:center;">${item.type}</td>
-      <td style="text-align:center;">${item.slot.toUpperCase()}</td>
-      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.total}</td>
-      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#e74c3c;">${item.loaned}</td>
-      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#2ecc71;">${item.available}</td>
-      <td style="text-align:center;width:100px;">
-        <div style="background:#2a2828;border-radius:4px;height:8px;overflow:hidden;">
-          <div style="width:${loanedPct}%;height:100%;background:${barColor};border-radius:4px;"></div>
-        </div>
-        <span style="font-size:0.7rem;color:#555;">${loanedPct}%</span>
-      </td>
-    </tr>`;
-  }).join('');
-
-  return `
-    <div style="overflow-x:auto;margin-top:0.5rem;">
-      <table class="members-table" style="font-size:0.85rem;">
-        <thead>
-          <tr>
-            <th>Item Name</th>
-            <th style="text-align:center;">Type</th>
-            <th style="text-align:center;">Slot</th>
-            <th style="text-align:center;">Total</th>
-            <th style="text-align:center;">Loaned</th>
-            <th style="text-align:center;">Available</th>
-            <th style="text-align:center;">Usage</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -3353,8 +3361,8 @@ function renderTravelProfits() {
 
       // Next Restock
       let restockHtml = '<span style="color:#555;">—</span>';
-      if (analytics && analytics.nextRestock) {
-        restockHtml = `<span style="color:#f0a500;font-family:'Share Tech Mono',monospace;">~${analytics.nextRestock.inMinutes}m</span>`;
+      if (analytics && analytics.restock && analytics.restock.nextInMinutes) {
+        restockHtml = `<span style="color:#f0a500;font-family:'Share Tech Mono',monospace;">~${analytics.restock.nextInMinutes}m</span>`;
       }
 
       // Recommendation
