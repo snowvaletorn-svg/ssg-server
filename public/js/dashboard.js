@@ -1040,7 +1040,7 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const memberRows = members
@@ -1639,7 +1639,7 @@ function renderWarOverview() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...warDataOverview].sort((a, b) => {
@@ -1786,7 +1786,7 @@ function renderMemberOverview() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...overviewData].sort((a, b) => {
@@ -2002,7 +2002,7 @@ function renderFactionLoans(members, totals, armoryItems) {
   // Sort by position hierarchy then name (matching Member Overview table order)
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...members].sort((a, b) => {
@@ -2098,7 +2098,7 @@ function exportOverviewCSV() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Banker': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
   };
 
   const sorted = [...overviewData].sort((a, b) => {
@@ -4845,22 +4845,22 @@ async function fetchTargets() {
   const factionless = document.getElementById('target-factionless').checked ? 1 : 0;
   const preset = document.getElementById('target-preset')?.value || '';
 
-    try {
-      const params = new URLSearchParams();
-      params.set('limit', limit);
+  try {
+    const params = new URLSearchParams();
+    params.set('limit', limit);
 
-      // If a preset is selected, only send preset + limit (FFScouter spec: only key + limit allowed with preset)
-      if (preset && preset !== '') {
-        params.set('preset', preset);
-      } else {
-        // Custom filters — include inactiveonly
-        params.set('inactiveonly', 1);
-        params.set('minlevel', minlevel);
-        params.set('maxlevel', maxlevel);
-        params.set('minff', minff);
-        params.set('maxff', maxff);
-        params.set('factionless', factionless);
-      }
+    // If a preset is selected, only send preset + limit (FFScouter spec: only key + limit allowed with preset)
+    if (preset && preset !== '') {
+      params.set('preset', preset);
+    } else {
+      // Custom filters — include inactiveonly
+      params.set('inactiveonly', 1);
+      params.set('minlevel', minlevel);
+      params.set('maxlevel', maxlevel);
+      params.set('minff', minff);
+      params.set('maxff', maxff);
+      params.set('factionless', factionless);
+    }
 
     const res = await fetch(`/api/ffscouter/targets?${params}`);
     const data = await res.json();

@@ -92,7 +92,7 @@ const POSITIONS = {
   ownership: ['Leader', 'Co-leader', 'Matriarch'],
   leadership: ['Leadership'],
   warlord: ['Warlord'],
-  strategy: ['Team Strategy', 'Banker'],
+  strategy: ['Team Strategy', 'Team_Strategy'],
   strength: ['Team Strength'],
   growth: ['Team Growth', 'Recruit'],
 };
@@ -119,49 +119,49 @@ const TRAINING_CHANNELS = [
     id: '1435130329479250021',
     name: '📖 Torn Stats Account Creation',
     description: 'Website dedicated to Tracking Stat progress for Torn as well as a plethora of other items.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414594410512494',
     name: '📊 Stats Training',
     description: 'Advanced stat training guides and strategies.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
   },
   {
     id: '1435416169946415194',
     name: '💰 Money Making Training',
     description: 'Guides on making money to fund your stats growth.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
   },
   {
     id: '1435413325725958165',
     name: '⬆️ Level Training',
     description: 'Everything you need to know about leveling up fast.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414982316654746',
     name: '🔗 Chains',
     description: 'Detailed walkthrough on what chains are.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416378709508138',
     name: '🫆 Crimes Training',
     description: 'Guide for all members on Crimes in Torn.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416812706857225',
     name: '🗝️ Organized Crimes Training',
     description: 'Guide for all members on Organized Crimes in Torn.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435130329479250021',
     name: '📖 Torn Stats Guides',
     description: 'The following are guides available in Torn Stats. These guides require access to Torn Stats. See Torn Stats Training for information on how to create your Torn Stats account.',
-    positionGroups: ['ownership', 'leadership', 'strategy', 'banker', 'strength', 'growth', 'warlord']
+    positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
 ];
 
@@ -415,7 +415,7 @@ app.get('/', async (req, res) => {
             'Leadership': 'Leadership',
             'Warlord': 'Warlord',
             'Team Strategy': 'Strategy',
-            'Banker': 'Strategy',
+            'Team_Strategy': 'Strategy',
             'Team Strength': 'Strength',
             'Team Growth': 'Growth',
             'Recruit': 'Growth'
