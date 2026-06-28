@@ -84,7 +84,7 @@ function getCompanyTypeName(typeId) {
 async function fetchCompanyDataFromApi(companyId, directorApiKey) {
   try {
     const res = await axios.get(
-      `https://api.torn.com/company/${companyId}?key=${directorApiKey}`
+      `https://api.torn.com/company/${companyId}?key=${encodeURIComponent(directorApiKey)}`
     );
     if (res.data.error) {
       throw new Error(res.data.error.error);
@@ -99,7 +99,7 @@ async function fetchCompanyDataFromApi(companyId, directorApiKey) {
 async function fetchEmployeeWorkStats(employeeApiKey) {
   try {
     const res = await axios.get(
-      `https://api.torn.com/user/?selections=profile,personalstats&key=${employeeApiKey}`
+      `https://api.torn.com/user/?selections=profile,personalstats&key=${encodeURIComponent(employeeApiKey)}`
     );
     if (res.data.error) return null;
     const ps = res.data.personalstats;

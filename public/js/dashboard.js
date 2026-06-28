@@ -2516,7 +2516,6 @@ const HELP_CONTENT = {
         heading: 'War Panel',
         content: `
           <p class="help-text">The War Panel is available to Leaders, Co-leaders, and Warlords. It provides real-time war statistics and member readiness data to help coordinate faction war efforts.</p>
-          <div class="help-callout warning">⚠️ This section is only visible to Leadership and Warlord ranks.</div>
         `
       },
       {
