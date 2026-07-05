@@ -33,6 +33,8 @@ const { sendEmail } = require('./services/emailService');
 const AppNotification = require('./models/AppNotification');
 const Announcement = require('./models/Announcement');
 const StockObservation = require('./models/StockObservation');
+const OrganizedCrime = require('./models/OrganizedCrime');
+const UserStatSnapshot = require('./models/UserStatSnapshot');
 const { startScheduler } = require('./services/schedulerService');
 const stockAnalysisService = require('./services/stockAnalysisService');
 const stockDataSourceService = require('./services/stockDataSourceService');
@@ -840,6 +842,100 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
 
     res.json(tornRes.data);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Save personal stat snapshot and return increase ─────────────────────
+app.post('/api/user/stats/snapshot', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+
+    const tornRes = await axios.get(
+      `https://api.torn.com/user/?selections=personalstats&key=${encodeURIComponent(dbUser.tornApiKey)}`
+    );
+    if (tornRes.data.error) {
+      return res.status(400).json({ error: tornRes.data.error.error });
+    }
+
+    const ps = tornRes.data.personalstats || {};
+    const current = {
+      strength: ps.strength || 0,
+      defense: ps.defense || 0,
+      speed: ps.speed || 0,
+      dexterity: ps.dexterity || 0,
+      totalStats: ps.totalstats || 0
+    };
+
+    // Find the most recent previous snapshot
+    const lastSnapshot = await UserStatSnapshot.findOne({ tornPlayerId: req.session.userId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    // Save the new snapshot
+    await UserStatSnapshot.create({
+      tornPlayerId: req.session.userId,
+      ...current
+    });
+
+    // Calculate differences
+    const diff = {
+      strength: 0,
+      defense: 0,
+      speed: 0,
+      dexterity: 0,
+      totalStats: 0
+    };
+
+    if (lastSnapshot) {
+      diff.strength = current.strength - lastSnapshot.strength;
+      diff.defense = current.defense - lastSnapshot.defense;
+      diff.speed = current.speed - lastSnapshot.speed;
+      diff.dexterity = current.dexterity - lastSnapshot.dexterity;
+      diff.totalStats = current.totalStats - lastSnapshot.totalStats;
+    }
+
+    res.json({
+      current,
+      previous: lastSnapshot || null,
+      diff,
+      isFirstSnapshot: !lastSnapshot
+    });
+  } catch (err) {
+    console.error('Stat snapshot error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get last stat increase ─────────────────────────────────────────────
+app.get('/api/user/stats/last-increase', isAuthenticated, async (req, res) => {
+  try {
+    const snapshots = await UserStatSnapshot.find({ tornPlayerId: req.session.userId })
+      .sort({ timestamp: -1 })
+      .limit(2)
+      .lean();
+
+    if (snapshots.length < 2) {
+      return res.json({ diff: null, message: 'Need at least 2 snapshots to calculate increase.' });
+    }
+
+    const current = snapshots[0];
+    const previous = snapshots[1];
+
+    const diff = {
+      strength: current.strength - previous.strength,
+      defense: current.defense - previous.defense,
+      speed: current.speed - previous.speed,
+      dexterity: current.dexterity - previous.dexterity,
+      totalStats: current.totalStats - previous.totalStats
+    };
+
+    res.json({ current, previous, diff });
+  } catch (err) {
+    console.error('Last increase error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2259,6 +2355,119 @@ async function startServer() {
 }
 
 startServer();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MY DAY DASHBOARD API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ─── API: Get personalized "My Day" dashboard data ──────────────────────────
+app.get('/api/my-day', isAuthenticated, async (req, res) => {
+  try {
+    const userId = parseInt(req.session.userId);
+    const dbUser = await User.findOne({ tornPlayerId: userId });
+    const factionKey = await getFactionApiKey();
+
+    const result = {
+      energy: null,
+      nerve: null,
+      activeOc: null,
+      ocItemNeeded: null,
+      ocItemChannelLink: null,
+      war: null,
+      hasApiKey: !!dbUser?.tornApiKey
+    };
+
+    // 1. Fetch user bars (nerve, energy) if they have an API key
+    if (dbUser?.tornApiKey) {
+      try {
+        const tornRes = await axios.get(
+          `https://api.torn.com/user/?selections=bars&key=${encodeURIComponent(dbUser.tornApiKey)}`,
+          { timeout: 10000 }
+        );
+        if (!tornRes.data.error) {
+          result.energy = tornRes.data.energy || null;
+          result.nerve = tornRes.data.nerve || null;
+        }
+      } catch (err) {
+        console.error('My Day: Error fetching user bars:', err.message);
+      }
+    }
+
+    // 2. Check for active OC participation
+    if (factionKey) {
+      try {
+        // First, try to refresh OC data from Torn API to ensure we have current data
+        // This is needed because OC data may not have been synced to the database yet
+        const { refreshFactionCrimes } = require('./services/tornCrimesService');
+        try {
+          await refreshFactionCrimes(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+        } catch (refreshErr) {
+          // Non-fatal: if refresh fails, we'll still check the database for existing data
+          console.error('My Day: OC refresh error (non-fatal):', refreshErr.message);
+        }
+
+        // Find pending/active crimes where this user is a participant
+        const activeCrimes = await OrganizedCrime.find({
+          isComplete: false,
+          'participants.playerId': userId
+        }).sort({ timeStarted: -1 }).limit(1).lean();
+
+        if (activeCrimes.length > 0) {
+          const crime = activeCrimes[0];
+          const participant = crime.participants.find(p => p.playerId === userId);
+
+          result.activeOc = {
+            crimeId: crime.crimeId,
+            crimeName: crime.crimeName,
+            role: participant?.role || 'Unknown',
+            initiated: crime.initiated,
+            timeLeft: crime.timeLeft
+          };
+
+          // Check if this participant's role requires an item/tool
+          if (participant && participant.tool && participant.tool !== 'N/A') {
+            result.ocItemNeeded = participant.tool;
+            result.ocItemChannelLink = 'https://discord.com/channels/1432576178383753309/1461808457869951077';
+          }
+        }
+      } catch (err) {
+        console.error('My Day: Error checking OC participation:', err.message);
+      }
+    }
+
+    // 3. Check war status
+    if (factionKey) {
+      try {
+        const warsRes = await axios.get(
+          `https://api.torn.com/v2/faction/?selections=wars&key=${encodeURIComponent(factionKey)}`,
+          { timeout: 10000 }
+        );
+        const rankedWar = warsRes.data.wars?.ranked;
+        if (rankedWar && rankedWar.start) {
+          const warEnd = rankedWar.end || null;
+          const isActive = !warEnd || warEnd > Math.floor(Date.now() / 1000);
+          if (isActive) {
+            const warFactions = rankedWar.factions || [];
+            const enemyFaction = warFactions.find(f => f.id !== 53272);
+            result.war = {
+              enemy: enemyFaction?.name || 'Unknown',
+              start: rankedWar.start,
+              end: rankedWar.end,
+              isActive: true
+            };
+          }
+        }
+      } catch (err) {
+        console.error('My Day: Error checking war status:', err.message);
+      }
+    }
+
+    res.json(result);
+  } catch (err) {
+    console.error('My Day API error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ORGANIZED CRIME TRACKING API

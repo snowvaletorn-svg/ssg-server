@@ -5,12 +5,145 @@ function showSection(sectionId, el) {
   document.getElementById(sectionId).classList.add('active');
   if (el) el.classList.add('active');
 
+  if (sectionId === 'my-day') { fetchMyDay(); }
   if (sectionId === 'torn') { fetchTornUser(); }
   if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
   if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); }
   if (sectionId === 'targets') { checkFFScouterKeyStatus(); fetchTargets(); }
+}
+
+// ── My Day Dashboard ──────────────────────────────────────────────────────────
+async function fetchMyDay() {
+  const container = document.getElementById('my-day-data');
+  container.innerHTML = '<div class="channel-loading">LOADING YOUR DAY...</div>';
+  try {
+    const res = await fetch('/api/my-day');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderMyDay(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderMyDay(d) {
+  const cards = [];
+
+  // ── Energy Card ──
+  if (d.energy) {
+    const pct = Math.round((d.energy.current / d.energy.maximum) * 100);
+    const isMaxed = pct >= 100;
+    const isFull = pct >= 95 && !isMaxed;
+    let cardClass = 'myday-ok';
+    let barColor = '#4caf50';
+    let actionText = '<div class="myday-card-hint">You can still train more.</div>';
+    if (isMaxed) {
+      cardClass = 'myday-danger';
+      barColor = '#ff4444';
+      actionText = '<div class="myday-card-action">🔴 Energy is full! Train or use boosters now!</div>';
+    } else if (isFull) {
+      cardClass = 'myday-warning';
+      barColor = '#e67e22';
+      actionText = '<div class="myday-card-action">🔴 Energy is nearly full — train or use boosters!</div>';
+    }
+    cards.push(`
+      <div class="myday-card ${cardClass}">
+        <div class="myday-card-icon">⚡</div>
+        <div class="myday-card-body">
+          <div class="myday-card-title">Energy</div>
+          <div class="myday-card-value">${d.energy.current.toLocaleString()} / ${d.energy.maximum.toLocaleString()} <span class="myday-pct">(${pct}%)</span></div>
+          <div class="myday-bar"><div class="myday-bar-fill" style="width:${pct}%;background:${barColor};"></div></div>
+          ${actionText}
+        </div>
+      </div>
+    `);
+  } else if (!d.hasApiKey) {
+    cards.push(`
+      <div class="myday-card myday-missing">
+        <div class="myday-card-icon">🔑</div>
+        <div class="myday-card-body">
+          <div class="myday-card-title">API Key Required</div>
+          <div class="myday-card-value">Save your Torn API key in your Profile to see energy and nerve status.</div>
+          <div class="myday-card-action"><a href="#profile" onclick="showSection('profile', document.querySelector('.nav-item[href=\\'#profile\\']'))" class="btn btn-primary btn-small">Go to Profile</a></div>
+        </div>
+      </div>
+    `);
+  }
+
+  // ── Nerve Card ──
+  if (d.nerve) {
+    const pct = Math.round((d.nerve.current / d.nerve.maximum) * 100);
+    const isFull = pct >= 90;
+    cards.push(`
+      <div class="myday-card ${isFull ? 'myday-danger' : 'myday-ok'}">
+        <div class="myday-card-icon">🔪</div>
+        <div class="myday-card-body">
+          <div class="myday-card-title">Nerve</div>
+          <div class="myday-card-value">${d.nerve.current.toLocaleString()} / ${d.nerve.maximum.toLocaleString()} <span class="myday-pct">(${pct}%)</span></div>
+          <div class="myday-bar"><div class="myday-bar-fill" style="width:${pct}%;background:${isFull ? '#ff4444' : '#4caf50'};"></div></div>
+          ${isFull ? '<div class="myday-card-action">🔴 Nerve is almost full! Time to do crimes!</div>' : '<div class="myday-card-hint">Nerve is building — keep doing crimes when you can.</div>'}
+        </div>
+      </div>
+    `);
+  }
+
+  // ── OC Card ──
+  if (d.activeOc) {
+    const statusText = d.activeOc.initiated ? '🔄 In Progress' : '⏳ Planning';
+    cards.push(`
+      <div class="myday-card myday-oc">
+        <div class="myday-card-icon">🗝️</div>
+        <div class="myday-card-body">
+          <div class="myday-card-title">Active Organized Crime</div>
+          <div class="myday-card-value">${d.activeOc.crimeName}</div>
+          <div class="myday-card-detail">Your role: <strong>${d.activeOc.role}</strong> — ${statusText}</div>
+          ${d.ocItemNeeded ? `
+            <div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — Request it in <a href="${d.ocItemChannelLink}" target="_blank" rel="noopener" style="color:#4a90e2;text-decoration:underline;">#resource-request</a></div>
+          ` : '<div class="myday-card-hint">✅ No item needed for your role.</div>'}
+        </div>
+      </div>
+    `);
+  } else {
+    cards.push(`
+      <div class="myday-card myday-info">
+        <div class="myday-card-icon">🗝️</div>
+        <div class="myday-card-body">
+          <div class="myday-card-title">No Active OC</div>
+          <div class="myday-card-value">You're not in any active Organized Crime.</div>
+          <div class="myday-card-action">Check <a href="https://www.torn.com/factions.php?step=your&type=1#/tab=crimes" target="_blank" rel="noopener" style="color:#4a90e2;text-decoration:underline;">the faction OC page</a> for available spots!</div>
+        </div>
+      </div>
+    `);
+  }
+
+  // ── War Card ──
+  if (d.war && d.war.isActive) {
+    const startDate = new Date(d.war.start * 1000).toLocaleDateString();
+    cards.push(`
+      <div class="myday-card myday-war">
+        <div class="myday-card-icon">⚔️</div>
+        <div class="myday-card-body">
+          <div class="myday-card-title">⚔️ Active War</div>
+          <div class="myday-card-value">vs ${d.war.enemy}</div>
+          <div class="myday-card-detail">Started: ${startDate}</div>
+          <div class="myday-card-action"><a href="#war" onclick="showSection('war', document.querySelector('.nav-item[href=\\'#war\\']'))" class="btn btn-primary btn-small">View War Panel</a></div>
+        </div>
+      </div>
+    `);
+  }
+
+  // If no cards at all, show a message
+  if (cards.length === 0) {
+    return `
+      <div class="empty-state">
+        <span class="empty-icon">📋</span>
+        <p>No data available yet. Make sure you have an API key saved.</p>
+      </div>`;
+  }
+
+  return `<div class="myday-grid">${cards.join('')}</div>`;
 }
 
 // ── Personal Torn API Key ─────────────────────────────────────────────────────
@@ -120,20 +253,69 @@ async function saveFactionKey() {
 
 
 // ── Torn User Stats ───────────────────────────────────────────────────────────
+// Cached snapshot data that persists across page loads until refresh is clicked
+let cachedSnapshotData = null;
+
 async function fetchTornUser() {
   const container = document.getElementById('torn-user-data');
   container.innerHTML = '<div class="channel-loading">LOADING TORN DATA...</div>';
   try {
-    const res = await fetch('/api/torn/user');
-    const data = await res.json();
-    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
-    container.innerHTML = renderTornUser(data);
+    const [userRes, snapshotRes] = await Promise.all([
+      fetch('/api/torn/user'),
+      fetch('/api/user/stats/last-increase')
+    ]);
+    const data = await userRes.json();
+    if (!userRes.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+
+    // Use cached snapshot data if available, otherwise use the API response
+    if (!cachedSnapshotData) {
+      const snapshotData = snapshotRes.ok ? await snapshotRes.json() : null;
+      if (snapshotData && snapshotData.diff) {
+        cachedSnapshotData = snapshotData;
+      } else if (snapshotData && snapshotData.message) {
+        // First time - no previous snapshot exists yet
+        cachedSnapshotData = { isFirstSnapshot: true };
+      }
+    }
+
+    container.innerHTML = renderTornUser(data, cachedSnapshotData);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
-function renderTornUser(d) {
+async function refreshStatsSnapshot() {
+  const container = document.getElementById('torn-user-data');
+  try {
+    const res = await fetch('/api/user/stats/snapshot', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+    const snapshotData = res.ok ? await res.json() : null;
+    if (snapshotData) {
+      cachedSnapshotData = snapshotData;
+    }
+    // Re-fetch user data and re-render with updated snapshot
+    const userRes = await fetch('/api/torn/user');
+    const data = await userRes.json();
+    if (!userRes.ok) { return; }
+    container.innerHTML = renderTornUser(data, cachedSnapshotData);
+  } catch (err) {
+    console.error('Stats refresh error:', err.message);
+  }
+}
+
+// Refresh just the user data without touching the snapshot cache
+async function refreshTornUserData() {
+  const container = document.getElementById('torn-user-data');
+  try {
+    const res = await fetch('/api/torn/user');
+    const data = await res.json();
+    if (!res.ok) { return; }
+    container.innerHTML = renderTornUser(data, cachedSnapshotData);
+  } catch (err) {
+    console.error('User data refresh error:', err.message);
+  }
+}
+
+function renderTornUser(d, snapshotData) {
   const lifeBar = d.life ? `${d.life.current}/${d.life.maximum}` : 'N/A';
   const energyBar = d.energy ? `${d.energy.current}/${d.energy.maximum}` : 'N/A';
   const nerveBar = d.nerve ? `${d.nerve.current}/${d.nerve.maximum}` : 'N/A';
@@ -141,6 +323,67 @@ function renderTornUser(d) {
   const married = d.married?.spouse_name ? `💍 ${d.married.spouse_name}` : 'No';
   const job = d.job?.position && d.job?.company_name !== 'None'
     ? `${d.job.position} at ${d.job.company_name}` : d.job?.job || 'Unemployed';
+
+  // Build stat increase display with duration since last update
+  let statIncreaseHtml = '';
+  if (snapshotData && snapshotData.diff) {
+    const diff = snapshotData.diff;
+    const hasAnyIncrease = diff.strength || diff.defense || diff.speed || diff.dexterity || diff.totalStats;
+    const hasPrevious = snapshotData.previous && snapshotData.previous.timestamp;
+
+    // Calculate duration since last update
+    let durationText = '';
+    if (hasPrevious) {
+      const prevTime = new Date(snapshotData.previous.timestamp).getTime();
+      const now = Date.now();
+      const msAgo = now - prevTime;
+      const hoursAgo = Math.floor(msAgo / (1000 * 60 * 60));
+      const daysAgo = Math.floor(hoursAgo / 24);
+      if (daysAgo > 0) {
+        const remainingHours = hoursAgo % 24;
+        durationText = `${daysAgo}d ${remainingHours}h ago`;
+      } else if (hoursAgo > 0) {
+        const minsAgo = Math.floor((msAgo % (1000 * 60 * 60)) / (1000 * 60));
+        durationText = `${hoursAgo}h ${minsAgo}m ago`;
+      } else {
+        const minsAgo = Math.floor(msAgo / (1000 * 60));
+        durationText = minsAgo > 0 ? `${minsAgo}m ago` : 'just now';
+      }
+    }
+
+    if (hasPrevious) {
+      const durationMessage = `Your stats have increased +${formatNumFull(diff.strength)} Strength, +${formatNumFull(diff.defense)} Defense, +${formatNumFull(diff.speed)} Speed, +${formatNumFull(diff.dexterity)} Dexterity, +${formatNumFull(diff.totalStats)} Total since your last update ${durationText}.`;
+      statIncreaseHtml = `
+        <div class="card" style="margin-top:1.25rem;background:#1a1919;border:1px solid #2a2828;">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+            <span>📈 Stats Overview</span>
+            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+              <span style="font-size:0.8rem;color:#888;">Last update: ${durationText}</span>
+              <button class="btn btn-small btn-outline" onclick="refreshStatsSnapshot()" style="font-size:0.75rem;padding:2px 10px;">↻ Refresh Stats</button>
+            </div>
+          <div class="card-body">
+            <div class="stats-grid">
+              ${statTile(`+${formatNumFull(diff.strength)}`, 'Strength')}
+              ${statTile(`+${formatNumFull(diff.defense)}`, 'Defense')}
+              ${statTile(`+${formatNumFull(diff.speed)}`, 'Speed')}
+              ${statTile(`+${formatNumFull(diff.dexterity)}`, 'Dexterity')}
+              ${statTile(`+${formatNumFull(diff.totalStats)}`, 'Total Stats')}
+            </div>
+            <div style="margin-top:1rem;padding:0.75rem;background:#161515;border:1px solid #2a2828;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+              <code id="stat-increase-copy-text" style="color:#c0bcbc;font-size:0.85rem;word-break:break-all;">${durationMessage}</code>
+              <button class="btn btn-small btn-outline" onclick="copyStatIncrease()">📋 Copy</button>
+            </div>
+          </div>
+        </div>`;
+    } else if (snapshotData.isFirstSnapshot) {
+      statIncreaseHtml = `
+        <div class="card" style="margin-top:1.25rem;background:#1a1919;border:1px solid #2a2828;">
+          <div class="card-body">
+            <p class="muted" style="margin:0;">📸 First stat snapshot saved! Refresh again later to see your stat increases.</p>
+          </div>
+        </div>`;
+    }
+  }
 
   return `
     <div class="card">
@@ -200,8 +443,24 @@ function renderTornUser(d) {
             ${infoBadge('Total Work', formatNumFull((parseInt(d.personalstats.manuallabor) || 0) + (parseInt(d.personalstats.intelligence) || 0) + (parseInt(d.personalstats.endurance) || 0)))}
           </div>
         </div>` : ''}
+        ${statIncreaseHtml}
       </div>
     </div>`;
+}
+
+function copyStatIncrease() {
+  const el = document.getElementById('stat-increase-copy-text');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const btn = el.nextElementSibling;
+    if (btn) {
+      const original = btn.textContent;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => btn.textContent = original, 2000);
+    }
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+  });
 }
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
 async function fetchHonors() {
@@ -4992,8 +5251,11 @@ function renderTargets(targets, meta) {
     </div>`;
 }
 
-// ── Initialize profile section features on page load ──────────────────────────
-(function initProfileFeatures() {
+// ── Initialize dashboard features on page load ────────────────────────────────
+(function initDashboard() {
+  // Auto-load My Day (the default landing section)
+  fetchMyDay();
+
   // Fetch announcement for all members
   fetchAnnouncement();
 

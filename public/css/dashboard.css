@@ -963,6 +963,128 @@ input[type="checkbox"] {
   display: block;
 }
 
+/* ── My Day Dashboard ──────────────────────────────────────────────────── */
+.myday-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.myday-card {
+  display: flex;
+  gap: 1rem;
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  padding: 1.25rem;
+  align-items: flex-start;
+  border-left: 4px solid #3611b0;
+  transition: border-color 0.2s;
+}
+
+.myday-card:hover {
+  border-color: #4a1fd4;
+}
+
+.myday-card-icon {
+  font-size: 1.8rem;
+  flex-shrink: 0;
+  width: 40px;
+  text-align: center;
+  line-height: 1;
+}
+
+.myday-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.myday-card-title {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  margin-bottom: 0.25rem;
+}
+
+.myday-card-value {
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #c0bcbc;
+  margin-bottom: 0.3rem;
+}
+
+.myday-card-detail {
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 0.3rem;
+}
+
+.myday-pct {
+  font-size: 0.85rem;
+  color: #666;
+  font-weight: 400;
+}
+
+.myday-bar {
+  background: #2a2828;
+  border-radius: 4px;
+  height: 8px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+  max-width: 300px;
+}
+
+.myday-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.myday-card-action {
+  font-size: 0.85rem;
+  color: #c0bcbc;
+  margin-top: 0.25rem;
+}
+
+.myday-card-hint {
+  font-size: 0.8rem;
+  color: #666;
+  margin-top: 0.25rem;
+}
+
+/* Card color variants */
+.myday-ok {
+  border-left-color: #4caf50;
+}
+
+.myday-warning {
+  border-left-color: #e67e22;
+}
+
+.myday-danger {
+  border-left-color: #ff4444;
+}
+
+.myday-oc {
+  border-left-color: #9b59b6;
+}
+
+.myday-war {
+  border-left-color: #e74c3c;
+}
+
+.myday-info {
+  border-left-color: #3498db;
+}
+
+.myday-missing {
+  border-left-color: #888;
+}
+
 /* ── Scrollbar styling ─────────────────────────────────────────────────── */
 .channel-feed::-webkit-scrollbar { width: 6px; }
 .channel-feed::-webkit-scrollbar-track { background: #0f0f0f; }

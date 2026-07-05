@@ -42,7 +42,8 @@
         <!-- Sidebar -->
         <aside class="sidebar">
           <nav class="sidebar-nav">
-            <a href="#profile" class="nav-item active" onclick="showSection('profile', this)">👤 Profile</a>
+            <a href="#my-day" class="nav-item active" onclick="showSection('my-day', this)">🏠 My Day</a>
+            <a href="#profile" class="nav-item" onclick="showSection('profile', this)">👤 Profile</a>
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Personal Stats</a>
             <a href="#targets" class="nav-item" onclick="showSection('targets', this)">🎯 Targets</a>
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
@@ -64,8 +65,25 @@
         <!-- Main Content -->
         <main class="dashboard-content">
 
+          <!-- ── MY DAY ── -->
+          <section id="my-day" class="section active">
+            <div class="section-header">
+              <h3>🏠 My Day</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;">
+                <button class="btn btn-primary btn-small" onclick="fetchMyDay()">↻ Refresh</button>
+                <button class="btn btn-small btn-outline" onclick="openHelp('myDay')">❓ Help</button>
+              </div>
+            </div>
+            <div id="my-day-data">
+              <div class="empty-state">
+                <span class="empty-icon">⏳</span>
+                <p>Loading your day...</p>
+              </div>
+            </div>
+          </section>
+
           <!-- ── PROFILE ── -->
-          <section id="profile" class="section active">
+          <section id="profile" class="section">
             <div class="section-header">
               <h3>Your Profile</h3>
               <button class="btn btn-small btn-outline" onclick="openHelp('profile')">❓ Help</button>
@@ -272,7 +290,7 @@
           <section id="torn" class="section">
             <div class="section-header">
               <h3>Your Personal Stats</h3>
-              <button class="btn btn-primary btn-small" onclick="fetchTornUser()">↻ Refresh</button>
+              <button class="btn btn-primary btn-small" onclick="refreshTornUserData()">↻ Refresh</button>
               <button class="btn btn-small btn-outline" onclick="openHelp('torn')">❓ Help</button>
             </div>
             <div id="torn-user-data">
