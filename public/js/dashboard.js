@@ -361,6 +361,7 @@ function renderTornUser(d, snapshotData) {
               <span style="font-size:0.8rem;color:#888;">Last update: ${durationText}</span>
               <button class="btn btn-small btn-outline" onclick="refreshStatsSnapshot()" style="font-size:0.75rem;padding:2px 10px;">↻ Refresh Stats</button>
             </div>
+          </div>
           <div class="card-body">
             <div class="stats-grid">
               ${statTile(`+${formatNumFull(diff.strength)}`, 'Strength')}
