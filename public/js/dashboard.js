@@ -326,61 +326,77 @@ function renderTornUser(d, snapshotData) {
 
   // Build stat increase display with duration since last update
   let statIncreaseHtml = '';
-  if (snapshotData && snapshotData.diff) {
-    const diff = snapshotData.diff;
-    const hasAnyIncrease = diff.strength || diff.defense || diff.speed || diff.dexterity || diff.totalStats;
-    const hasPrevious = snapshotData.previous && snapshotData.previous.timestamp;
+  if (snapshotData) {
+    if (snapshotData.diff) {
+      const diff = snapshotData.diff;
+      const hasPrevious = snapshotData.previous && snapshotData.previous.timestamp;
 
-    // Calculate duration since last update
-    let durationText = '';
-    if (hasPrevious) {
-      const prevTime = new Date(snapshotData.previous.timestamp).getTime();
-      const now = Date.now();
-      const msAgo = now - prevTime;
-      const hoursAgo = Math.floor(msAgo / (1000 * 60 * 60));
-      const daysAgo = Math.floor(hoursAgo / 24);
-      if (daysAgo > 0) {
-        const remainingHours = hoursAgo % 24;
-        durationText = `${daysAgo}d ${remainingHours}h ago`;
-      } else if (hoursAgo > 0) {
-        const minsAgo = Math.floor((msAgo % (1000 * 60 * 60)) / (1000 * 60));
-        durationText = `${hoursAgo}h ${minsAgo}m ago`;
-      } else {
-        const minsAgo = Math.floor(msAgo / (1000 * 60));
-        durationText = minsAgo > 0 ? `${minsAgo}m ago` : 'just now';
+      // Calculate duration since last update
+      let durationText = '';
+      if (hasPrevious) {
+        const prevTime = new Date(snapshotData.previous.timestamp).getTime();
+        const now = Date.now();
+        const msAgo = now - prevTime;
+        const hoursAgo = Math.floor(msAgo / (1000 * 60 * 60));
+        const daysAgo = Math.floor(hoursAgo / 24);
+        if (daysAgo > 0) {
+          const remainingHours = hoursAgo % 24;
+          durationText = `${daysAgo}d ${remainingHours}h ago`;
+        } else if (hoursAgo > 0) {
+          const minsAgo = Math.floor((msAgo % (1000 * 60 * 60)) / (1000 * 60));
+          durationText = `${hoursAgo}h ${minsAgo}m ago`;
+        } else {
+          const minsAgo = Math.floor(msAgo / (1000 * 60));
+          durationText = minsAgo > 0 ? `${minsAgo}m ago` : 'just now';
+        }
       }
-    }
 
-    if (hasPrevious) {
-      const durationMessage = `Your stats have increased +${formatNumFull(diff.strength)} Strength, +${formatNumFull(diff.defense)} Defense, +${formatNumFull(diff.speed)} Speed, +${formatNumFull(diff.dexterity)} Dexterity, +${formatNumFull(diff.totalStats)} Total since your last update ${durationText}.`;
+      if (hasPrevious) {
+        const durationMessage = `Your stats have increased +${formatNumFull(diff.strength)} Strength, +${formatNumFull(diff.defense)} Defense, +${formatNumFull(diff.speed)} Speed, +${formatNumFull(diff.dexterity)} Dexterity, +${formatNumFull(diff.totalStats)} Total since your last update ${durationText}.`;
+        statIncreaseHtml = `
+          <div class="card" style="margin-top:1.25rem;background:#1a1919;border:1px solid #2a2828;">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+              <span>📈 Stats Overview</span>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <span style="font-size:0.8rem;color:#888;">Last update: ${durationText}</span>
+                <button class="btn btn-small btn-outline" onclick="refreshStatsSnapshot()" style="font-size:0.75rem;padding:2px 10px;">↻ Refresh Stats</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="stats-grid">
+                ${statTile(`+${formatNumFull(diff.strength)}`, 'Strength')}
+                ${statTile(`+${formatNumFull(diff.defense)}`, 'Defense')}
+                ${statTile(`+${formatNumFull(diff.speed)}`, 'Speed')}
+                ${statTile(`+${formatNumFull(diff.dexterity)}`, 'Dexterity')}
+                ${statTile(`+${formatNumFull(diff.totalStats)}`, 'Total Stats')}
+              </div>
+              <div style="margin-top:1rem;padding:0.75rem;background:#161515;border:1px solid #2a2828;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
+                <code id="stat-increase-copy-text" style="color:#c0bcbc;font-size:0.85rem;word-break:break-all;">${durationMessage}</code>
+                <button class="btn btn-small btn-outline" onclick="copyStatIncrease()">📋 Copy</button>
+              </div>
+            </div>
+          </div>`;
+      } else if (snapshotData.isFirstSnapshot) {
+        statIncreaseHtml = `
+          <div class="card" style="margin-top:1.25rem;background:#1a1919;border:1px solid #2a2828;">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+              <span>📈 Stats Overview</span>
+            </div>
+            <div class="card-body">
+              <p class="muted" style="margin:0 0 0.75rem 0;">First snapshot taken! Click the button below to take another snapshot and start tracking your stat increases.</p>
+              <button class="btn btn-primary" onclick="refreshStatsSnapshot()">📸 Take Another Snapshot</button>
+            </div>
+          </div>`;
+      }
+    } else if (snapshotData.isFirstSnapshot) {
       statIncreaseHtml = `
         <div class="card" style="margin-top:1.25rem;background:#1a1919;border:1px solid #2a2828;">
           <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
             <span>📈 Stats Overview</span>
-            <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
-              <span style="font-size:0.8rem;color:#888;">Last update: ${durationText}</span>
-              <button class="btn btn-small btn-outline" onclick="refreshStatsSnapshot()" style="font-size:0.75rem;padding:2px 10px;">↻ Refresh Stats</button>
-            </div>
           </div>
           <div class="card-body">
-            <div class="stats-grid">
-              ${statTile(`+${formatNumFull(diff.strength)}`, 'Strength')}
-              ${statTile(`+${formatNumFull(diff.defense)}`, 'Defense')}
-              ${statTile(`+${formatNumFull(diff.speed)}`, 'Speed')}
-              ${statTile(`+${formatNumFull(diff.dexterity)}`, 'Dexterity')}
-              ${statTile(`+${formatNumFull(diff.totalStats)}`, 'Total Stats')}
-            </div>
-            <div style="margin-top:1rem;padding:0.75rem;background:#161515;border:1px solid #2a2828;border-radius:6px;display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;">
-              <code id="stat-increase-copy-text" style="color:#c0bcbc;font-size:0.85rem;word-break:break-all;">${durationMessage}</code>
-              <button class="btn btn-small btn-outline" onclick="copyStatIncrease()">📋 Copy</button>
-            </div>
-          </div>
-        </div>`;
-    } else if (snapshotData.isFirstSnapshot) {
-      statIncreaseHtml = `
-        <div class="card" style="margin-top:1.25rem;background:#1a1919;border:1px solid #2a2828;">
-          <div class="card-body">
-            <p class="muted" style="margin:0;">📸 First stat snapshot saved! Refresh again later to see your stat increases.</p>
+            <p class="muted" style="margin:0 0 0.75rem 0;">No stat snapshots yet. Click the button below to take your first snapshot and start tracking your stat increases over time.</p>
+            <button class="btn btn-primary" onclick="refreshStatsSnapshot()">📸 Take First Snapshot</button>
           </div>
         </div>`;
     }
