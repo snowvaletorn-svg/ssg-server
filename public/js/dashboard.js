@@ -451,6 +451,17 @@ function renderTornUser(d, snapshotData) {
             ${infoBadge('Total', formatNumFull(d.personalstats.totalstats))}
           </div>
         </div>
+        ${d.effectiveStats ? `
+        <div style="margin-top:1.25rem;">
+          <div class="badge-label">Effective Battle Stats <span style="font-size:0.75rem;color:#888;font-weight:400;">(with modifiers)</span></div>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+            ${infoBadge('Eff. Strength', formatNumFull(d.effectiveStats.strength) + ' <span style="color:#4caf50;font-size:0.75rem;">(+' + d.effectiveStats.modifiers.strength + '%)</span>')}
+            ${infoBadge('Eff. Defense', formatNumFull(d.effectiveStats.defense) + ' <span style="color:#4caf50;font-size:0.75rem;">(+' + d.effectiveStats.modifiers.defense + '%)</span>')}
+            ${infoBadge('Eff. Speed', formatNumFull(d.effectiveStats.speed) + ' <span style="color:#4caf50;font-size:0.75rem;">(+' + d.effectiveStats.modifiers.speed + '%)</span>')}
+            ${infoBadge('Eff. Dexterity', formatNumFull(d.effectiveStats.dexterity) + ' <span style="color:#4caf50;font-size:0.75rem;">(+' + d.effectiveStats.modifiers.dexterity + '%)</span>')}
+            ${infoBadge('Eff. Total', formatNumFull(d.effectiveStats.total))}
+          </div>
+        </div>` : ''}
         <div style="margin-top:1.25rem;">
           <div class="badge-label">Work Stats</div>
           <div style="display:flex;gap:1rem;flex-wrap:wrap;">
@@ -1283,14 +1294,16 @@ async function fetchFaction() {
   try {
     const requests = [
       fetch('/api/torn/faction'),
-      fetch('/api/torn/faction-travel')
+      fetch('/api/torn/faction-travel'),
+      fetch('/api/faction/member-skills')
     ];
     if (IS_LEADERSHIP) requests.push(fetch('/api/admin/member-stats'));
 
-    const [factionRes, travelRes, statsRes] = await Promise.allSettled(requests);
+    const [factionRes, travelRes, skillsRes, statsRes] = await Promise.allSettled(requests);
 
     const data = factionRes.status === 'fulfilled' ? await factionRes.value.json() : {};
     const travelData = travelRes.status === 'fulfilled' ? await travelRes.value.json() : {};
+    const skillsData = skillsRes.status === 'fulfilled' ? await skillsRes.value.json() : {};
     const statsData = statsRes?.status === 'fulfilled' ? await statsRes.value.json() : {};
 
     if (!data.basic) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
@@ -1303,13 +1316,16 @@ async function fetchFaction() {
     const travelMap = {};
     (travelData.traveling || []).forEach(t => { travelMap[t.id] = t; });
 
-    container.innerHTML = renderFaction(data, statsMap, travelMap);
+    const skillsMap = {};
+    (skillsData.skills || []).forEach(s => { skillsMap[s.player_id] = s; });
+
+    container.innerHTML = renderFaction(data, statsMap, travelMap, skillsMap);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
 }
 
-function renderFaction(d, statsMap = {}, travelMap = {}) {
+function renderFaction(d, statsMap = {}, travelMap = {}, skillsMap = {}) {
   const basic = d.basic;
   const members = d.members || [];
   const hasStats = Object.keys(statsMap).length > 0;
@@ -1446,6 +1462,108 @@ function renderFaction(d, statsMap = {}, travelMap = {}) {
         <button class="btn btn-success" onclick="saveFactionProfileChanges()" style="margin-right:0.5rem;">💾 Save Changes</button>
         <button class="btn btn-outline" onclick="cancelFactionEditMode()">✕ Cancel</button>
       </div>` : ''}
+    </div>
+    ${renderFactionSkills(members, skillsMap, positionOrder)}`;
+}
+
+// ── Faction Skills Table ──────────────────────────────────────────────────────
+let factionSkillsSortCol = 'total';
+let factionSkillsSortAsc = false;
+
+function sortFactionSkills(col) {
+  if (factionSkillsSortCol === col) {
+    factionSkillsSortAsc = !factionSkillsSortAsc;
+  } else {
+    factionSkillsSortCol = col;
+    factionSkillsSortAsc = true;
+  }
+  // Re-render the faction section with the new sort
+  fetchFaction();
+}
+
+function renderFactionSkills(members, skillsMap, positionOrder) {
+  const hasSkills = Object.keys(skillsMap).length > 0;
+  if (!hasSkills) return '';
+
+  // Define the skill keys in alphabetical order (after Total)
+  const SKILL_KEYS = [
+    'arson', 'bootlegging', 'burglary', 'card_skimming', 'cracking',
+    'disposal', 'forgery', 'graffiti', 'hunting', 'hustling',
+    'pickpocketing', 'racing', 'reviving', 'scammin', 'search_for_cash', 'shoplifting'
+  ];
+
+  // Build rows sorted by position then level (same as member roster)
+  const sortedMembers = [...members].sort((a, b) => {
+    const aO = positionOrder[a.position] ?? 99;
+    const bO = positionOrder[b.position] ?? 99;
+    if (aO !== bO) return aO - bO;
+    return (b.level || 0) - (a.level || 0);
+  });
+
+  // Apply current sort
+  sortedMembers.sort((a, b) => {
+    const aSkills = skillsMap[a.id]?.skills;
+    const bSkills = skillsMap[b.id]?.skills;
+
+    if (!aSkills && !bSkills) return 0;
+    if (!aSkills) return 1;
+    if (!bSkills) return -1;
+
+    let aVal, bVal;
+    if (factionSkillsSortCol === 'total') {
+      aVal = SKILL_KEYS.reduce((sum, k) => sum + (aSkills[k] || 0), 0);
+      bVal = SKILL_KEYS.reduce((sum, k) => sum + (bSkills[k] || 0), 0);
+    } else {
+      aVal = aSkills[factionSkillsSortCol] || 0;
+      bVal = bSkills[factionSkillsSortCol] || 0;
+    }
+
+    return factionSkillsSortAsc ? aVal - bVal : bVal - aVal;
+  });
+
+  const arrow = col => factionSkillsSortCol === col ? (factionSkillsSortAsc ? ' ▲' : ' ▼') : '';
+
+  const rows = sortedMembers.map(m => {
+    const memberSkills = skillsMap[m.id]?.skills;
+    if (!memberSkills) {
+      return `<tr>
+        <td>${escapeHtml(m.name)}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#555;">—</td>
+        ${SKILL_KEYS.map(() => '<td style="text-align:right;font-family:\'Share Tech Mono\',monospace;color:#555;">—</td>').join('')}
+      </tr>`;
+    }
+
+    const total = SKILL_KEYS.reduce((sum, k) => sum + (memberSkills[k] || 0), 0);
+
+    return `<tr>
+      <td>${escapeHtml(m.name)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-weight:600;color:#f0c040;">${total.toFixed(2)}</td>
+      ${SKILL_KEYS.map(k => {
+        const val = memberSkills[k] || 0;
+        return `<td style="text-align:right;font-family:'Share Tech Mono',monospace;">${val.toFixed(2)}</td>`;
+      }).join('')}
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-top:1.5rem;">
+      <div class="card-header">
+        Skills
+        <span style="float:right;font-size:0.8rem;color:#555;">Click column headers to sort</span>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="members-table" id="faction-skills-table">
+          <thead><tr>
+            <th class="sortable" onclick="sortFactionSkills('name')" style="cursor:pointer;">Name${arrow('name')}</th>
+            <th class="sortable" onclick="sortFactionSkills('total')" style="cursor:pointer;text-align:right;">Total${arrow('total')}</th>
+            ${SKILL_KEYS.map(k => {
+              const displayName = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+              return `<th class="sortable" onclick="sortFactionSkills('${k}')" style="cursor:pointer;text-align:right;font-size:0.78rem;">${displayName}${arrow(k)}</th>`;
+            }).join('')}
+          </tr></thead>
+          <tbody>${rows || '<tr><td colspan="18" class="muted" style="padding:1rem;">No skill data available</td></tr>'}</tbody>
+        </table>
+      </div>
     </div>`;
 }
 

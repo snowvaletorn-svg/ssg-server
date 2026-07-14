@@ -821,9 +821,47 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
-    const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${encodeURIComponent(dbUser.tornApiKey)}`
-    );
+    const [tornRes, battlestatsRes] = await Promise.all([
+      axios.get(
+        `https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${encodeURIComponent(dbUser.tornApiKey)}`
+      ),
+      axios.get(
+        `https://api.torn.com/user/?selections=battlestats&key=${encodeURIComponent(dbUser.tornApiKey)}`
+      )
+    ]);
+
+    // Compute effective battle stats from modifiers
+    if (!tornRes.data.error && tornRes.data.personalstats && !battlestatsRes.data.error) {
+      // Battlestats data is at the top level of the response, with _modifier fields containing the percentage boost
+      const bs = battlestatsRes.data;
+      const ps = tornRes.data.personalstats;
+      
+      // The battlestats API returns modifier percentages in the _modifier fields (e.g. strength_modifier: 20 = 20%)
+      const strengthMod = parseFloat(bs.strength_modifier) || 0;
+      const defenseMod = parseFloat(bs.defense_modifier) || 0;
+      const speedMod = parseFloat(bs.speed_modifier) || 0;
+      const dexterityMod = parseFloat(bs.dexterity_modifier) || 0;
+      
+      const effectiveStrength = (ps.strength || 0) * (1 + strengthMod / 100);
+      const effectiveDefense = (ps.defense || 0) * (1 + defenseMod / 100);
+      const effectiveSpeed = (ps.speed || 0) * (1 + speedMod / 100);
+      const effectiveDexterity = (ps.dexterity || 0) * (1 + dexterityMod / 100);
+      const effectiveTotal = effectiveStrength + effectiveDefense + effectiveSpeed + effectiveDexterity;
+      
+      tornRes.data.effectiveStats = {
+        strength: Math.round(effectiveStrength),
+        defense: Math.round(effectiveDefense),
+        speed: Math.round(effectiveSpeed),
+        dexterity: Math.round(effectiveDexterity),
+        total: Math.round(effectiveTotal),
+        modifiers: {
+          strength: strengthMod,
+          defense: defenseMod,
+          speed: speedMod,
+          dexterity: dexterityMod
+        }
+      };
+    }
 
     const factionKey = await getFactionApiKey();
     if (factionKey) {
@@ -1094,6 +1132,118 @@ app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
       traveling: [...enriched, ...basicOnly].sort((a, b) => a.name.localeCompare(b.name)),
       total: travelingMembers.length
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Faction member crime skills ─────────────────────────────────────────
+app.get('/api/faction/member-skills', isAuthenticated, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) {
+      return res.status(400).json({ error: 'No faction API key configured.' });
+    }
+
+    // Get faction members first
+    const encodedKey = encodeURIComponent(factionKey.trim());
+    const factionRes = await axios.get(
+      `https://api.torn.com/v2/faction/?selections=basic,members&key=${encodedKey}`
+    );
+    const members = factionRes.data.members || [];
+
+    // Get users with API keys from DB
+    const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey tornPlayerId tornName');
+    const dbByTornId = {};
+    dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
+
+    // The crime skills we care about
+    const SKILL_KEYS = [
+      'bootlegging', 'burglary', 'card_skimming', 'cracking', 'disposal',
+      'forgery', 'graffiti', 'hunting', 'hustling', 'pickpocketing',
+      'racing', 'reviving', 'search_for_cash', 'shoplifting', 'scammin', 'arson'
+    ];
+
+    // Fetch skills for each member that has an API key
+    const results = await Promise.allSettled(
+      members.map(async (m) => {
+        const dbUser = dbByTornId[m.id];
+        if (!dbUser?.tornApiKey) {
+          return {
+            player_id: m.id,
+            name: m.name,
+            position: m.position,
+            level: m.level,
+            days_in_faction: m.days_in_faction,
+            skills: null
+          };
+        }
+
+        try {
+          const skillsRes = await axios.get(
+            `https://api.torn.com/v2/user/skills?key=${encodeURIComponent(dbUser.tornApiKey)}`,
+            { timeout: 10000 }
+          );
+
+          if (skillsRes.data.error) {
+            return {
+              player_id: m.id,
+              name: m.name,
+              position: m.position,
+              level: m.level,
+              days_in_faction: m.days_in_faction,
+              skills: null
+            };
+          }
+
+          // Extract crime skills from the response
+          // The API returns skills as an array of objects, e.g.:
+          // { "skills": [ { "name": "Bootlegging", "level": 25.75 }, ... ] }
+          const skillsArray = skillsRes.data.skills || [];
+          
+          // Build a lookup map from the array: name -> level
+          const skillMap = {};
+          if (Array.isArray(skillsArray)) {
+            skillsArray.forEach(skill => {
+              if (skill && skill.name) {
+                // Normalize the name: lowercase, replace spaces with underscores
+                const normalized = skill.name.toLowerCase().replace(/\s+/g, '_');
+                skillMap[normalized] = skill.level || 0;
+              }
+            });
+          }
+          
+          const extracted = {};
+          SKILL_KEYS.forEach(key => {
+            extracted[key] = skillMap[key] || 0;
+          });
+
+          return {
+            player_id: m.id,
+            name: m.name,
+            position: m.position,
+            level: m.level,
+            days_in_faction: m.days_in_faction,
+            skills: extracted
+          };
+        } catch {
+          return {
+            player_id: m.id,
+            name: m.name,
+            position: m.position,
+            level: m.level,
+            days_in_faction: m.days_in_faction,
+            skills: null
+          };
+        }
+      })
+    );
+
+    const skillData = results
+      .filter(r => r.status === 'fulfilled' && r.value !== null)
+      .map(r => r.value);
+
+    res.json({ skills: skillData });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
