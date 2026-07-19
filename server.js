@@ -1625,6 +1625,171 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: War enemy stats (FFScouter get-stats) ───────────────────────────────
+app.get('/api/war/enemy-stats', isAuthenticated, async (req, res) => {
+  try {
+    // First check if there's an active war
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    const warsRes = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`);
+    const rankedWar = warsRes.data.wars?.ranked;
+
+    if (!rankedWar || !rankedWar.start) {
+      return res.json({ enemies: [], message: 'No active war found.' });
+    }
+
+    // Get enemy faction ID
+    const warFactions = rankedWar.factions || [];
+    const enemyFaction = warFactions.find(f => f.id !== SSG_FACTION_ID);
+    const enemyFactionId = enemyFaction?.id;
+
+    if (!enemyFactionId) {
+      return res.json({ enemies: [], message: 'No enemy faction found.' });
+    }
+
+    // Find a user with FFScouter key
+    const dbUser = await User.findOne({ ffScouterKey: { $ne: null } }, 'ffScouterKey');
+    if (!dbUser?.ffScouterKey) {
+      return res.status(400).json({ error: 'No FFScouter API key available. Please save one in the Targets section.' });
+    }
+
+    // Get enemy members from war attacks (defenders)
+    const warStart = rankedWar.start;
+    const warEnd = rankedWar.end || null;
+    
+    // Fetch attacks to get enemy member IDs and names
+    // Map of player ID -> name from attack data
+    const enemyMemberMap = new Map();
+    let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
+    let reachedWarStart = false;
+
+    while (nextUrl && !reachedWarStart) {
+      const attacksRes = await axios.get(nextUrl);
+      const attacks = attacksRes.data.attacks || [];
+      const prevLink = attacksRes.data._metadata?.links?.prev;
+
+      for (const attack of attacks) {
+        if (attack.started < warStart) { reachedWarStart = true; break; }
+        if (warEnd && attack.started > warEnd) continue;
+        
+        // Check if this is a ranked war attack
+        if (attack.is_ranked_war) {
+          // Capture defenders (enemy members we attacked)
+          if (attack.defender?.faction?.id === enemyFactionId) {
+            const defenderId = attack.defender.id;
+            const defenderName = attack.defender.name;
+            if (defenderId && !enemyMemberMap.has(defenderId)) {
+              enemyMemberMap.set(defenderId, defenderName || null);
+            }
+          }
+          // Capture attackers (enemy members who attacked us)
+          if (attack.attacker?.faction?.id === enemyFactionId) {
+            const attackerId = attack.attacker.id;
+            const attackerName = attack.attacker.name;
+            if (attackerId && !enemyMemberMap.has(attackerId)) {
+              enemyMemberMap.set(attackerId, attackerName || null);
+            }
+          }
+        }
+      }
+
+      nextUrl = !reachedWarStart && prevLink ? prevLink + `&key=${factionKey}` : null;
+    }
+
+    if (enemyMemberMap.size === 0) {
+      return res.json({ enemies: [], message: 'No enemy members found in war attacks.' });
+    }
+
+    // Get player IDs for FFScouter stats lookup
+    const targetIds = Array.from(enemyMemberMap.keys()).join(',');
+
+    // Call FFScouter get-stats API with the target IDs
+    const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
+      params: { key: dbUser.ffScouterKey, targets: targetIds },
+      timeout: 15000
+    });
+
+    if (ffRes.data?.error) {
+      return res.status(400).json({ error: 'FFScouter error: ' + ffRes.data.error });
+    }
+
+    // Build a map of stats by player ID
+    // FFScouter returns an array directly (not nested under .stats)
+    const statsMap = {};
+    const ffStats = Array.isArray(ffRes.data) ? ffRes.data : (ffRes.data?.stats || []);
+    if (Array.isArray(ffStats)) {
+      ffStats.forEach(s => {
+        if (s.player_id) statsMap[s.player_id] = s;
+      });
+    }
+
+    // Fetch enemy member details from Torn API for level and status
+    const tornMemberMap = {};
+    try {
+      const encodedFactionKey = encodeURIComponent(factionKey.trim());
+      const enemyFactionRes = await axios.get(
+        `https://api.torn.com/v2/faction/${enemyFactionId}?selections=basic,members&key=${encodedFactionKey}`
+      );
+      const enemyMembers = enemyFactionRes.data.members || [];
+      if (enemyMembers.length > 0) {
+        console.log('[Enemy Stats] Sample Torn member:', JSON.stringify(enemyMembers[0]).substring(0, 500));
+      }
+      enemyMembers.forEach(m => {
+        tornMemberMap[m.id] = {
+          level: m.level,
+          status: m.status?.description || m.status?.state || 'Unknown',
+          statusState: m.status?.state || 'Unknown',
+          statusColor: m.status?.color || null,
+          name: m.name,
+          isRevivable: m.is_revivable
+        };
+      });
+    } catch (err) {
+      console.error('Error fetching enemy faction members:', err.message);
+    }
+
+    // Process enemy members with data from both Torn API and FFScouter
+    const enemies = Array.from(enemyMemberMap.entries()).map(([id, attackName]) => {
+      const tornData = tornMemberMap[id] || {};
+      const stats = statsMap[id] || {};
+      // Name priority: Torn API > FFScouter > Attack data > fallback
+      const name = tornData.name || stats.name || attackName || `Player ${id}`;
+      // Level and status from Torn API (more reliable)
+      const level = tornData.level || stats.level || 0;
+      const status = tornData.status || stats.status || 'Unknown';
+      // Battle stats estimate from FFScouter only
+      const totalStats = stats.bs_estimate || 0;
+      const fairFight = stats.fair_fight || null;
+
+      return {
+        id: parseInt(id),
+        name: name,
+        level: level,
+        totalStats: totalStats,
+        fairFight: fairFight,
+        status: status,
+        statusState: tornData.statusState || 'Unknown',
+        statusColor: tornData.statusColor || null,
+        travel: null,
+        isRevivable: tornData.isRevivable !== undefined ? tornData.isRevivable : null
+      };
+    });
+
+    // Cache the result
+    setCached('war-enemy-stats', { enemies, enemyFactionId, enemyFactionName: enemyFaction?.name }, CACHE_TTL.FACTION_MEMBERS);
+
+    res.json({
+      enemies,
+      enemyFactionId,
+      enemyFactionName: enemyFaction?.name
+    });
+  } catch (err) {
+    console.error('Enemy stats error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Member total stats ──────────────────────────────────────────────────
 app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
@@ -2511,6 +2676,87 @@ startServer();
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ─── API: Get personalized "My Day" dashboard data ──────────────────────────
+// ─── API: TCSE Stock Exchange ─────────────────────────────────────────────────
+app.get('/api/torn/stocks', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
+    }
+
+    const encodedKey = encodeURIComponent(dbUser.tornApiKey);
+    const response = await axios.get('https://api.torn.com/torn/?selections=stocks&key=' + encodedKey);
+
+    if (response.data.error) {
+      return res.status(400).json({ error: 'Failed to fetch stock data: ' + response.data.error.error });
+    }
+
+    const apiStocks = response.data.stocks || {};
+
+    // Debug: Log the first stock's raw structure to see available fields
+    const firstStockKey = Object.keys(apiStocks)[0];
+    if (firstStockKey) {
+      console.log('[/api/torn/stocks] Sample stock raw data:', JSON.stringify(apiStocks[firstStockKey], null, 2));
+    }
+
+    // Build enriched stock list using Torn API's built-in benefit data
+    const stocks = Object.entries(apiStocks).map(([id, stock]) => {
+      const stockId = parseInt(id);
+      const acronym = stock.acronym || '';
+      const price = stock.current_price || stock.price || 0;
+
+      // Use the Torn API's benefit field if available
+      const benefit = stock.benefit || {};
+      const benefitRequirement = benefit.requirement || 0;
+      const benefitDescription = benefit.description || '';
+      const benefitFrequency = benefit.frequency || 0;  // number, e.g. 31 or 7
+      const benefitType = benefit.type || '';           // "active" or "passive"
+
+      // Determine if this is an index fund (no share requirement, per-share benefit)
+      const isIndexFund = benefitRequirement === 0 && benefitDescription.length > 0;
+
+      // Determine if the stock is tiered:
+      // - "active" type = Tiered: you buy shares in increments (e.g. 35k for tier 1,
+      //   another 35k to double your dividend). You claim the reward periodically.
+      // - "passive" type = Not Tiered: one-time constant benefit, buy the required
+      //   shares once and the benefit is permanent.
+      // - Index funds (requirement = 0) are per-share, not tiered.
+      const benefitTiered = benefitType === 'active' && benefitRequirement > 0;
+
+      // Required shares and total cost
+      const requiredShares = benefitRequirement > 0 ? benefitRequirement : null;
+      const totalCost = requiredShares ? requiredShares * price : null;
+
+      // Build dividend/reward description
+      let dividend = benefitDescription;
+      if (benefitFrequency > 0 && dividend) {
+        dividend += ` (every ${benefitFrequency} days)`;
+      }
+
+      return {
+        id: stockId,
+        name: stock.name || 'Unknown',
+        acronym: acronym,
+        price: price,
+        marketCap: stock.market_cap || 0,
+        totalShares: stock.total_shares || 0,
+        availableShares: stock.available_shares || 0,
+        investors: stock.investors || 0,
+        isIndexFund: isIndexFund,
+        isTiered: benefitTiered,
+        requiredShares: requiredShares,
+        totalCost: totalCost,
+        dividend: dividend || '',
+      };
+    });
+
+    res.json({ stocks });
+  } catch (err) {
+    console.error('[/api/torn/stocks]', err.message);
+    res.status(500).json({ error: 'Failed to fetch stock data: ' + err.message });
+  }
+});
+
 app.get('/api/my-day', isAuthenticated, async (req, res) => {
   try {
     const userId = parseInt(req.session.userId);

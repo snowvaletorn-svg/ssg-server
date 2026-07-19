@@ -1,3 +1,194 @@
+// ── Stocks─ TCSE Stock Exchange ────────────────────────────────────────────────
+let stocksCache = null;
+
+async function fetchStocks() {
+  const container = document.getElementById('stocks-data');
+  container.innerHTML = '<div class="channel-loading">LOADING STOCK DATA...</div>';
+  try {
+    const res = await fetch('/api/torn/stocks');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    stocksCache = data.stocks || [];
+    renderStocks();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderStocks() {
+  const container = document.getElementById('stocks-data');
+  if (!stocksCache || stocksCache.length === 0) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">📈</span><p>No stock data available. Click Load Stocks to fetch data.</p></div>';
+    return;
+  }
+
+  const sortBy = document.getElementById('stocks-sort')?.value || 'name';
+  const order = document.getElementById('stocks-order')?.value || 'asc';
+  const filter = document.getElementById('stocks-filter')?.value || 'all';
+  const search = (document.getElementById('stocks-search')?.value || '').toLowerCase().trim();
+
+  let stocks = [...stocksCache];
+
+  // Apply search filter
+  if (search) {
+    stocks = stocks.filter(s => s.name.toLowerCase().includes(search) || (s.acronym || '').toLowerCase().includes(search));
+  }
+
+  // Apply tier filter
+  if (filter === 'tiered') {
+    stocks = stocks.filter(s => s.isTiered);
+  } else if (filter === 'non-tiered') {
+    stocks = stocks.filter(s => !s.isTiered);
+  } else if (filter === 'available') {
+    stocks = stocks.filter(s => s.availableShares > 0);
+  }
+
+  // Sort
+  const validSortFields = ['name', 'price', 'requiredShares', 'totalCost', 'investors', 'availableShares'];
+  if (validSortFields.includes(sortBy)) {
+    stocks.sort((a, b) => {
+      let aVal = a[sortBy];
+      let bVal = b[sortBy];
+      if (aVal == null) aVal = order === 'asc' ? 999999999999 : -1;
+      if (bVal == null) bVal = order === 'asc' ? 999999999999 : -1;
+      if (typeof aVal === 'string') return order === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      return order === 'asc' ? aVal - bVal : bVal - aVal;
+    });
+  }
+
+  function fmt(n) {
+    if (n == null) return '—';
+    if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  }
+
+  const rows = stocks.map(s => {
+    const typeBadge = s.isIndexFund
+      ? '<span style="color:#888;font-size:0.75rem;">📊 Index Fund</span>'
+      : s.isTiered
+        ? '<span style="color:#4caf50;font-size:0.75rem;">🎚️ Tiered</span>'
+        : '<span style="color:#888;font-size:0.75rem;">📊 Not Tiered</span>';
+    const priceColor = s.price > 0 ? '#c0bcbc' : '#888';
+    return `<tr style="cursor:pointer;" onclick="showStockDetail(${s.id})">
+      <td><strong>${escapeHtml(s.name)}</strong><br><span style="font-size:0.75rem;color:#888;">${escapeHtml(s.acronym || '')}</span></td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${priceColor};">$${fmt(s.price)}</td>
+      <td style="text-align:center;">${typeBadge}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${s.requiredShares ? fmt(s.requiredShares) : '—'}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${s.totalCost != null ? '$' + fmt(s.totalCost) : '—'}</td>
+      <td style="font-size:0.85rem;color:#a0a0a0;max-width:300px;">${escapeHtml(s.dividend || '')}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="card">
+      <div style="overflow-x:auto;max-height:600px;overflow-y:auto;">
+        <table class="members-table">
+          <thead>
+            <tr>
+              <th style="min-width:180px;">Stock</th>
+              <th style="text-align:right;">Price</th>
+              <th style="text-align:center;">Type</th>
+              <th style="text-align:right;">Required Shares</th>
+              <th style="text-align:right;">Total Cost</th>
+              <th>Dividend / Reward</th>
+            </tr>
+          </thead>
+          <tbody>${rows || '<tr><td colspan="6" class="muted" style="padding:1rem;">No stocks match the current filters.</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div style="padding:0.5rem 1rem;font-size:0.8rem;color:#666;display:flex;justify-content:space-between;">
+        <span>${stocks.length} stocks shown</span>
+        <span>Click a row for details</span>
+      </div>
+    </div>`;
+}
+
+function showStockDetail(stockId) {
+  const stock = stocksCache?.find(s => s.id === stockId);
+  if (!stock) return;
+
+  const modal = document.getElementById('stock-detail-modal');
+  const title = document.getElementById('stock-detail-title');
+  const body = document.getElementById('stock-detail-body');
+
+  title.textContent = `${stock.name} (${stock.acronym || ''}) - Details`;
+
+  function fmt(n) {
+    if (n == null) return '—';
+    if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
+    if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
+    if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
+    return n.toLocaleString();
+  }
+
+  const typeLabel = stock.isIndexFund
+    ? '📊 Index Fund (per share)'
+    : stock.isTiered
+      ? '🎚️ Tiered (recurring reward - claim repeatedly)'
+      : '📊 Not Tiered (constant/one-time benefit)';
+
+  const typeColor = stock.isIndexFund ? '#888' : stock.isTiered ? '#4caf50' : '#888';
+
+  let html = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem 1.5rem;margin-bottom:1.5rem;color:#c0bcbc;">
+      <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+        <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Type</div>
+        <div style="color:${typeColor};font-size:0.9rem;">${typeLabel}</div>
+      </div>
+      <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+        <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Price</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:#c0bcbc;">$${fmt(stock.price)}</div>
+      </div>`;
+
+  if (stock.requiredShares) {
+    html += `
+      <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+        <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Required Shares</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:#c0bcbc;">${fmt(stock.requiredShares)}</div>
+      </div>
+      <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+        <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Total Cost</div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:1.1rem;color:#f0a500;">$${fmt(stock.totalCost)}</div>
+      </div>`;
+  }
+
+  html += `</div>`;
+
+  if (stock.dividend) {
+    html += `<div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;margin-bottom:1rem;">
+      <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem;">Reward / Dividend</div>
+      <div style="color:#c0bcbc;font-size:0.9rem;line-height:1.5;">${escapeHtml(stock.dividend)}</div>
+    </div>`;
+  }
+
+  // Show market info
+  html += `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem;">
+    <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+      <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Market Cap</div>
+      <div style="font-family:'Share Tech Mono',monospace;color:#c0bcbc;">$${fmt(stock.marketCap)}</div>
+    </div>
+    <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+      <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Total Shares</div>
+      <div style="font-family:'Share Tech Mono',monospace;color:#c0bcbc;">${fmt(stock.totalShares)}</div>
+    </div>
+    <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem 1rem;">
+      <div style="font-size:0.7rem;color:#666;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.25rem;">Investors</div>
+      <div style="font-family:'Share Tech Mono',monospace;color:#c0bcbc;">${fmt(stock.investors)}</div>
+    </div>
+  </div>`;
+
+  body.innerHTML = html;
+  modal.style.display = 'flex';
+}
+
+function closeStockDetail(event) {
+  if (event.target === event.currentTarget) {
+    document.getElementById('stock-detail-modal').style.display = 'none';
+  }
+}
+
 // ── Section Navigation ────────────────────────────────────────────────────────
 function showSection(sectionId, el) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -10,8 +201,9 @@ function showSection(sectionId, el) {
   if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
-  if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); }
+  if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); fetchEnemyStats(); }
   if (sectionId === 'targets') { checkFFScouterKeyStatus(); fetchTargets(); }
+  if (sectionId === 'stocks') { fetchStocks(); }
 }
 
 // ── My Day Dashboard ──────────────────────────────────────────────────────────
@@ -1956,6 +2148,11 @@ function renderWarStats(data) {
   const memberHits = data.memberHits || [];
 
   if (!war) {
+    // Clear enemy stats when no war
+    const enemyContainer = document.getElementById('war-enemy-stats-data');
+    if (enemyContainer) {
+      enemyContainer.innerHTML = '<div class="empty-state"><span class="empty-icon">🎯</span><p>No active war. Enemy stats will appear when a war begins.</p></div>';
+    }
     return `<div class="card"><div class="card-body"><p class="muted">No active ranked war found.</p></div></div>`;
   }
 
@@ -1995,6 +2192,121 @@ function renderWarStats(data) {
       </div>
     </div>`;
 }
+// ── War Enemy Stats (FFScouter) ───────────────────────────────────────────
+let enemyStats = [];
+
+async function fetchEnemyStats() {
+  const container = document.getElementById('war-enemy-stats-data');
+  container.innerHTML = '<div class="channel-loading">LOADING ENEMY STATS...</div>';
+  try {
+    const res = await fetch('/api/war/enemy-stats');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to fetch enemy stats'}</div>`;
+      return;
+    }
+    enemyStats = data.enemies || [];
+    renderEnemyStats(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderEnemyStats(data) {
+  const container = document.getElementById('war-enemy-stats-data');
+  const enemies = data.enemies || [];
+  const enemyFactionName = data.enemyFactionName || 'Enemy Faction';
+
+  if (!enemies.length) {
+    container.innerHTML = `<div class="empty-state">
+      <span class="empty-icon">🎯</span>
+      <p>${data.message || 'No enemy stats available.'}</p>
+      <p class="muted">Make sure an FFScouter API key is saved in the Targets section.</p>
+    </div>`;
+    return;
+  }
+
+  // Sort by total stats descending
+  const sorted = [...enemies].sort((a, b) => b.totalStats - a.totalStats);
+
+  const rows = sorted.map((e, i) => {
+    // Determine status icon, text, and color based on statusState from Torn API
+    let statusIcon = '🏠';
+    let statusText = e.status || 'Unknown';
+    let statusColor = '#2ecc71';
+
+    const state = e.statusState || 'Unknown';
+    if (state === 'Traveling') {
+      statusIcon = '✈️';
+      statusColor = '#3498db';
+    } else if (state === 'Abroad') {
+      statusIcon = '🌍';
+      statusColor = '#f39c12';
+    } else if (state === 'Hospital') {
+      statusIcon = '🏥';
+      statusColor = '#ff4444';
+    } else if (state === 'Jail') {
+      statusIcon = '🔒';
+      statusColor = '#f39c12';
+    } else if (state === 'Okay') {
+      statusIcon = '🏠';
+      statusColor = '#2ecc71';
+    } else if (e.statusColor === 'red') {
+      statusIcon = '🏥';
+      statusColor = '#ff4444';
+    } else if (e.statusColor === 'blue') {
+      statusIcon = '✈️';
+      statusColor = '#3498db';
+    }
+
+    // Determine revivable display
+    let revivableIcon = '—';
+    let revivableColor = '#555';
+    if (e.isRevivable === true) {
+      revivableIcon = '✅';
+      revivableColor = '#4caf50';
+    } else if (e.isRevivable === false) {
+      revivableIcon = '❌';
+      revivableColor = '#ff4444';
+    }
+
+    return `<tr>
+      <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
+      <td>
+        <a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" rel="noopener"
+          style="color:#a78df5;text-decoration:none;">${escapeHtml(e.name)}</a>
+        <span style="color:#555;font-size:0.75rem;"> [${e.id}]</span>
+      </td>
+      <td style="text-align:center;">${e.level}</td>
+      <td style="text-align:center;font-weight:bold;color:#c0bcbc;">${formatNum(e.totalStats)}</td>
+      <td style="text-align:center;">
+        <span style="color:${statusColor};">${statusIcon} ${statusText}</span>
+      </td>
+      <td style="text-align:center;color:${revivableColor};">${revivableIcon}</td>
+    </tr>`;
+  }).join('');
+
+  container.innerHTML = `
+    <div style="overflow-x:auto;">
+      <table class="members-table enemy-stats-table">
+        <thead>
+          <tr>
+            <th style="text-align:center;width:40px;">#</th>
+            <th>Name</th>
+            <th style="text-align:center;">Level</th>
+            <th style="text-align:center;">Est. Total Stats</th>
+            <th style="text-align:center;">Status</th>
+            <th style="text-align:center;">Revivable</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
+      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Data from FFScouter.
+    </p>`;
+}
+
 // ── War Data Overview ─────────────────────────────────────────────────────
 let warDataOverview = [];
 let warDataOverviewSortCol = 'position';

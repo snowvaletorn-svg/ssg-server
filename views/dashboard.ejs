@@ -51,6 +51,7 @@
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
             <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
             <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
+            <a href="#stocks" class="nav-item" onclick="showSection('stocks', this)">📈 Stocks</a>
             <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
             <a href="#scripts" class="nav-item" onclick="showSection('scripts', this)">📜 Scripts</a>
             <% if (isOwner || isDirector) { %>
@@ -716,10 +717,97 @@
               <h3>War Stats</h3>
               <button class="btn btn-primary btn-small" onclick="fetchWarStats()">↻ Refresh</button>
             </div>
-            <div id="war-stats-data">
+             <div id="war-stats-data">
+               <div class="empty-state">
+                 <span class="empty-icon">⚔️</span>
+                 <p>Click Refresh to load current war stats.</p>
+               </div>
+             </div>
+
+             <!-- Enemy Stats (FFScouter) -->
+             <div class="section-header" style="margin-top:2rem;">
+               <h3>Enemy Stats</h3>
+               <button class="btn btn-primary btn-small" onclick="fetchEnemyStats()">↻ Refresh</button>
+             </div>
+             <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+               Estimated battle stats for enemy faction members. Data from FFScouter war-room.
+             </p>
+             <div id="war-enemy-stats-data">
+               <div class="empty-state">
+                 <span class="empty-icon">🎯</span>
+                 <p>No active war. Enemy stats will appear when a war begins.</p>
+               </div>
+             </div>
+           </section>
+
+          <!-- ── STOCKS ── -->
+          <section id="stocks" class="section">
+            <div class="section-header">
+              <h3>📈 Torn Stock Exchange</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary btn-small" onclick="fetchStocks()">↻ Load Stocks</button>
+                <button class="btn btn-small btn-outline" onclick="openHelp('stocks')">❓ Help</button>
+              </div>
+            </div>
+
+            <!-- Filters & Sort -->
+            <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-body">
+                <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;">
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Sort By</label>
+                    <select id="stocks-sort" class="channel-dropdown" style="min-width:160px;" onchange="renderStocks()">
+                      <option value="name">Name</option>
+                      <option value="price">Price</option>
+                      <option value="requiredShares">Required Shares</option>
+                      <option value="totalCost">Total Cost</option>
+                      <option value="investors">Investors</option>
+                      <option value="availableShares">Available Shares</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Order</label>
+                    <select id="stocks-order" class="channel-dropdown" style="min-width:100px;" onchange="renderStocks()">
+                      <option value="desc">High → Low</option>
+                      <option value="asc">Low → High</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Filter</label>
+                    <select id="stocks-filter" class="channel-dropdown" style="min-width:140px;" onchange="renderStocks()">
+                      <option value="all">All Stocks</option>
+                      <option value="tiered">Tiered Only</option>
+                      <option value="non-tiered">Non-Tiered Only</option>
+                      <option value="available">Available Shares</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.75rem;color:#555;text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:0.3rem;">Search</label>
+                    <input type="text" id="stocks-search" class="form-input" placeholder="Stock name..." style="width:160px;" oninput="renderStocks()" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stock Table -->
+            <div id="stocks-data" class="mt-2">
               <div class="empty-state">
-                <span class="empty-icon">⚔️</span>
-                <p>Click Refresh to load current war stats.</p>
+                <span class="empty-icon">📈</span>
+                <p>Click <strong>Load Stocks</strong> to fetch current Torn Stock Exchange data.</p>
+                <p class="muted">Shows all stocks with dividend yield, benefit tiers, and ROI calculations.</p>
+              </div>
+            </div>
+
+            <!-- Stock Detail Modal (for tier breakdown) -->
+            <div id="stock-detail-modal" class="help-modal-overlay" style="display:none;"
+              onclick="closeStockDetail(event)">
+              <div class="help-modal" style="max-width:800px;">
+                <div class="help-modal-header">
+                  <span id="stock-detail-title">Stock Details</span>
+                  <button class="help-close-btn"
+                    onclick="document.getElementById('stock-detail-modal').style.display='none'">✕</button>
+                </div>
+                <div class="help-modal-body" id="stock-detail-body"></div>
               </div>
             </div>
           </section>
