@@ -10,10 +10,11 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'SSG Server <notifications@s
  * @param {string|string[]} options.to - Recipient email address(es)
  * @param {string} options.subject - Email subject line
  * @param {string} options.text - Plain text body
+ * @param {string} [options.html] - HTML body (optional, overrides text if provided)
  * @param {Array} [options.attachments] - Array of { filename, content } objects (content is base64 or string)
  * @returns {Promise<{success: boolean, error?: string}>}
  */
-async function sendEmail({ to, subject, text, attachments }) {
+async function sendEmail({ to, subject, text, html, attachments }) {
   if (!RESEND_API_KEY) {
     console.log('[Email] Resend API key not configured — skipping send.');
     return { success: false, error: 'Resend API key not configured' };
@@ -28,8 +29,14 @@ async function sendEmail({ to, subject, text, attachments }) {
     from: FROM_EMAIL,
     to: Array.isArray(to) ? to : [to],
     subject,
-    text
   };
+
+  // Prefer HTML over plain text if provided
+  if (html) {
+    payload.html = html;
+  } else {
+    payload.text = text;
+  }
 
   // Add attachments if provided
   if (attachments && attachments.length > 0) {

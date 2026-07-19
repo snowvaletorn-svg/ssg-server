@@ -6,6 +6,18 @@ const { sendEmail } = require('./emailService');
 const AppNotification = require('../models/AppNotification');
 const FactionConfig = require('../models/FactionConfig');
 
+// ─── Helper: HTML escape ──────────────────────────────────────────────────────
+function escapeHtml(str) {
+  if (str == null) return '';
+  var a = String.fromCharCode(38);
+  return String(str)
+    .replace(new RegExp(a, 'g'), a + 'amp;')
+    .replace(/</g, a + 'lt;')
+    .replace(/>/g, a + 'gt;')
+    .replace(/"/g, a + 'quot;')
+    .replace(/'/g, a + '#039;');
+}
+
 // ─── Helper: Get notification email recipients ────────────────────────────────
 function getNotifyEmails() {
   const envEmails = process.env.NOTIFY_EMAILS;
@@ -358,6 +370,103 @@ function generateCSVContent(differences) {
   return [header, ...rows].join('\n');
 }
 
+// ─── Send war target comparison via email ─────────────────────────────────────
+async function sendWarTargetComparison(tableText, enemyFactionName) {
+  const results = { email: null };
+  const dateStr = new Date().toISOString().split('T')[0];
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const subject = `🎯 War Target Comparison - vs ${enemyFactionName}`;
+
+  // Parse the monospace table into an HTML table
+  const lines = tableText.split('\n');
+  // First line is header, second is separator, rest are data rows
+  const headerLine = lines[0] || '';
+  const dataLines = lines.slice(2).filter(l => l.trim()); // skip separator and empty lines
+
+  // Parse header: split by ' | ' to get column names
+  const headerParts = headerLine.split(' | ').map(s => s.trim());
+  const enemyNames = headerParts.slice(1); // first column is "Member", rest are enemies
+
+  // Parse data rows
+  const memberRows = dataLines.map(line => {
+    const parts = line.split(' | ').map(s => s.trim());
+    const memberName = parts[0] || '';
+    const hits = parts.slice(1);
+    return { memberName, hits };
+  });
+
+  // Build HTML table rows
+  const htmlHeaderCells = headerParts.map(name => 
+    `<th style="padding:6px 8px;text-align:left;font-size:12px;border-bottom:2px solid #333;white-space:nowrap;">${escapeHtml(name)}</th>`
+  ).join('');
+
+  const htmlBodyRows = memberRows.map(row => {
+    const cells = row.hits.map((hit, i) => {
+      const isCheck = hit.includes('✅');
+      const isCross = hit.includes('❌');
+      const bgColor = isCheck ? '#1a3a1a' : isCross ? '#3a1a1a' : 'transparent';
+      const symbol = isCheck ? '✅' : '❌';
+      return `<td style="padding:4px 6px;text-align:center;font-size:13px;background:${bgColor};">${symbol}</td>`;
+    }).join('');
+    return `<tr>
+      <td style="padding:6px 8px;font-weight:600;font-size:12px;white-space:nowrap;border-bottom:1px solid #2a2828;">${escapeHtml(row.memberName)}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  // Build the horizontal header row for enemy names at the top
+  const enemyHeaderHtml = enemyNames.map(name => 
+    `<th style="writing-mode:vertical-lr;text-orientation:mixed;padding:4px 2px;font-size:10px;border-bottom:2px solid #333;max-width:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)}</th>`
+  ).join('');
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="background:#0d0d0d;color:#c0bcbc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;padding:20px;">
+  <h2 style="color:#c0bcbc;margin-bottom:4px;">🎯 War Target Comparison</h2>
+  <p style="color:#888;font-size:13px;margin-top:0;">vs <strong style="color:#c0bcbc;">${escapeHtml(enemyFactionName)}</strong> &mdash; ${dateStr} at ${timeStr}</p>
+
+  <table style="border-collapse:collapse;background:#141414;border:1px solid #2a2828;border-radius:8px;overflow:hidden;font-size:12px;">
+    <thead>
+      <tr>
+        <th style="padding:6px 8px;text-align:left;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Member</th>
+        ${enemyHeaderHtml}
+      </tr>
+    </thead>
+    <tbody>
+      ${htmlBodyRows}
+    </tbody>
+  </table>
+
+  <div style="margin-top:16px;padding:12px;background:#141414;border:1px solid #2a2828;border-radius:8px;font-size:12px;color:#888;line-height:1.6;">
+    <div><span style="color:#4caf50;">✅</span> <strong style="color:#c0bcbc;">Can hit</strong> — member effective stats ≥ 98% of enemy total stats</div>
+    <div><span style="color:#ff4444;">❌</span> <strong style="color:#c0bcbc;">Can't hit</strong> — member effective stats < 98% of enemy total stats</div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2828;">
+      <span>Data sources: Torn API (SSG members with modifiers) + FFScouter (enemy members)</span><br>
+      <span>Member stats include a +2% buffer for safe engagement.</span>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  const recipients = getNotifyEmails();
+
+  if (recipients.length > 0) {
+    const emailResult = await sendEmail({
+      to: recipients,
+      subject,
+      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit (member stats ≥ 98% of enemy stats)\n❌ = Can't hit\n\nData sources: Torn API + FFScouter`,
+      html
+    });
+    results.email = emailResult;
+  } else {
+    results.email = { success: false, error: 'No ownership emails configured' };
+    console.log('[WarTargets] No ownership emails found — skipping email send');
+  }
+
+  return results;
+}
+
 // ─── Import historical data (supports wide CSV format) ────────────────────────
 async function importHistoricalData(csvData, createdBy = 'system') {
   try {
@@ -426,6 +535,7 @@ module.exports = {
   generateCSVContent,
   importHistoricalData,
   sendWeeklyReport,
+  sendWarTargetComparison,
   buildDiffCSV,
   computeDiff,
   getRealSnapshots,

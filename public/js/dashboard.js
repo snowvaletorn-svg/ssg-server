@@ -2192,6 +2192,36 @@ function renderWarStats(data) {
       </div>
     </div>`;
 }
+// ── War Target Comparison ──────────────────────────────────────────────────
+async function outputWarTargetComparison() {
+  const container = document.getElementById('war-target-comparison-data');
+  container.innerHTML = '<div class="channel-loading">GENERATING COMPARISON...</div>';
+  try {
+    const res = await fetch('/api/war/target-comparison');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${data.error || 'Failed to generate comparison'}</div>`;
+      return;
+    }
+    container.innerHTML = `
+      <div class="card" style="border-left:4px solid #2ecc71;">
+        <div class="card-body">
+          <p style="color:#c0bcbc;font-size:0.9rem;">✅ Comparison generated and emailed successfully.</p>
+          <p style="color:#888;font-size:0.85rem;margin-top:0.5rem;">
+            <strong>Enemy:</strong> ${escapeHtml(data.enemyFactionName)}<br>
+            <strong>Members:</strong> ${data.memberCount} &nbsp;|&nbsp; <strong>Enemies:</strong> ${data.enemyCount}
+          </p>
+          ${data.emailResult?.success
+            ? '<p style="color:#2ecc71;font-size:0.85rem;margin-top:0.5rem;">📧 Email sent to leadership team.</p>'
+            : '<p style="color:#e67e22;font-size:0.85rem;margin-top:0.5rem;">⚠️ Email not sent: ' + (data.emailResult?.error || 'Unknown error') + '</p>'}
+          <pre style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem;font-size:0.75rem;color:#c0bcbc;overflow-x:auto;margin-top:0.75rem;white-space:pre;">${escapeHtml(data.tableText)}</pre>
+        </div>
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
 // ── War Enemy Stats (FFScouter) ───────────────────────────────────────────
 let enemyStats = [];
 

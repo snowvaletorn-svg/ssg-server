@@ -1790,6 +1790,211 @@ app.get('/api/war/enemy-stats', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: War target comparison (Ownership only) ─────────────────────────────
+app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Check for active war
+    const warsRes = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`);
+    const rankedWar = warsRes.data.wars?.ranked;
+    if (!rankedWar || !rankedWar.start) {
+      return res.status(400).json({ error: 'No active war found.' });
+    }
+
+    const warFactions = rankedWar.factions || [];
+    const enemyFaction = warFactions.find(f => f.id !== SSG_FACTION_ID);
+    const enemyFactionId = enemyFaction?.id;
+    const enemyFactionName = enemyFaction?.name || 'Unknown';
+    if (!enemyFactionId) {
+      return res.status(400).json({ error: 'No enemy faction found.' });
+    }
+
+    // Get SSG members with effective battle stats
+    const factionRes = await axios.get(`https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`);
+    // Torn API v2 returns members as an object keyed by player ID
+    const factionMembersArr = Object.values(factionRes.data.members || {});
+
+    const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey tornPlayerId tornName');
+    const dbByTornId = {};
+    dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
+
+    const ssgMembers = [];
+    for (const m of factionMembersArr) {
+      const dbUser = dbByTornId[m.id];
+      if (!dbUser?.tornApiKey) continue;
+
+      try {
+        const [basicRes, battleRes] = await Promise.all([
+          axios.get(`https://api.torn.com/user/?selections=basic,personalstats&key=${dbUser.tornApiKey}`),
+          axios.get(`https://api.torn.com/user/?selections=battlestats&key=${dbUser.tornApiKey}`)
+        ]);
+
+        if (basicRes.data.error || battleRes.data.error) continue;
+
+        const ps = basicRes.data.personalstats || {};
+        const bs = battleRes.data;
+        
+        // Calculate effective stats with modifiers
+        const strengthMod = parseFloat(bs.strength_modifier) || 0;
+        const defenseMod = parseFloat(bs.defense_modifier) || 0;
+        const speedMod = parseFloat(bs.speed_modifier) || 0;
+        const dexterityMod = parseFloat(bs.dexterity_modifier) || 0;
+
+        const effectiveStrength = Math.round((ps.strength || 0) * (1 + strengthMod / 100));
+        const effectiveDefense = Math.round((ps.defense || 0) * (1 + defenseMod / 100));
+        const effectiveSpeed = Math.round((ps.speed || 0) * (1 + speedMod / 100));
+        const effectiveDexterity = Math.round((ps.dexterity || 0) * (1 + dexterityMod / 100));
+        const effectiveTotal = effectiveStrength + effectiveDefense + effectiveSpeed + effectiveDexterity;
+
+        ssgMembers.push({
+          id: m.id,
+          name: basicRes.data.name || m.name,
+          totalStats: effectiveTotal,
+          position: m.position
+        });
+      } catch (err) {
+        console.error(`Error fetching stats for member ${m.id}:`, err.message);
+      }
+    }
+
+    // Get enemy members with stats from FFScouter
+    const enemyMemberMap = new Map();
+    let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
+    let reachedWarStart = false;
+
+    while (nextUrl && !reachedWarStart) {
+      const attacksRes = await axios.get(nextUrl);
+      const attacks = attacksRes.data.attacks || [];
+      const prevLink = attacksRes.data._metadata?.links?.prev;
+
+      for (const attack of attacks) {
+        if (attack.started < rankedWar.start) { reachedWarStart = true; break; }
+        if (rankedWar.end && attack.started > rankedWar.end) continue;
+
+        if (attack.is_ranked_war) {
+          if (attack.defender?.faction?.id === enemyFactionId) {
+            const defenderId = attack.defender.id;
+            const defenderName = attack.defender.name;
+            if (defenderId && !enemyMemberMap.has(defenderId)) {
+              enemyMemberMap.set(defenderId, defenderName || null);
+            }
+          }
+          if (attack.attacker?.faction?.id === enemyFactionId) {
+            const attackerId = attack.attacker.id;
+            const attackerName = attack.attacker.name;
+            if (attackerId && !enemyMemberMap.has(attackerId)) {
+              enemyMemberMap.set(attackerId, attackerName || null);
+            }
+          }
+        }
+      }
+
+      nextUrl = !reachedWarStart && prevLink ? prevLink + `&key=${factionKey}` : null;
+    }
+
+    if (enemyMemberMap.size === 0) {
+      return res.status(400).json({ error: 'No enemy members found in war attacks.' });
+    }
+
+    // Find a user with FFScouter key
+    const dbUserWithKey = await User.findOne({ ffScouterKey: { $ne: null } }, 'ffScouterKey');
+    if (!dbUserWithKey?.ffScouterKey) {
+      return res.status(400).json({ error: 'No FFScouter API key available. Please save one in the Targets section.' });
+    }
+
+    const targetIds = Array.from(enemyMemberMap.keys()).join(',');
+    const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
+      params: { key: dbUserWithKey.ffScouterKey, targets: targetIds },
+      timeout: 15000
+    });
+
+    if (ffRes.data?.error) {
+      return res.status(400).json({ error: 'FFScouter error: ' + ffRes.data.error });
+    }
+
+    const statsMap = {};
+    const ffStats = Array.isArray(ffRes.data) ? ffRes.data : (ffRes.data?.stats || []);
+    if (Array.isArray(ffStats)) {
+      ffStats.forEach(s => {
+        if (s.player_id) statsMap[s.player_id] = s;
+      });
+    }
+
+    // Build enemy members array
+    const enemyMembers = Array.from(enemyMemberMap.entries()).map(([id, attackName]) => {
+      const stats = statsMap[id] || {};
+      const name = stats.name || attackName || `Player ${id}`;
+      const totalStats = stats.bs_estimate || 0;
+      return {
+        id: parseInt(id),
+        name,
+        totalStats
+      };
+    });
+
+    // Sort members by position, enemies by stats (descending)
+    const positionOrder = {
+      'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
+      'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
+    };
+
+    ssgMembers.sort((a, b) => {
+      const aO = positionOrder[a.position] ?? 99;
+      const bO = positionOrder[b.position] ?? 99;
+      return aO !== bO ? aO - bO : a.name.localeCompare(b.name);
+    });
+
+    enemyMembers.sort((a, b) => (b.totalStats || 0) - (a.totalStats || 0));
+
+    // Calculate hit matrix (member can hit if their stats >= 98% of enemy stats)
+    const hitMatrix = ssgMembers.map(member => {
+      const hits = enemyMembers.map(enemy => {
+        const canHit = member.totalStats >= (enemy.totalStats * 0.98);
+        return canHit ? '✅' : '❌';
+      });
+      return {
+        memberName: member.name,
+        memberId: member.id,
+        hits
+      };
+    });
+
+    // Format table for Discord
+    const colWidth = 22;
+    const headerRow = ['Member'.padEnd(colWidth), ...enemyMembers.map(e => {
+      const label = e.name.length > 12 ? e.name.substring(0, 11) + '…' : e.name;
+      return label.padEnd(colWidth);
+    })].join(' | ');
+
+    const separator = '─'.repeat(headerRow.length);
+
+    const dataRows = hitMatrix.map(row => {
+      const memberLabel = row.memberName.length > 20 ? row.memberName.substring(0, 19) + '…' : row.memberName;
+      return [memberLabel.padEnd(colWidth), ...row.hits.map(h => h.padEnd(colWidth))].join(' | ');
+    });
+
+    const tableText = [headerRow, separator, ...dataRows].join('\n');
+
+    // Send email
+    const { sendWarTargetComparison } = require('./services/snapshotService');
+    const emailResult = await sendWarTargetComparison(tableText, enemyFactionName);
+
+    res.json({
+      success: true,
+      tableText,
+      enemyFactionName,
+      memberCount: ssgMembers.length,
+      enemyCount: enemyMembers.length,
+      emailResult
+    });
+  } catch (err) {
+    console.error('War target comparison error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Member total stats ──────────────────────────────────────────────────
 app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {

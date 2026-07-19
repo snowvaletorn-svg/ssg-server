@@ -724,21 +724,39 @@
                </div>
              </div>
 
-             <!-- Enemy Stats (FFScouter) -->
-             <div class="section-header" style="margin-top:2rem;">
-               <h3>Enemy Stats</h3>
-               <button class="btn btn-primary btn-small" onclick="fetchEnemyStats()">↻ Refresh</button>
-             </div>
-             <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
-               Estimated battle stats for enemy faction members. Data from FFScouter war-room.
-             </p>
-             <div id="war-enemy-stats-data">
-               <div class="empty-state">
-                 <span class="empty-icon">🎯</span>
-                 <p>No active war. Enemy stats will appear when a war begins.</p>
-               </div>
-             </div>
-           </section>
+              <!-- Enemy Stats (FFScouter) -->
+              <div class="section-header" style="margin-top:2rem;">
+                <h3>Enemy Stats</h3>
+                <button class="btn btn-primary btn-small" onclick="fetchEnemyStats()">↻ Refresh</button>
+              </div>
+              <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                Estimated battle stats for enemy faction members. Data from FFScouter war-room.
+              </p>
+              <div id="war-enemy-stats-data">
+                <div class="empty-state">
+                  <span class="empty-icon">🎯</span>
+                  <p>No active war. Enemy stats will appear when a war begins.</p>
+                </div>
+              </div>
+
+              <!-- War Target Comparison (Ownership only) -->
+              <% if (isOwner) { %>
+              <div class="section-header" style="margin-top:2rem;">
+                <h3>War Target Comparison</h3>
+                <button class="btn btn-primary btn-small" onclick="outputWarTargetComparison()">📊 Output Comparison</button>
+              </div>
+              <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                Generates a comparison table showing which SSG members can hit which enemies based on battle stats.
+                The table is emailed to the leadership team and includes a +2% buffer for safe engagement.
+              </p>
+              <div id="war-target-comparison-data">
+                <div class="empty-state">
+                  <span class="empty-icon">⚔️</span>
+                  <p>Click <strong>Output Comparison</strong> to generate and email the war target table.</p>
+                </div>
+              </div>
+              <% } %>
+            </section>
 
           <!-- ── STOCKS ── -->
           <section id="stocks" class="section">
@@ -1239,10 +1257,6 @@
       <div class="help-modal-body" id="help-modal-body"></div>
     </div>
   </div>
-  <script>
-    const IS_LEADERSHIP = <% if (isOwner || isLeadership) { %> true <% } else { %> false <% } %>;
-    const IS_OWNER = <% if (isOwner) { %> true <% } else { %> false <% } %>;
-  </script>
   <script src="/js/dashboard.js">
   </script>
 </body>
