@@ -1257,6 +1257,11 @@
       <div class="help-modal-body" id="help-modal-body"></div>
     </div>
   </div>
+  <script>
+    // Global flags for client-side JavaScript
+    const IS_LEADERSHIP = <%= (isOwner || isLeadership) ? 'true' : 'false' %>;
+    const IS_OWNER = <%= isOwner ? 'true' : 'false' %>;
+  </script>
   <script src="/js/dashboard.js">
   </script>
 </body>
