@@ -196,6 +196,9 @@ function showSection(sectionId, el) {
   document.getElementById(sectionId).classList.add('active');
   if (el) el.classList.add('active');
 
+  // Update the URL hash so the section is linkable/shareable
+  window.location.hash = sectionId;
+
   if (sectionId === 'my-day') { fetchMyDay(); }
   if (sectionId === 'torn') { fetchTornUser(); }
   if (sectionId === 'faction') { fetchFaction(); }
@@ -5730,8 +5733,27 @@ function renderTargets(targets, meta) {
 
 // ── Initialize dashboard features on page load ────────────────────────────────
 (function initDashboard() {
-  // Auto-load My Day (the default landing section)
-  fetchMyDay();
+  // Check URL hash for a specific section to navigate to
+  const hash = window.location.hash.replace('#', '');
+  const validSections = ['my-day', 'profile', 'torn', 'targets', 'faction', 'travel', 'training', 'bank-rates', 'war', 'stocks', 'oc', 'scripts', 'companies', 'admin'];
+  
+  if (hash && validSections.includes(hash)) {
+    // Navigate to the section specified in the URL hash
+    const navItem = document.querySelector(`.nav-item[href="#${hash}"]`);
+    showSection(hash, navItem);
+  } else {
+    // Default: Auto-load My Day
+    fetchMyDay();
+  }
+
+  // Listen for hash changes (e.g., browser back/forward buttons)
+  window.addEventListener('hashchange', function() {
+    const newHash = window.location.hash.replace('#', '');
+    if (newHash && validSections.includes(newHash)) {
+      const navItem = document.querySelector(`.nav-item[href="#${newHash}"]`);
+      showSection(newHash, navItem);
+    }
+  });
 
   // Fetch announcement for all members
   fetchAnnouncement();
