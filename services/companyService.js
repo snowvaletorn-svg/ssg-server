@@ -1,6 +1,7 @@
 const axios = require('axios');
 const Company = require('../models/Company');
 const User = require('../models/User');
+const AppNotification = require('../models/AppNotification');
 
 // Helper to get faction API key
 async function getFactionApiKey() {
@@ -115,6 +116,52 @@ async function fetchEmployeeWorkStats(employeeApiKey) {
   }
 }
 
+/**
+ * Detect employees who have left the company and notify ownership.
+ * Compares stored employee accounts for this company against the
+ * company's current Torn roster (keyed by player ID).
+ */
+async function detectDepartedEmployees(companyId, currentEmployeeIds) {
+  try {
+    // Find all employee accounts registered for this company
+    const storedEmployees = await User.find(
+      { accountType: 'employee', companyId: parseInt(companyId) },
+      'tornPlayerId tornName'
+    );
+
+    const currentIdSet = new Set(currentEmployeeIds.map(id => parseInt(id)));
+
+    for (const emp of storedEmployees) {
+      if (currentIdSet.has(emp.tornPlayerId)) continue;
+
+      // Employee is no longer in the company roster — check for existing notification
+      const existing = await AppNotification.findOne({
+        type: 'employee_removal',
+        employeeId: emp.tornPlayerId,
+        companyId: parseInt(companyId)
+      });
+
+      if (existing) continue; // Already notified
+
+      const company = await Company.findOne({ companyId: parseInt(companyId) });
+
+      await AppNotification.create({
+        type: 'employee_removal',
+        title: `👋 Employee Left: ${emp.tornName}`,
+        message: `${emp.tornName} [${emp.tornPlayerId}] is no longer an employee of ${company?.companyName || `Company ${companyId}`}. Delete their data if they should no longer have access.`,
+        employeeName: emp.tornName,
+        employeeId: emp.tornPlayerId,
+        companyName: company?.companyName || `Company ${companyId}`,
+        companyId: parseInt(companyId)
+      });
+
+      console.log(`[Company ${companyId}] Employee ${emp.tornName} (${emp.tornPlayerId}) detected as departed — notification created.`);
+    }
+  } catch (err) {
+    console.error('Employee departure detection error:', err.message);
+  }
+}
+
 // Add a new company (ownership only)
 async function addCompany(companyId, directorPlayerId, addedBy) {
   // 1. Verify director is in faction
@@ -183,40 +230,28 @@ async function getCompanyData(companyId, requestingPlayerId) {
   const profile = companyData.company || companyData;
   const dailyIncome = profile.daily_income || 0;
 
-  // 4. Get faction member list for name-to-ID mapping
-  const factionKey = await getFactionApiKey();
-  let memberNameToId = {};
-  try {
-    if (factionKey) {
-      const factionRes = await axios.get(
-        `https://api.torn.com/v2/faction/?selections=members&key=${factionKey}`
-      );
-      const members = factionRes.data.members || [];
-      members.forEach(m => {
-        memberNameToId[m.name.toLowerCase()] = m.id;
-      });
-    }
-  } catch (err) {
-    console.warn('Could not fetch faction members for employee enrichment:', err.message);
-  }
-
-  // 5. Get all users with API keys from DB for quick lookup
-  const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornPlayerId tornApiKey tornName');
-
-  // 6. Process employees - enrich with work stats
+  // 4. Process employees - match by player ID directly from the Torn company API
   const employees = [];
   const employeesData = profile.employees || {};
-  
-  for (const emp of Object.values(employeesData)) {
+
+  // Torn company API keys employees by player ID (object key = player ID)
+  const employeeIds = Object.keys(employeesData).map(id => parseInt(id));
+
+  // Get all users with API keys from DB for work-stats lookup
+  const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornPlayerId tornApiKey tornName');
+  const dbByTornId = {};
+  dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
+
+  for (const [empId, emp] of Object.entries(employeesData)) {
     if (!emp || !emp.name) continue;
 
-    // Try to find this employee's Torn ID by name match
-    const employeeId = memberNameToId[emp.name.toLowerCase()];
-    
-    // Look for their API key in our database
-    const dbUser = dbUsers.find(u => u.tornPlayerId === employeeId);
+    const playerId = parseInt(empId);
+    if (!playerId) continue;
+
+    // Look for their API key in our database by player ID
+    const dbUser = dbByTornId[playerId];
     let workStats = null;
-    
+
     if (dbUser && dbUser.tornApiKey) {
       workStats = await fetchEmployeeWorkStats(dbUser.tornApiKey);
     }
@@ -224,7 +259,7 @@ async function getCompanyData(companyId, requestingPlayerId) {
     employees.push({
       name: emp.name,
       position: emp.position || '',
-      playerId: employeeId || null,
+      playerId: playerId,
       manualLabor: workStats?.manualLabor || 0,
       intelligence: workStats?.intelligence || 0,
       endurance: workStats?.endurance || 0,
@@ -238,7 +273,10 @@ async function getCompanyData(companyId, requestingPlayerId) {
     return a.name.localeCompare(b.name);
   });
 
-  // 7. Update cached info in DB
+  // 5. Detect departed employees and notify ownership (deduped)
+  await detectDepartedEmployees(companyId, employeeIds);
+
+  // 6. Update cached info in DB
   company.companyName = profile.name || company.companyName;
   company.companyType = getCompanyTypeName(profile.company_type);
   company.stars = profile.rating || company.stars;
@@ -277,5 +315,7 @@ module.exports = {
   getCompanyData,
   listCompanies,
   removeCompany,
-  verifyDirectorInFaction
+  verifyDirectorInFaction,
+  detectDepartedEmployees,
+  fetchCompanyDataFromApi
 };

@@ -1,0 +1,69 @@
+📢 **SSG Employee Dashboard — How to Log In & What You Can Access**
+
+Hello everyone! We now have a company dashboard available to all employees of our companies. Here's everything you need to know to get started.
+
+---
+
+**🔐 HOW TO LOG IN**
+
+1. Go to the SSG Server website and click the **"🏢 Employees"** tab on the login page
+2. Enter your **Torn Username**, **Torn ID**, and your **Torn API key**
+3. Select **your company** from the dropdown menu
+4. Click **Employee Login** — that's it!
+
+*Note: This login is for employees who are NOT already members of the SSG faction. If you're a faction member, please use the Faction Login instead.*
+
+---
+
+**🔑 API KEY REQUIREMENTS**
+
+**Limited Access Key** (works for basic features):
+- Personal User Data (basic/profile)
+- Personal Stats
+- Travel
+- Torn Market Data (Items, Bank, Stocks)
+
+**Full Access Key** (unlocks everything):
+- Everything a Limited key can access
+- Access to all dashboard features including the **Target Finder**
+- Some pages will show *"Incorrect key. To use the full capability of this page, please use a Full Access API Key."* if you try to use a Limited key on them
+
+**The Difference:** A Limited key gives you the essentials — your own stats, travel information, market data, and bank rates (including your Bank Investment merit bonus). A **Full Access key** unlocks the complete dashboard experience, including the Target Finder (FFScouter) and any pages that need deeper Torn data access. For the best experience, we recommend using a **Full Access key**.
+
+**Bank Rates & Merits:** The Bank Rates page uses your Torn API key to fetch your Bank Investment merit level (0-10), which adds a bonus to the displayed interest rates. Both Limited and Full Access keys can pull this data as long as **"Personal User Data"** is enabled in your API key settings. If your key doesn't have this permission, the page will still show bank rates — just without your personal merit bonus applied.
+
+*You can create a key at: torn.com → Preferences → API (torn.com/preferences.php#tab=api)*
+
+---
+
+**🎯 WHAT YOU CAN ACCESS**
+
+- **Target Finder** — Find inactive players you can attack based on your battle stats (requires an FFScouter API key — see below)
+- **Travel** — Track your travel status and find profitable items to trade abroad
+- **Stocks** — Browse the Torn Stock Exchange
+- **Bank Rates** — Current interest rates and a calculator
+- **Scripts** — Helpful Tampermonkey scripts to install
+- **Your Company** — View your company's information
+
+---
+
+**🎯 FFScouter Setup (for Target Finder)**
+
+To use the Target Finder, you'll need a separate free API key from FFScouter:
+1. Go to ffscouter.com and click **"Generate Custom API Key"**
+2. Follow the prompts to create and copy the key
+3. On the dashboard's **Targets** page, paste your FFScouter key and click **Save Key**
+
+---
+
+**💬 DISCORD ACCESS**
+
+Want access to our **Faction training pages** and guides? Join our Discord server! The training channels are packed with valuable resources — stat building guides, money making strategies, crime training, chains tutorials, and more.
+
+**👉 Join our Discord to get access to the Faction Training channels: [DISCORD INVITE LINK]**
+
+Once you're in Discord, ping a leadership member (Leader/Co-leader) and let them know you're an employee of one of our companies, and they'll grant you access to the training channels.
+
+---
+
+If you have any issues logging in or need help setting up your API key, don't hesitate to reach out in Discord or in the company chat. 🙌

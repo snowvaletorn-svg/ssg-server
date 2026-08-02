@@ -4,7 +4,7 @@ const appNotificationSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['application', 'weekly_report']
+    enum: ['application', 'weekly_report', 'employee_removal']
   },
   title: {
     type: String,
@@ -23,6 +23,11 @@ const appNotificationSchema = new mongoose.Schema({
   csvContent: { type: String, default: null },
   snapshotLabel: { type: String, default: null },
   memberCount: { type: Number, default: null },
+  // For employee_removal notifications - store departed employee details
+  employeeName: { type: String, default: null },
+  employeeId: { type: Number, default: null },
+  companyName: { type: String, default: null },
+  companyId: { type: Number, default: null },
   // Read tracking
   readBy: [{ type: Number }], // array of tornPlayerIds who have read it
   createdAt: { type: Date, default: Date.now }

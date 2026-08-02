@@ -44,6 +44,12 @@ const {
   listCompanies,
   removeCompany
 } = require('./services/companyService');
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAT SCRIPT BACKEND — COMMENTED OUT FOR FUTURE USE
+// ═══════════════════════════════════════════════════════════════════════════════
+// const CatUser = require('./models/CatUser');
+// const CatCall = require('./models/CatCall');
+// const CatStatus = require('./models/CatStatus');
 
 // ==============================================
 // CACHING LAYER
@@ -88,6 +94,34 @@ const PORT = process.env.PORT || 3000;
 
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
 const SSG_FACTION_ID = 53272;
+
+// Test users for employee login testing (non-faction company employees)
+// Each test user is only authorized for their mapped company ID.
+const TEST_USERS = [
+  { tornName: 'test_userAN', tornId: 1234567, companyId: 115695 },
+  { tornName: 'test_userMS', tornId: 2345678, companyId: 124594 },
+];
+
+function findTestUser(tornName, tornId) {
+  const name = (tornName || '').trim().toLowerCase();
+  return TEST_USERS.find(u =>
+    u.tornName.toLowerCase() === name && u.tornId === parseInt(tornId)
+  );
+}
+
+// Format a Torn API error code into a friendly, actionable message
+function formatTornApiError(code) {
+  const messages = {
+    0: 'Torn API is currently down. Please try again later.',
+    1: 'You must provide a valid API key.',
+    2: 'Your API key is missing permissions. Enable: Personal User Data, Personal Stats, Travel, and Torn Market Data (Items, Bank, Stocks) in Torn API settings.',
+    3: 'Your API key does not have access to this data.',
+    4: 'Incorrect key. To use the full capability of this page, please use a Full Access API Key.',
+    5: 'Torn API is rate limiting your key. Please wait a minute and try again.',
+    6: 'Torn is down for maintenance. Please try again later.',
+  };
+  return messages[code] || `Torn API error (code ${code}).`;
+}
 
 // Torn faction positions mapped to permission groups
 const POSITIONS = {
@@ -194,6 +228,33 @@ async function validateTornApiKey(apiKey) {
     };
   } catch (err) {
     return { valid: false, error: err.message };
+  }
+}
+
+// ─── HELPER: Check if player is in a company's employee roster ───────────────
+// Uses the company director's saved API key to fetch the current rosters.
+async function isPlayerInCompany(playerId, companyId) {
+  try {
+    const { fetchCompanyDataFromApi } = require('./services/companyService');
+    const Company = require('./models/Company');
+    const company = await Company.findOne({ companyId: parseInt(companyId) });
+    if (!company) return { inCompany: false, error: 'Company not found in the system.' };
+
+    const directorUser = await User.findOne({ tornPlayerId: company.directorPlayerId });
+    if (!directorUser || !directorUser.tornApiKey) {
+      return { inCompany: false, error: 'Company director has no API key saved. Please contact ownership.' };
+    }
+
+    const companyData = await fetchCompanyDataFromApi(companyId, directorUser.tornApiKey);
+    const employeesObj = companyData.company?.employees || companyData.employees || {};
+    const employeeIds = Object.keys(employeesObj).map(id => parseInt(id));
+
+    return {
+      inCompany: employeeIds.includes(parseInt(playerId)),
+      companyName: companyData.company?.name || companyData.name || `Company ${companyId}`
+    };
+  } catch (err) {
+    return { inCompany: false, error: err.message };
   }
 }
 
@@ -389,6 +450,14 @@ const isWarlord = (req, res, next) => {
   next();
 };
 
+// Reject employee (non-faction) accounts from faction-sensitive endpoints
+const isFactionMember = (req, res, next) => {
+  if (req.session?.user?.accountType === 'employee') {
+    return res.status(403).json({ error: 'This feature is only available to faction members.' });
+  }
+  next();
+};
+
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
 // Home page
@@ -465,9 +534,165 @@ app.get('/', async (req, res) => {
 });
 
 // Login page
-app.get('/login', (req, res) => {
+app.get('/login', async (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');
-  res.render('login');
+  // Pass configured companies for the employee login dropdown (Company Name — Company ID)
+  let companies = [];
+  try {
+    companies = await listCompanies();
+  } catch (err) {
+    console.error('Could not load companies for login page:', err.message);
+  }
+  res.render('login', { companies });
+});
+
+// Employee login API — for non-faction company employees
+app.post('/api/login/employee', async (req, res) => {
+  const { tornName, tornId, apiKey: rawApiKey, companyId, stayLoggedIn } = req.body;
+  const apiKey = rawApiKey?.trim();
+
+  if (!tornName || !tornId || !apiKey || !companyId) {
+    return res.status(400).json({ error: 'All fields are required.' });
+  }
+
+  // Step 1: Test-user bypass (for testing employee accounts)
+  const testUser = findTestUser(tornName, tornId);
+  if (testUser) {
+    // Verify the selected company matches the test user's authorized company
+    if (parseInt(companyId) !== testUser.companyId) {
+      return res.status(403).json({ error: `Test user ${testUser.tornName} is only authorized for company ${testUser.companyId}.` });
+    }
+
+    // Verify the company exists in the system
+    const Company = require('./models/Company');
+    const company = await Company.findOne({ companyId: testUser.companyId });
+    if (!company) {
+      return res.status(403).json({ error: `Company ${testUser.companyId} is not configured. Add it in Admin → Companies first.` });
+    }
+
+    // Use the TEST_API_KEY from .env if available
+    const testApiKey = process.env.TEST_API_KEY?.trim();
+    const savedKey = testApiKey || 'test-api-key-placeholder';
+
+    // Upsert the test user record
+    let user = await User.findOne({ tornPlayerId: testUser.tornId });
+    if (user) {
+      user.tornName = testUser.tornName;
+      user.tornApiKey = savedKey;
+      user.accountType = 'employee';
+      user.companyId = testUser.companyId;
+      user.username = testUser.tornName;
+      user.lastSeen = new Date();
+      user.tornKeyUpdatedAt = new Date();
+      await user.save();
+    } else {
+      user = new User({
+        tornPlayerId: testUser.tornId,
+        tornName: testUser.tornName,
+        tornApiKey: savedKey,
+        username: testUser.tornName,
+        accountType: 'employee',
+        companyId: testUser.companyId,
+        lastSeen: new Date()
+      });
+      await user.save();
+    }
+
+    // Create session
+    req.session.userId = user.tornPlayerId;
+    req.session.user = {
+      id: user.tornPlayerId,
+      username: testUser.tornName,
+      tornName: testUser.tornName,
+      accountType: 'employee',
+      companyId: testUser.companyId,
+      positionGroup: null,
+      factionPosition: null,
+      tornApiKey: savedKey,
+      tornAvatar: null,
+      isTestUser: true
+    };
+
+    if (stayLoggedIn) {
+      req.session.stayLoggedIn = true;
+      req.session.cookie.maxAge = STAY_LOGGED_IN_MAX_AGE;
+    }
+
+    console.log(`[TEST] Employee test login: ${testUser.tornName} (${testUser.tornId}) → company ${testUser.companyId}`);
+    return res.json({ success: true, user: { username: testUser.tornName, isTestUser: true } });
+  }
+
+  // Step 2: Validate API key for real users
+  const validation = await validateTornApiKey(apiKey);
+  if (!validation.valid) {
+    const code = parseInt(validation.error);
+    if (!isNaN(code)) {
+      return res.status(401).json({ error: formatTornApiError(code) });
+    }
+    return res.status(401).json({ error: `Invalid API key: ${validation.error}` });
+  }
+
+  // Step 3: Verify name and ID match
+  if (validation.name !== tornName || validation.playerId !== tornId) {
+    return res.status(401).json({ error: 'Torn name or ID does not match the API key.' });
+  }
+
+  // Step 4: Block faction members from employee login
+  const factionCheck = await isPlayerInFaction(tornId);
+  if (factionCheck.inFaction) {
+    return res.status(403).json({ error: 'Faction members must use Faction Login. Employees of our companies who are not faction members should use this login.' });
+  }
+
+  // Step 5: Verify company membership
+  const companyCheck = await isPlayerInCompany(tornId, companyId);
+  if (!companyCheck.inCompany) {
+    return res.status(403).json({ error: companyCheck.error || `You are not a member of ${companyCheck.companyName || 'the selected company'}. Access denied.` });
+  }
+
+  // Step 6: Upsert user record
+  let user = await User.findOne({ tornPlayerId: tornId });
+  if (user) {
+    user.tornApiKey = apiKey;
+    user.tornName = tornName;
+    user.tornKeyUpdatedAt = new Date();
+    user.lastSeen = new Date();
+    user.accountType = 'employee';
+    user.companyId = parseInt(companyId);
+    await user.save();
+  } else {
+    user = new User({
+      tornPlayerId: tornId,
+      tornName: tornName,
+      tornApiKey: apiKey,
+      username: tornName,
+      accountType: 'employee',
+      companyId: parseInt(companyId),
+      lastSeen: new Date()
+    });
+    await user.save();
+  }
+
+  // Step 7: Create session
+  req.session.userId = user.tornPlayerId;
+  req.session.user = {
+    id: user.tornPlayerId,
+    username: tornName,
+    tornName: tornName,
+    accountType: 'employee',
+    companyId: parseInt(companyId),
+    positionGroup: null,
+    factionPosition: null,
+    tornApiKey: user.tornApiKey,
+    tornAvatar: validation.data?.profile_image ?? null,
+    isTestUser: false
+  };
+
+  if (stayLoggedIn) {
+    req.session.stayLoggedIn = true;
+    req.session.cookie.maxAge = STAY_LOGGED_IN_MAX_AGE;
+  }
+
+  res.json({ success: true, user: { username: tornName } });
 });
 
 // Torn-based login API
@@ -500,11 +725,13 @@ app.post('/api/login', async (req, res) => {
   let user = await User.findOne({ tornPlayerId: tornId });
 
   if (user) {
-    // Existing user - update API key and login
+    // Existing user - update API key and login (ensure faction account type)
     user.tornApiKey = apiKey;
     user.tornName = tornName;
     user.tornKeyUpdatedAt = new Date();
     user.lastSeen = new Date();
+    user.accountType = 'faction';
+    user.companyId = null;
     await user.save();
   } else {
     // Create new user
@@ -513,6 +740,8 @@ app.post('/api/login', async (req, res) => {
       tornName: tornName,
       tornApiKey: apiKey,
       username: tornName,
+      accountType: 'faction',
+      companyId: null,
       lastSeen: new Date()
     });
     await user.save();
@@ -537,6 +766,8 @@ app.post('/api/login', async (req, res) => {
     id: user.tornPlayerId,
     username: tornName,
     tornName: tornName,
+    accountType: 'faction',
+    companyId: user.companyId || null,
     factionPosition: factionPosition,
     positionGroup: positionGroup,
     tornApiKey: user.tornApiKey,
@@ -557,9 +788,35 @@ app.post('/api/login', async (req, res) => {
 
 // Dashboard
 app.get('/dashboard', isAuthenticated, async (req, res) => {
+  const isEmployee = req.session.user?.accountType === 'employee';
   const positionGroup = getEffectivePositionGroup(req);
   const factionPosition = req.session.user?.factionPosition;
   const isImpersonating = hasPositionGroup(req.session.user, 'ownership') && req.session.impersonateRole;
+
+  if (isEmployee) {
+    // Employee accounts skip the faction gate and get the employee dashboard
+    const user = await User.findOne({ tornPlayerId: req.session.userId });
+    const factionKey = await getFactionApiKey();
+
+    return res.render('dashboard', {
+      user: req.session.user,
+      accessibleTraining: [], // Employees get no training access
+      tornApiKey: user?.tornApiKey || null,
+      userEmail: null,
+      isOwner: false,
+      realIsOwner: false,
+      isLeadership: false,
+      isWarlord: false,
+      hasFactionKey: !!factionKey,
+      factionPosition: null,
+      isImpersonating: false,
+      impersonatedRole: null,
+      availableRoles: [],
+      isDirector: true, // Employees see the Companies nav item (their own company)
+      isEmployee: true,
+      isTestUser: !!req.session.user?.isTestUser
+    });
+  }
 
   // Check if user is in faction (all faction members get basic access)
   let canAccess = !!positionGroup;
@@ -603,7 +860,9 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     isImpersonating,
     impersonatedRole: req.session.impersonateRole || null,
     availableRoles: Object.keys(POSITIONS),
-    isDirector
+    isDirector,
+    isEmployee: false,
+    isTestUser: false
   });
 });
 
@@ -1043,7 +1302,7 @@ app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Faction stats ───────────────────────────────────────────────────────
-app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
+app.get('/api/torn/faction', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) {
@@ -1089,7 +1348,7 @@ app.get('/api/torn/faction', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Faction travel status ───────────────────────────────────────────────
-app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
+app.get('/api/torn/faction-travel', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
@@ -1138,7 +1397,7 @@ app.get('/api/torn/faction-travel', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Faction member crime skills ─────────────────────────────────────────
-app.get('/api/faction/member-skills', isAuthenticated, async (req, res) => {
+app.get('/api/faction/member-skills', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) {
@@ -1479,7 +1738,7 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: War debug - raw data inspection ────────────────────────────────────
-app.get('/api/torn/wars-debug', isAuthenticated, async (req, res) => {
+app.get('/api/torn/wars-debug', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
@@ -1546,7 +1805,7 @@ app.get('/api/torn/wars-debug', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: War hits tracking ───────────────────────────────────────────────────
-app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
+app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
@@ -1626,7 +1885,7 @@ app.get('/api/torn/wars', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: War enemy stats (FFScouter get-stats) ───────────────────────────────
-app.get('/api/war/enemy-stats', isAuthenticated, async (req, res) => {
+app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     // First check if there's an active war
     const factionKey = await getFactionApiKey();
@@ -1998,7 +2257,8 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
 // ─── API: Member total stats ──────────────────────────────────────────────────
 app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
-    const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornApiKey username');
+    // Exclude employee (non-faction) accounts from leadership views
+    const dbUsers = await User.find({ tornApiKey: { $ne: null }, accountType: { $ne: 'employee' } }, 'tornApiKey username');
 
     const results = await Promise.allSettled(
       dbUsers.map(async (u) => {
@@ -2033,7 +2293,7 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
 });
 
 // ─── API: War member overview ─────────────────────────────────────────────────
-app.get('/api/war/member-overview', isAuthenticated, async (req, res) => {
+app.get('/api/war/member-overview', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
     if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
@@ -2736,36 +2996,45 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
 
-    // Fetch bank rates and user merits from Torn API
+    const isTestUser = !!req.session?.user?.isTestUser;
     const encodedKey = encodeURIComponent(dbUser.tornApiKey);
-    const [bankRes, userRes] = await Promise.all([
-      axios.get('https://api.torn.com/torn/?selections=bank&key=' + encodedKey),
-      axios.get('https://api.torn.com/user/?selections=merits&key=' + encodedKey)
-    ]);
+
+    // Fetch bank rates
+    const bankRes = await axios.get('https://api.torn.com/torn/?selections=bank&key=' + encodedKey);
 
     if (bankRes.data.error) {
       return res.status(400).json({ error: 'Failed to fetch bank rates: ' + bankRes.data.error.error });
     }
-    if (userRes.data.error) {
-      return res.status(400).json({ error: 'Failed to fetch merits: ' + userRes.data.error.error });
-    }
 
     const bankData = bankRes.data.bank || {};
-    const meritsData = userRes.data.merits || {};
-
-    // Debug: Log the merits data structure
-    //console.log('[/api/torn/bank-rates] Merits data:', JSON.stringify(meritsData));
 
     // Get Bank Investment merit level (0-10)
-    // Try different possible key formats based on API response
-    const bankInvestmentMerit = meritsData['Bank Interest'] ||
-      meritsData['Bank_Interest'] ||
-      meritsData['Bank Investment'] ||
-      meritsData['Bank_Investment'] ||
-      meritsData['bankinterest'] ||
-      meritsData['bankinvestment'] ||
-      0;
-    const meritBonus = bankInvestmentMerit * 5; // 5% per merit level
+    let bankInvestmentMerit = 0;
+    let meritBonus = 0;
+
+    // Test users use placeholder API keys — always force merits to 0.
+    // Also make the merits fetch non-fatal for real users, so a missing
+    // "Personal User Data" permission doesn't break the entire bank rates page.
+    if (!isTestUser) {
+      try {
+        const userRes = await axios.get('https://api.torn.com/user/?selections=merits&key=' + encodedKey);
+        if (!userRes.data.error) {
+          const meritsData = userRes.data.merits || {};
+          // Try different possible key formats based on API response
+          bankInvestmentMerit = meritsData['Bank Interest'] ||
+            meritsData['Bank_Interest'] ||
+            meritsData['Bank Investment'] ||
+            meritsData['Bank_Investment'] ||
+            meritsData['bankinterest'] ||
+            meritsData['bankinvestment'] ||
+            0;
+          meritBonus = bankInvestmentMerit * 5; // 5% per merit level
+        }
+      } catch (meritErr) {
+        // Non-fatal: bank rates still work without the merit bonus
+        console.log('Could not fetch merits for bank rates:', meritErr.message);
+      }
+    }
 
     // Calculate rates with merits applied
     const baseRates = {
@@ -2901,7 +3170,7 @@ app.get('/api/torn/stocks', isAuthenticated, async (req, res) => {
     // Debug: Log the first stock's raw structure to see available fields
     const firstStockKey = Object.keys(apiStocks)[0];
     if (firstStockKey) {
-      console.log('[/api/torn/stocks] Sample stock raw data:', JSON.stringify(apiStocks[firstStockKey], null, 2));
+      //console.log('[/api/torn/stocks] Sample stock raw data:', JSON.stringify(apiStocks[firstStockKey], null, 2));
     }
 
     // Build enriched stock list using Torn API's built-in benefit data
@@ -2962,7 +3231,7 @@ app.get('/api/torn/stocks', isAuthenticated, async (req, res) => {
   }
 });
 
-app.get('/api/my-day', isAuthenticated, async (req, res) => {
+app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const userId = parseInt(req.session.userId);
     const dbUser = await User.findOne({ tornPlayerId: userId });
@@ -3083,7 +3352,7 @@ const {
 } = require('./services/tornCrimesService');
 
 // ─── API: Refresh OC crimes from Torn ─────────────────────────────────────────
-app.post('/api/oc/refresh', isAuthenticated, async (req, res) => {
+app.post('/api/oc/refresh', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { daysBack } = req.body;
     const startDate = daysBack ? new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000) : null;
@@ -3101,7 +3370,7 @@ app.post('/api/oc/refresh', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Get all OC crimes ───────────────────────────────────────────────────
-app.get('/api/oc/crimes', isAuthenticated, async (req, res) => {
+app.get('/api/oc/crimes', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { status, dateFrom, dateTo, sort, order, limit } = req.query;
     const filters = {};
@@ -3138,7 +3407,7 @@ app.get('/api/oc/crimes', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Get crime details ───────────────────────────────────────────────────
-app.get('/api/oc/crimes/:crimeId', isAuthenticated, async (req, res) => {
+app.get('/api/oc/crimes/:crimeId', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const crime = await getCrimeDetails(parseInt(req.params.crimeId));
     res.json(crime);
@@ -3148,7 +3417,7 @@ app.get('/api/oc/crimes/:crimeId', isAuthenticated, async (req, res) => {
 });
 
 // ─── API: Update checkpoint pass rates ────────────────────────────────────────
-app.put('/api/oc/crimes/:crimeId/checkpoints', isAuthenticated, async (req, res) => {
+app.put('/api/oc/crimes/:crimeId/checkpoints', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { participantRates } = req.body;
     const result = await updateCheckpointRates(parseInt(req.params.crimeId), participantRates);
@@ -3159,7 +3428,7 @@ app.put('/api/oc/crimes/:crimeId/checkpoints', isAuthenticated, async (req, res)
 });
 
 // ─── API: Get participant history ─────────────────────────────────────────────
-app.get('/api/oc/participants/:playerId', isAuthenticated, async (req, res) => {
+app.get('/api/oc/participants/:playerId', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const history = await getParticipantHistory(parseInt(req.params.playerId), SSG_FACTION_ID);
     res.json(history);
@@ -3474,9 +3743,12 @@ app.get('/api/companies', isAuthenticated, async (req, res) => {
 
     const companies = await listCompanies();
 
-    // Filter: ownership sees all, directors see only their own companies
+    // Filter: ownership sees all, directors see only their own companies,
+    // employees see only their own company
     let accessible = companies;
-    if (!isOwner) {
+    if (req.session.user?.accountType === 'employee') {
+      accessible = companies.filter(c => c.companyId === req.session.user?.companyId);
+    } else if (!isOwner) {
       accessible = companies.filter(c => c.directorPlayerId === userId);
     }
 
@@ -3502,8 +3774,10 @@ app.get('/api/company/:companyId', isAuthenticated, async (req, res) => {
     }
 
     const isDirector = targetCompany.directorPlayerId === userId;
-    if (!isOwner && !isDirector) {
-      return res.status(403).json({ error: 'Access denied. Only the company director or Ownership can view this data.' });
+    const isEmployeeCompany = req.session.user?.accountType === 'employee' &&
+      targetCompany.companyId === req.session.user?.companyId;
+    if (!isOwner && !isDirector && !isEmployeeCompany) {
+      return res.status(403).json({ error: 'Access denied. Only the company director, the employee of this company, or Ownership can view this data.' });
     }
 
     const data = await getCompanyData(companyId, userId);
@@ -3544,6 +3818,40 @@ app.delete('/api/admin/companies/:companyId', isAuthenticated, isOwnership, asyn
       res.status(404).json({ error: 'Company not found' });
     }
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Delete employee data (Ownership only) ───────────────────────────────
+app.delete('/api/admin/employees/:playerId', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const playerId = parseInt(req.params.playerId);
+
+    // Find the employee user record
+    const employee = await User.findOne({ tornPlayerId: playerId });
+
+    if (!employee) {
+      return res.status(404).json({ error: 'Employee not found in the database.' });
+    }
+
+    // Safety: only allow deleting employee accounts, never faction members
+    if (employee.accountType !== 'employee') {
+      return res.status(403).json({ error: 'Only employee (non-faction) accounts can be deleted.' });
+    }
+
+    // Delete the employee's user record
+    await User.deleteOne({ tornPlayerId: playerId });
+
+    // Clean up their stat snapshots
+    await UserStatSnapshot.deleteMany({ tornPlayerId: playerId });
+
+    // Clean up any employee_removal notifications for this employee
+    await AppNotification.deleteMany({ type: 'employee_removal', employeeId: playerId });
+
+    console.log(`[Admin] Employee ${employee.tornName} (${playerId}) data deleted by ${req.session.userId}.`);
+    res.json({ success: true, message: `Employee ${employee.tornName} (${playerId}) has been removed.` });
+  } catch (err) {
+    console.error('Employee deletion error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -3829,5 +4137,216 @@ app.get('/api/stock/restock-countdown', isAuthenticated, (req, res) => {
   const countdown = stockDataSourceService.getRestockCountdown();
   res.json(countdown);
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CAT SCRIPT BACKEND API — COMMENTED OUT FOR FUTURE USE
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// const crypto = require('crypto');
+//
+// function generateCatToken() {
+//   return crypto.randomBytes(32).toString('hex');
+// }
+//
+// async function authenticateCatRequest(req, res, next) {
+//   const authHeader = req.headers.authorization;
+//   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+//     return res.status(401).json({ error: 'Missing or invalid authorization header' });
+//   }
+//   const token = authHeader.split(' ')[1];
+//   try {
+//     const catUser = await CatUser.findOne({ authToken: token });
+//     if (!catUser) {
+//       return res.status(401).json({ error: 'Invalid auth token' });
+//     }
+//     catUser.lastActive = new Date();
+//     await catUser.save();
+//     req.catUser = catUser;
+//     next();
+//   } catch (err) {
+//     res.status(500).json({ error: 'Auth error: ' + err.message });
+//   }
+// }
+//
+// app.post('/api/cat/register', async (req, res) => {
+//   try {
+//     const { apiKey } = req.body;
+//     if (!apiKey || !apiKey.trim()) {
+//       return res.status(400).json({ error: 'Torn API key is required' });
+//     }
+//     const validation = await validateTornApiKey(apiKey.trim());
+//     if (!validation.valid) {
+//       return res.status(401).json({ error: 'Invalid Torn API key: ' + validation.error });
+//     }
+//     const playerId = validation.playerId;
+//     const playerName = validation.name;
+//     const factionCheck = await isPlayerInFaction(playerId);
+//     if (!factionCheck.inFaction) {
+//       return res.status(403).json({ error: 'You are not a member of SSG faction' });
+//     }
+//     let catUser = await CatUser.findOne({ playerId });
+//     if (catUser) {
+//       catUser.authToken = generateCatToken();
+//       catUser.playerName = playerName;
+//       catUser.lastActive = new Date();
+//       await catUser.save();
+//       return res.json({ success: true, token: catUser.authToken, playerId: catUser.playerId, playerName: catUser.playerName, factionId: catUser.factionId });
+//     }
+//     catUser = new CatUser({ playerId, playerName, factionId: SSG_FACTION_ID, authToken: generateCatToken() });
+//     await catUser.save();
+//     res.json({ success: true, token: catUser.authToken, playerId: catUser.playerId, playerName: catUser.playerName, factionId: catUser.factionId });
+//   } catch (err) {
+//     console.error('[CAT] Register error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.get('/api/cat/calls', authenticateCatRequest, async (req, res) => {
+//   try {
+//     const factionId = req.catUser.factionId;
+//     const calls = await CatCall.find({ factionId }).sort({ createdAt: -1 }).lean();
+//     const now = Math.floor(Date.now() / 1000);
+//     const enrichedCalls = calls.map(call => {
+//       const isAwake = call.hospitalUntil ? now >= call.hospitalUntil : false;
+//       const timeRemaining = call.hospitalUntil ? Math.max(0, call.hospitalUntil - now) : 0;
+//       return { id: call._id, callerId: call.callerId, callerName: call.callerName, targetId: call.targetId, targetName: call.targetName, hospitalUntil: call.hospitalUntil, isAwake, timeRemaining, createdAt: call.createdAt };
+//     });
+//     enrichedCalls.sort((a, b) => {
+//       if (a.isAwake !== b.isAwake) return a.isAwake ? -1 : 1;
+//       return a.timeRemaining - b.timeRemaining;
+//     });
+//     res.json({ calls: enrichedCalls });
+//   } catch (err) {
+//     console.error('[CAT] Get calls error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.post('/api/cat/calls', authenticateCatRequest, async (req, res) => {
+//   try {
+//     const { targetId, targetName, hospitalUntil } = req.body;
+//     if (!targetId || !targetName) {
+//       return res.status(400).json({ error: 'targetId and targetName are required' });
+//     }
+//     const factionId = req.catUser.factionId;
+//     const existingCall = await CatCall.findOne({ factionId, targetId });
+//     if (existingCall) {
+//       existingCall.callerId = req.catUser.playerId;
+//       existingCall.callerName = req.catUser.playerName;
+//       existingCall.targetName = targetName;
+//       existingCall.hospitalUntil = hospitalUntil || null;
+//       existingCall.isAwake = false;
+//       existingCall.updatedAt = new Date();
+//       await existingCall.save();
+//       return res.json({ success: true, call: existingCall, updated: true });
+//     }
+//     const call = new CatCall({ factionId, callerId: req.catUser.playerId, callerName: req.catUser.playerName, targetId, targetName, hospitalUntil: hospitalUntil || null, isAwake: false });
+//     await call.save();
+//     res.json({ success: true, call, updated: false });
+//   } catch (err) {
+//     console.error('[CAT] Create call error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.delete('/api/cat/calls/:id', authenticateCatRequest, async (req, res) => {
+//   try {
+//     const call = await CatCall.findById(req.params.id);
+//     if (!call) return res.status(404).json({ error: 'Call not found' });
+//     if (call.factionId !== req.catUser.factionId) return res.status(403).json({ error: 'Not authorized to delete this call' });
+//     await CatCall.findByIdAndDelete(req.params.id);
+//     res.json({ success: true });
+//   } catch (err) {
+//     console.error('[CAT] Delete call error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.put('/api/cat/calls/:id/timer', authenticateCatRequest, async (req, res) => {
+//   try {
+//     const { hospitalUntil } = req.body;
+//     const call = await CatCall.findById(req.params.id);
+//     if (!call) return res.status(404).json({ error: 'Call not found' });
+//     if (call.factionId !== req.catUser.factionId) return res.status(403).json({ error: 'Not authorized' });
+//     call.hospitalUntil = hospitalUntil || null;
+//     call.isAwake = false;
+//     call.updatedAt = new Date();
+//     await call.save();
+//     res.json({ success: true, call });
+//   } catch (err) {
+//     console.error('[CAT] Update timer error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.post('/api/cat/status', authenticateCatRequest, async (req, res) => {
+//   try {
+//     const { playerId, playerName, status, details, until, untilSource, previousStatus, previousArea, departedAt, onlineStatus } = req.body;
+//     if (!playerId) return res.status(400).json({ error: 'playerId is required' });
+//     await CatStatus.findOneAndUpdate(
+//       { factionId: req.catUser.factionId, playerId },
+//       { factionId: req.catUser.factionId, playerId, playerName: playerName || '', status: status || 'Okay', details: details || null, until: until || null, untilSource: untilSource || null, previousStatus: previousStatus || null, previousArea: previousArea || null, departedAt: departedAt || null, onlineStatus: onlineStatus || 'offline', createdAt: new Date() },
+//       { upsert: true }
+//     );
+//     res.json({ success: true });
+//   } catch (err) {
+//     console.error('[CAT] Status update error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.get('/api/cat/war-data', authenticateCatRequest, async (req, res) => {
+//   try {
+//     const factionId = req.catUser.factionId;
+//     const calls = await CatCall.find({ factionId }).sort({ createdAt: -1 }).lean();
+//     const now = Math.floor(Date.now() / 1000);
+//     const enrichedCalls = calls.map(call => ({
+//       id: call._id, callerId: call.callerId, callerName: call.callerName, targetId: call.targetId, targetName: call.targetName,
+//       hospitalUntil: call.hospitalUntil, isAwake: call.hospitalUntil ? now >= call.hospitalUntil : false,
+//       timeRemaining: call.hospitalUntil ? Math.max(0, call.hospitalUntil - now) : 0, createdAt: call.createdAt
+//     }));
+//     enrichedCalls.sort((a, b) => { if (a.isAwake !== b.isAwake) return a.isAwake ? -1 : 1; return a.timeRemaining - b.timeRemaining; });
+//     let enemyStats = null;
+//     try { const cachedStats = getCached('war-enemy-stats'); if (cachedStats) enemyStats = cachedStats; } catch (e) { }
+//     let warInfo = null;
+//     try {
+//       const factionKey = await getFactionApiKey();
+//       if (factionKey) {
+//         const warsRes = await axios.get(`https://api.torn.com/v2/faction/?selections=wars&key=${factionKey}`, { timeout: 5000 });
+//         const rankedWar = warsRes.data.wars?.ranked;
+//         if (rankedWar && rankedWar.start) {
+//           const warEnd = rankedWar.end || null;
+//           const isActive = !warEnd || warEnd > Math.floor(Date.now() / 1000);
+//           if (isActive) {
+//             const warFactions = rankedWar.factions || [];
+//             const enemyFaction = warFactions.find(f => f.id !== SSG_FACTION_ID);
+//             warInfo = { enemyFactionId: enemyFaction?.id || null, enemyFactionName: enemyFaction?.name || 'Unknown', start: rankedWar.start, end: rankedWar.end, isActive: true };
+//           }
+//         }
+//       }
+//     } catch (e) { }
+//     let statuses = [];
+//     try { statuses = await CatStatus.find({ factionId }).sort({ createdAt: -1 }).lean(); } catch (e) { }
+//     res.json({ calls: enrichedCalls, enemyStats: enemyStats?.enemies || [], war: warInfo, statuses, serverTime: Math.floor(Date.now() / 1000) });
+//   } catch (err) {
+//     console.error('[CAT] War data error:', err.message);
+//     res.status(500).json({ error: err.message });
+//   }
+// });
+//
+// app.get('/api/cat/script-version', (req, res) => {
+//   res.json({ success: true, version: '1.0.0', minVersion: '1.0.0', updateUrl: 'https://ssg-server.onrender.com/js/ssg-cat-script.user.js' });
+// });
+//
+// app.get('/js/ssg-cat-script.user.js', (req, res) => {
+//   const fs = require('fs');
+//   const scriptPath = path.join(__dirname, 'public', 'js', 'ssg-cat-script.user.js');
+//   fs.readFile(scriptPath, 'utf8', (err, data) => {
+//     if (err) return res.status(404).send('Userscript not found');
+//     res.setHeader('Content-Type', 'application/javascript');
+//     res.setHeader('Content-Disposition', 'attachment; filename="ssg-cat-script.user.js"');
+//     res.send(data);
+//   });
+// });
 
 module.exports = app;

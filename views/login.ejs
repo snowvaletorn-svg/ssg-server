@@ -102,6 +102,14 @@
       transform: none;
     }
 
+    .login-btn.employee-btn {
+      background: linear-gradient(135deg, #2980b9, #1a5276);
+    }
+
+    .login-btn.employee-btn:hover {
+      box-shadow: 0 6px 20px rgba(41, 128, 185, 0.4);
+    }
+
     .login-status {
       margin-top: 15px;
       padding: 12px;
@@ -177,6 +185,49 @@
     .api-key-info a:hover {
       text-decoration: underline;
     }
+
+    /* ── Login Tabs ── */
+    .login-tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 25px;
+      border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .login-tab {
+      flex: 1;
+      padding: 12px 16px;
+      background: transparent;
+      border: none;
+      color: #888;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.3s ease, border-color 0.3s ease;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+    }
+
+    .login-tab:hover {
+      color: var(--text-color);
+    }
+
+    .login-tab.active {
+      color: var(--text-color);
+      border-bottom-color: var(--ownership-color);
+    }
+
+    .login-tab.employee-tab.active {
+      border-bottom-color: #3498db;
+    }
+
+    .login-panel {
+      display: none;
+    }
+
+    .login-panel.active {
+      display: block;
+    }
   </style>
 </head>
 
@@ -191,47 +242,125 @@
 
   <div class="login-container">
     <div class="login-card">
-      <h2 class="login-title">Login with Torn</h2>
-      <p class="login-subtitle">Enter your Torn credentials to access the dashboard</p>
-
-      <div class="api-key-info">
-        <h4>🔑 API Key Required</h4>
-        <p>You need a <strong>Full Access</strong> API key from Torn. 
-          Get it from your Torn settings: 
-          <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">Torn API Settings</a>
-        </p>
+      <!-- Tabs -->
+      <div class="login-tabs">
+        <button class="login-tab active" id="tab-faction" onclick="switchTab('faction')">⚔️ Faction Login</button>
+        <button class="login-tab employee-tab" id="tab-employee" onclick="switchTab('employee')">🏢 Employees</button>
       </div>
 
-      <form id="loginForm" onsubmit="handleLogin(event)">
-        <div class="login-field">
-          <label class="login-label" for="tornName">Torn Username</label>
-          <input type="text" id="tornName" class="login-input" placeholder="e.g. Chedburn_Jr_Rocks" required autocomplete="username">
-          <p class="login-help">Your in-game username (case-sensitive)</p>
+      <!-- ── FACTION LOGIN PANEL ── -->
+      <div class="login-panel active" id="panel-faction">
+        <h2 class="login-title">Login with Torn</h2>
+        <p class="login-subtitle">For current members of the SSG faction</p>
+
+        <div class="api-key-info">
+          <h4>🔑 API Key Required</h4>
+          <p>You need a <strong>Full Access</strong> API key from Torn. 
+            Get it from your Torn settings: 
+            <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">Torn API Settings</a>
+          </p>
         </div>
 
-        <div class="login-field">
-          <label class="login-label" for="tornId">Torn ID</label>
-          <input type="number" id="tornId" class="login-input" placeholder="e.g. 1234567" required autocomplete="off">
-          <p class="login-help">The number in brackets after your name on your profile</p>
+        <form id="loginForm" onsubmit="handleLogin(event)">
+          <div class="login-field">
+            <label class="login-label" for="tornName">Torn Username</label>
+            <input type="text" id="tornName" class="login-input" placeholder="e.g. Chedburn_Jr_Rocks" required autocomplete="username">
+            <p class="login-help">Your in-game username (case-sensitive)</p>
+          </div>
+
+          <div class="login-field">
+            <label class="login-label" for="tornId">Torn ID</label>
+            <input type="number" id="tornId" class="login-input" placeholder="e.g. 1234567" required autocomplete="off">
+            <p class="login-help">The number in brackets after your name on your profile</p>
+          </div>
+
+          <div class="login-field">
+            <label class="login-label" for="apiKey">API Key</label>
+            <input type="password" id="apiKey" class="login-input" placeholder="Enter your Full Access API key" required autocomplete="current-password">
+            <p class="login-help">Must be a Full Access key (starts with numbers, ~64 characters)</p>
+          </div>
+
+          <div class="login-field" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="stayLoggedIn" style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="stayLoggedIn" style="color: var(--text-color); font-size: 14px; cursor: pointer;">
+              Stay logged in (100 hours) - Session resets on each visit
+            </label>
+          </div>
+
+          <button type="submit" class="login-btn" id="loginBtn">
+            Faction Login
+          </button>
+        </form>
+      </div>
+
+      <!-- ── EMPLOYEE LOGIN PANEL ── -->
+      <div class="login-panel" id="panel-employee">
+        <h2 class="login-title">Employee Login</h2>
+        <p class="login-subtitle">For employees of our companies who are not faction members</p>
+
+        <div class="api-key-info">
+          <h4>🔑 Limited API Key Required</h4>
+          <p>A <strong>Limited Access</strong> or <strong>Full Access</strong> key works. Enable these selections in
+            <a href="https://www.torn.com/preferences.php#tab=api" target="_blank" rel="noopener">Torn API Settings</a>:
+          </p>
+          <ul style="margin: 8px 0 0 0; padding-left: 20px; color: #888; font-size: 12px; line-height: 1.6;">
+            <li><strong>Personal User Data</strong> (basic/profile)</li>
+            <li><strong>Personal Stats</strong></li>
+            <li><strong>Travel</strong></li>
+            <li><strong>Torn Market Data</strong> (Items, Bank, Stocks)</li>
+          </ul>
         </div>
 
-        <div class="login-field">
-          <label class="login-label" for="apiKey">API Key</label>
-          <input type="password" id="apiKey" class="login-input" placeholder="Enter your Full Access API key" required autocomplete="current-password">
-          <p class="login-help">Must be a Full Access key (starts with numbers, ~64 characters)</p>
-        </div>
+        <form id="employeeLoginForm" onsubmit="handleEmployeeLogin(event)">
+          <div class="login-field">
+            <label class="login-label" for="empTornName">Torn Username</label>
+            <input type="text" id="empTornName" class="login-input" placeholder="e.g. Employee_Name" required autocomplete="username">
+          </div>
 
-        <div class="login-field" style="display: flex; align-items: center; gap: 10px;">
-          <input type="checkbox" id="stayLoggedIn" style="width: 18px; height: 18px; cursor: pointer;">
-          <label for="stayLoggedIn" style="color: var(--text-color); font-size: 14px; cursor: pointer;">
-            Stay logged in (100 hours) - Session resets on each visit
-          </label>
-        </div>
+          <div class="login-field">
+            <label class="login-label" for="empTornId">Torn ID</label>
+            <input type="number" id="empTornId" class="login-input" placeholder="e.g. 1234567" required autocomplete="off">
+          </div>
 
-        <button type="submit" class="login-btn" id="loginBtn">
-          Login
-        </button>
-      </form>
+          <div class="login-field">
+            <label class="login-label" for="empApiKey">API Key</label>
+            <input type="password" id="empApiKey" class="login-input" placeholder="Enter your Limited/Full Access API key" required autocomplete="current-password">
+          </div>
+
+          <div class="login-field">
+            <label class="login-label" for="empCompany">Company</label>
+            <select id="empCompany" class="login-input" required>
+              <option value="">— Select Your Company —</option>
+              <% if (typeof companies !== 'undefined' && companies.length > 0) { %>
+                <% companies.forEach(function(c) { %>
+                  <option value="<%= c.companyId %>"><%= c.companyName %> — <%= c.companyId %></option>
+                <% }); %>
+              <% } else { %>
+                <option value="" disabled>No companies configured yet. Contact ownership.</option>
+              <% } %>
+            </select>
+            <p class="login-help">Select the company you work for. The Company ID is shown next to the name.</p>
+          </div>
+
+          <div class="login-field" style="display: flex; align-items: center; gap: 10px;">
+            <input type="checkbox" id="empStayLoggedIn" style="width: 18px; height: 18px; cursor: pointer;">
+            <label for="empStayLoggedIn" style="color: var(--text-color); font-size: 14px; cursor: pointer;">
+              Stay logged in (100 hours)
+            </label>
+          </div>
+
+          <button type="submit" class="login-btn employee-btn" id="employeeLoginBtn">
+            Employee Login
+          </button>
+        </form>
+
+        <!--<p class="login-divider">— TESTING ONLY —</p>
+        <p style="text-align:center;font-size:12px;color:#666;margin-top:0;">
+          Test users: <strong>test_userAN</strong> (ID 1234567) → Company 115695 &nbsp;·&nbsp;
+          <strong>test_userMS</strong> (ID 2345678) → Company 124594<br>
+          Enter any API key value for test users (e.g. <code style="color:#888;">test</code>).
+        </p>-->
+      </div>
 
       <div id="loginStatus" class="login-status"></div>
 
@@ -242,28 +371,53 @@
   </div>
 
   <script>
+    // ── Tab Switching ──
+    function switchTab(tab) {
+      document.getElementById('tab-faction').classList.toggle('active', tab === 'faction');
+      document.getElementById('tab-employee').classList.toggle('active', tab === 'employee');
+      document.getElementById('panel-faction').classList.toggle('active', tab === 'faction');
+      document.getElementById('panel-employee').classList.toggle('active', tab === 'employee');
+      hideStatus();
+    }
+
+    // Auto-open employee tab if ?mode=employee
+    (function() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('mode') === 'employee') {
+        switchTab('employee');
+      }
+    })();
+
+    function showStatus(message, type) {
+      const statusEl = document.getElementById('loginStatus');
+      statusEl.textContent = message;
+      statusEl.className = `login-status ${type}`;
+      statusEl.style.display = 'block';
+    }
+
+    function hideStatus() {
+      const statusEl = document.getElementById('loginStatus');
+      statusEl.style.display = 'none';
+    }
+
     async function handleLogin(event) {
       event.preventDefault();
 
       const tornName = document.getElementById('tornName').value.trim();
       const tornId = document.getElementById('tornId').value.trim();
       const apiKey = document.getElementById('apiKey').value.trim();
-      const statusEl = document.getElementById('loginStatus');
       const loginBtn = document.getElementById('loginBtn');
 
-      // Basic validation
       if (!tornName || !tornId || !apiKey) {
         showStatus('Please fill in all fields.', 'error');
         return;
       }
 
-      // Validate Torn ID is a number
       if (!/^\d+$/.test(tornId)) {
         showStatus('Torn ID must be a number.', 'error');
         return;
       }
 
-      // Disable button and show loading
       loginBtn.disabled = true;
       loginBtn.textContent = 'Verifying...';
       showStatus('Verifying your credentials with Torn...', 'loading');
@@ -292,20 +446,70 @@
         } else {
           showStatus(`❌ ${data.error}`, 'error');
           loginBtn.disabled = false;
-          loginBtn.textContent = 'Login';
+          loginBtn.textContent = 'Faction Login';
         }
       } catch (err) {
         showStatus('❌ Connection error. Please try again.', 'error');
         loginBtn.disabled = false;
-        loginBtn.textContent = 'Login';
+        loginBtn.textContent = 'Faction Login';
       }
     }
 
-    function showStatus(message, type) {
-      const statusEl = document.getElementById('loginStatus');
-      statusEl.textContent = message;
-      statusEl.className = `login-status ${type}`;
-      statusEl.style.display = 'block';
+    async function handleEmployeeLogin(event) {
+      event.preventDefault();
+
+      const tornName = document.getElementById('empTornName').value.trim();
+      const tornId = document.getElementById('empTornId').value.trim();
+      const apiKey = document.getElementById('empApiKey').value.trim();
+      const companyId = document.getElementById('empCompany').value;
+      const loginBtn = document.getElementById('employeeLoginBtn');
+
+      if (!tornName || !tornId || !apiKey || !companyId) {
+        showStatus('Please fill in all fields and select your company.', 'error');
+        return;
+      }
+
+      if (!/^\d+$/.test(tornId)) {
+        showStatus('Torn ID must be a number.', 'error');
+        return;
+      }
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Verifying...';
+      showStatus('Verifying your employment...', 'loading');
+
+      const stayLoggedIn = document.getElementById('empStayLoggedIn').checked;
+
+      try {
+        const response = await fetch('/api/login/employee', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tornName,
+            tornId: parseInt(tornId),
+            apiKey,
+            companyId: parseInt(companyId),
+            stayLoggedIn
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          showStatus('✅ Login successful! Redirecting...', 'success');
+          setTimeout(() => {
+            window.location.href = '/dashboard';
+          }, 1500);
+        } else {
+          showStatus(`❌ ${data.error}`, 'error');
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Employee Login';
+        }
+      } catch (err) {
+        showStatus('❌ Connection error. Please try again.', 'error');
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Employee Login';
+      }
     }
   </script>
 </body>

@@ -7,6 +7,11 @@ const userSchema = new mongoose.Schema({
   tornApiKey:       { type: String, required: true },
   tornKeyUpdatedAt: { type: Date,   default: Date.now },
   
+  // Account type: 'faction' for faction members, 'employee' for non-faction company employees
+  accountType:      { type: String, enum: ['faction', 'employee'], default: 'faction' },
+  // For employee accounts: the company this employee belongs to
+  companyId:        { type: Number, default: null },
+  
   // Display name (defaults to Torn name)
   username:         { type: String, required: true },
   

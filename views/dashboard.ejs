@@ -35,6 +35,12 @@
   </div>
   <% } %>
 
+  <% if (isEmployee) { %>
+  <div class="impersonation-banner" style="background: linear-gradient(135deg, #1a5276, #2c3e50); border-bottom: 2px solid #3498db;">
+    <span>🏢 <strong>Employee Account</strong> <% if (isTestUser) { %> · 🔬 <strong>TEST ACCOUNT</strong><% } %></span>
+  </div>
+  <% } %>
+
   <div class="container">
     <div class="dashboard">
       <div class="dashboard-layout">
@@ -42,17 +48,27 @@
         <!-- Sidebar -->
         <aside class="sidebar">
           <nav class="sidebar-nav">
+            <% if (!isEmployee) { %>
             <a href="#my-day" class="nav-item active" onclick="showSection('my-day', this)">🏠 My Day</a>
             <a href="#profile" class="nav-item" onclick="showSection('profile', this)">👤 Profile</a>
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Personal Stats</a>
-            <a href="#targets" class="nav-item" onclick="showSection('targets', this)">🎯 Targets</a>
+            <% } %>
+            <a href="#targets" class="nav-item <%= isEmployee ? 'active' : '' %>" onclick="showSection('targets', this)">🎯 Targets</a>
+            <% if (!isEmployee) { %>
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
+            <% } %>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
+            <% if (!isEmployee) { %>
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
+            <% } %>
             <a href="#bank-rates" class="nav-item" onclick="showSection('bank-rates', this)">🏦 Bank Rates</a>
+            <% if (!isEmployee) { %>
             <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
+            <% } %>
             <a href="#stocks" class="nav-item" onclick="showSection('stocks', this)">📈 Stocks</a>
+            <% if (!isEmployee) { %>
             <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
+            <% } %>
             <a href="#scripts" class="nav-item" onclick="showSection('scripts', this)">📜 Scripts</a>
             <% if (isOwner || isDirector) { %>
               <a href="#companies" class="nav-item" onclick="showSection('companies', this)">🏢 Companies</a>
@@ -67,6 +83,7 @@
         <main class="dashboard-content">
 
           <!-- ── MY DAY ── -->
+          <% if (!isEmployee) { %>
           <section id="my-day" class="section active">
             <div class="section-header">
               <h3>🏠 My Day</h3>
@@ -285,6 +302,7 @@
                       </div>
                       <% } %>
           </section>
+          <% } %>
 
 
           <!-- ── TORN STATS ── -->
@@ -696,6 +714,32 @@
               <h3>War Panel</h3>
               <button class="btn btn-small btn-outline" onclick="openHelp('war')">❓ Help</button>
             </div>
+
+            <!-- SSG War Script Userscript Install — COMMENTED OUT FOR FUTURE USE -->
+            <% /* %>
+            <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-body" style="padding:0.85rem 1.25rem;">
+                <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;">
+                  <div style="flex:1;min-width:200px;">
+                    <div style="font-size:0.9rem;font-weight:600;margin-bottom:0.25rem;color:#888;">📞 SSG War Script</div>
+                    <div style="font-size:0.8rem;color:#888;">
+                      War page enhancement: call buttons, hospital timers, auto-sorted hit queue, and pulsing alerts when targets wake up.
+                      Uses the same API key you log in to the SSG Server with. Works on PC (Tampermonkey) and Torn PDA (Userscripts/Kiwi).
+                    </div>
+                  </div>
+                  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+                    <a href="/js/ssg-cat-script.user.js"
+                      class="btn btn-primary btn-small"
+                      style="text-decoration:none;display:inline-flex;align-items:center;gap:0.3rem;">
+                      📥 Install/Update War Script
+                    </a>
+                    <button class="btn btn-small btn-outline" onclick="openHelp('war')" style="font-size:0.78rem;">❓
+                      Help</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <% */ %>
 
             <!-- War Data Overview -->
             <div class="section-header" style="margin-top:0;">
@@ -1261,6 +1305,7 @@
     // Global flags for client-side JavaScript
     const IS_LEADERSHIP = <%= (isOwner || isLeadership) ? 'true' : 'false' %>;
     const IS_OWNER = <%= isOwner ? 'true' : 'false' %>;
+    const IS_EMPLOYEE = <%= isEmployee ? 'true' : 'false' %>;
   </script>
   <script src="/js/dashboard.js">
   </script>

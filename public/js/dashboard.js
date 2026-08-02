@@ -4861,6 +4861,15 @@ async function fetchNotifications() {
           <span>${membersText}</span>
           ${n.csvContent ? `<button class="btn btn-small btn-outline" style="font-size:0.7rem;padding:2px 6px;margin-left:0.5rem;" onclick="downloadNotificationCsv('${n._id}')">⬇️ Download CSV</button>` : ''}
         </div>`;
+      } else if (n.type === 'employee_removal') {
+        details = `<div style="font-size:0.8rem;color:#888;margin-top:0.25rem;">
+          <span>${n.employeeName} [${n.employeeId}]</span> &middot;
+          <span>🏢 ${n.companyName || ''}</span>
+          <a href="https://www.torn.com/profiles.php?XID=${n.employeeId}" target="_blank" style="color:#3498db;margin-left:0.5rem;">View Profile ↗</a>
+        </div>
+        <div style="margin-top:0.5rem;">
+          <button class="btn btn-small btn-danger" style="font-size:0.75rem;padding:3px 10px;" onclick="removeEmployeeData(${n.employeeId}, '${escapeHtml(n.employeeName || '')}')">🗑️ Delete Employee Data</button>
+        </div>`;
       }
 
       const readStyle = n.isRead ? 'opacity:0.6;' : 'font-weight:600;';
@@ -4904,6 +4913,22 @@ async function markNotificationRead(id, element) {
     }
   } catch (err) {
     console.error('Error marking notification read:', err);
+  }
+}
+
+async function removeEmployeeData(playerId, employeeName) {
+  if (!confirm(`Delete all stored data for ${employeeName} (${playerId})? This cannot be undone.`)) return;
+  try {
+    const res = await fetch(`/api/admin/employees/${playerId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(`Error: ${data.error}`);
+      return;
+    }
+    alert(`✅ ${data.message}`);
+    fetchNotifications();
+  } catch (err) {
+    alert(`Error deleting employee data: ${err.message}`);
   }
 }
 
@@ -5741,9 +5766,17 @@ function renderTargets(targets, meta) {
     // Navigate to the section specified in the URL hash
     const navItem = document.querySelector(`.nav-item[href="#${hash}"]`);
     showSection(hash, navItem);
-  } else {
-    // Default: Auto-load My Day
+  } else if (typeof IS_EMPLOYEE !== 'undefined' && IS_EMPLOYEE) {
+    // Employees default to Targets
+    const navItem = document.querySelector('.nav-item[href="#targets"]');
+    showSection('targets', navItem);
+  } else if (document.getElementById('my-day-data')) {
+    // Default: Auto-load My Day (faction members)
     fetchMyDay();
+  } else if (document.getElementById('targets-data')) {
+    // Fallback: if targets section exists, show it
+    const navItem = document.querySelector('.nav-item[href="#targets"]');
+    showSection('targets', navItem);
   }
 
   // Listen for hash changes (e.g., browser back/forward buttons)
