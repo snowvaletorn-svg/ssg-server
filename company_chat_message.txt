@@ -6,8 +6,9 @@ Hello everyone! We now have a company dashboard available to all employees of ou
 
 **🔐 HOW TO LOG IN**
 
-1. Go to the SSG Server website and click the **"🏢 Employees"** tab on the login page
-2. Enter your **Torn Username**, **Torn ID**, and your **Torn API key**
+1. Go to the SSG Server website https://ssg-server.onrender.com
+2. Click the **"🏢 Employees"** button
+2. On the Employees login page, enter your **Torn Username**, **Torn ID**, and your **Torn API key** (Limited key)
 3. Select **your company** from the dropdown menu
 4. Click **Employee Login** — that's it!
 
@@ -60,7 +61,7 @@ To use the Target Finder, you'll need a separate free API key from FFScouter:
 
 Want access to our **Faction training pages** and guides? Join our Discord server! The training channels are packed with valuable resources — stat building guides, money making strategies, crime training, chains tutorials, and more.
 
-**👉 Join our Discord to get access to the Faction Training channels: [DISCORD INVITE LINK]**
+**👉 Join our Discord to get access to the Faction Training channels: sent upon request**
 
 Once you're in Discord, ping a leadership member (Leader/Co-leader) and let them know you're an employee of one of our companies, and they'll grant you access to the training channels.
 

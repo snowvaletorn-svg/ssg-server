@@ -38,9 +38,14 @@ async function getFactionApiKey() {
   return process.env.TORN_FACTION_API_KEY || null;
 }
 
-// ─── Fetch live stats for all users with API keys ─────────────────────────────
+// ─── Fetch live stats for all faction members with API keys ────────────────────
+// Excludes employee accounts (accountType: 'employee') — weekly snapshots track
+// faction member stat progress only, not company employees.
 async function fetchAllMemberStats() {
-  const dbUsers = await User.find({ tornApiKey: { $ne: null } }, 'tornPlayerId tornName tornApiKey');
+  const dbUsers = await User.find(
+    { tornApiKey: { $ne: null }, accountType: { $ne: 'employee' } },
+    'tornPlayerId tornName tornApiKey'
+  );
 
   const results = await Promise.allSettled(
     dbUsers.map(async (u) => {
