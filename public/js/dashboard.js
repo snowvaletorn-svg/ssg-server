@@ -3944,8 +3944,8 @@ function renderTravelProfits() {
     container.innerHTML = `
       <div class="empty-state">
         <span class="empty-icon">💰</span>
-        <p>No profitable items found.</p>
-        <p class="muted">Items may not be available or market prices may not exceed foreign costs.</p>
+        <p>No items found.</p>
+        <p class="muted">Items may not be available or lack market data.</p>
       </div>`;
     return;
   }

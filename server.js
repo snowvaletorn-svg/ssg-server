@@ -1675,9 +1675,6 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
 
         const profit = catalogItem.marketValue - stockItem.cost;
 
-        // Skip items that wouldn't be profitable even if in stock
-        if (profit <= 0 && !outOfStock) return;
-
         const profitPercent = ((profit / stockItem.cost) * 100);
         const estimatedRestockIn = minutesUntilRestock;
         const nextRestockTime = new Date();
