@@ -294,9 +294,12 @@ function renderMyDay(d) {
           <div class="myday-card-title">Active Organized Crime</div>
           <div class="myday-card-value">${d.activeOc.crimeName}</div>
           <div class="myday-card-detail">Your role: <strong>${d.activeOc.role}</strong> — ${statusText}</div>
-          ${d.ocItemNeeded ? `
-            <div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — Request it in <a href="${d.ocItemChannelLink}" target="_blank" rel="noopener" style="color:#4a90e2;text-decoration:underline;">#resource-request</a></div>
-          ` : '<div class="myday-card-hint">✅ No item needed for your role.</div>'}
+          ${d.ocItemNeeded
+            ? (d.ocItemHave
+                ? `<div class="myday-card-hint">✅ You have the required item: <strong>${d.ocItemNeeded}</strong></div>`
+                : `<div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — Request it in <a href="${d.ocItemChannelLink}" target="_blank" rel="noopener" style="color:#4a90e2;text-decoration:underline;">#resource-request</a></div>`
+            )
+            : '<div class="myday-card-hint">✅ No item needed for your role.</div>'}
         </div>
       </div>
     `);
@@ -3357,6 +3360,14 @@ const HELP_CONTENT = {
           <p class="help-text">Drugs available in the faction armory (Xans, Vicodin, etc.). Shows total count, loaned items, available stock, and usage percentage.</p>
           <div class="help-callout">💡 Usage bars show what percentage of each item type is currently loaned out.</div>
         `
+      },
+      {
+        heading: 'Utilities Inventory',
+        content: `
+          <p class="help-text">The Utilities armory holds items used for Organized Crimes and personal crimes. This tab shows the inventory (total, loaned, available) and every loaned item tied to the member holding it <strong style="color:#c0bcbc;">and their organized crime</strong>.</p>
+          <div class="help-callout">💡 Each loan shows the crime, the member&apos;s role, and a status: <strong style="color:#f39c12;">In Use</strong> (item should be returned when the crime completes), <strong style="color:#e74c3c;">Return Due</strong> (their crime already finished and the item is a tool), <strong style="color:#2ecc71;">Consumed</strong> (a material that is used up — no return needed), or <strong style="color:#888;">No OC</strong>.</div>
+          <div class="help-callout">💡 A 🧰 marker on an item means it matches that member&apos;s OC role requirement. Materials (consumed) and Tools (returned) are classified per the Torn OC 2.0 wiki — an item can be a tool in one crime and a material in another.</div>
+        `
       }
     ]
   }
@@ -5026,6 +5037,11 @@ function showAdminTab(tabId, el) {
         fetchDrugInventory();
       }
       break;
+    case 'utilities-inventory':
+      if (document.getElementById('admin-utilities-inventory-data').innerHTML.includes('empty-state')) {
+        fetchUtilitiesInventory();
+      }
+      break;
     case 'faction-register':
       if (document.getElementById('admin-faction-register-data').innerHTML.includes('empty-state')) {
         fetchFactionRegister();
@@ -5212,6 +5228,130 @@ function renderDrugInventory(items) {
 }
 
 
+// ── Utilities Inventory ──────────────────────────────────────────────────────
+async function fetchUtilitiesInventory() {
+  const container = document.getElementById('admin-utilities-inventory-data');
+  container.innerHTML = '<div class="channel-loading">LOADING UTILITIES INVENTORY...</div>';
+  try {
+    const res = await fetch('/api/admin/utilities-inventory');
+    const contentType = res.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      container.innerHTML = `<div class="channel-error">⚠️ Server returned non-JSON response. Please ensure you're logged in and have leadership access.</div>`;
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderUtilitiesInventory(data.items || [], data.loans || [], data.memberCount || 0);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+  }
+}
+
+function utilitiesStatusBadge(status) {
+  const map = {
+    'IN USE': { label: '🔄 In Use', color: '#f39c12' },
+    'RETURN DUE': { label: '⬅️ Return Due', color: '#e74c3c' },
+    'CONSUMED': { label: '💨 Consumed', color: '#2ecc71' },
+    'NO OC': { label: '➖ No OC', color: '#888' }
+  };
+  const s = map[status] || { label: status, color: '#888' };
+  return `<span style="color:${s.color};font-weight:600;">${s.label}</span>`;
+}
+
+function formatLoanReturnTime(loan) {
+  if (loan.consumed) return 'N/A (consumed)';
+  if (loan.status === 'RETURN DUE') return 'Now — should be returned';
+  if (loan.status === 'IN USE' && loan.timeReady) {
+    return `When crime completes (ready ${new Date(loan.timeReady).toLocaleDateString()} ${new Date(loan.timeReady).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+  }
+  return 'When crime completes';
+}
+function renderUtilitiesInventory(items, loans, memberCount) {
+  if (!items.length && !loans.length) {
+    return '<div class="empty-state"><p class="muted">No Utilities items found in the armory.</p></div>';
+  }
+
+  // Summary tiles
+  const inUse = loans.filter(l => l.status === 'IN USE').length;
+  const returnDue = loans.filter(l => l.status === 'RETURN DUE').length;
+  const consumed = loans.filter(l => l.status === 'CONSUMED').length;
+
+  // Inventory table
+  const invRows = items.map(item => `
+    <tr>
+      <td>${escapeHtml(item.name)}</td>
+      <td style="text-align:center;">${escapeHtml(item.type || '—')}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${item.total || 0}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#e74c3c;">${item.loaned || 0}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#2ecc71;">${item.available || 0}</td>
+    </tr>`).join('');
+
+  const inventoryHtml = `
+    <div class="card">
+      <div class="card-header">🧰 Utilities Inventory (${items.length} types)</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead><tr>
+            <th>Name</th>
+            <th style="text-align:center;">Type</th>
+            <th style="text-align:center;">Total</th>
+            <th style="text-align:center;">Loaned</th>
+            <th style="text-align:center;">Available</th>
+          </tr></thead>
+          <tbody>${invRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // Loaned items table (tied to person + their OC)
+  let loansHtml = '';
+  if (loans.length) {
+    const loanRows = loans.map(l => `
+      <tr>
+        <td>
+          <a href="https://www.torn.com/profiles.php?XID=${l.playerId}" target="_blank" rel="noopener"
+            style="color:#a78df5;text-decoration:none;font-size:0.78rem;">${escapeHtml(l.playerName)}</a>
+          <span style="color:#555;font-size:0.7rem;"> [${l.playerId}]</span>
+        </td>
+        <td>${escapeHtml(l.itemName)}${l.ocRoleMatch ? ' <span title="Matches this member\'s OC role requirement" style="cursor:help;font-size:0.7rem;color:#f39c12;">🧰</span>' : ''}</td>
+        <td>${escapeHtml(l.crimeName || '—')}</td>
+        <td style="text-align:center;">${escapeHtml(l.role || '—')}</td>
+        <td style="text-align:center;white-space:nowrap;">${utilitiesStatusBadge(l.status)}</td>
+        <td style="text-align:center;">${escapeHtml(l.crimeStatus || '')}</td>
+        <td style="font-size:0.75rem;">${formatLoanReturnTime(l)}</td>
+      </tr>`).join('');
+
+    loansHtml = `
+      <div class="card" style="margin-top:1rem;">
+        <div class="card-header">📋 Loaned Utilities (${loans.length})</div>
+        <div style="overflow-x:auto;">
+          <table class="members-table">
+            <thead><tr>
+              <th>Member</th>
+              <th>Item</th>
+              <th>OC Crime</th>
+              <th style="text-align:center;">Role</th>
+              <th style="text-align:center;">Status</th>
+              <th style="text-align:center;">Crime Status</th>
+              <th>Expected Return</th>
+            </tr></thead>
+            <tbody>${loanRows}</tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1rem;">
+      ${statTile(items.length, 'Item Types')}
+      ${statTile(loans.length, 'Loaned Out')}
+      ${statTile(inUse, 'In Use')}
+      ${statTile(returnDue, 'Return Due')}
+      ${statTile(consumed, 'Consumed')}
+    </div>
+    ${inventoryHtml}
+    ${loansHtml}`;
+}
 // Weekly snapshot, records members hours from week to week and provides an email to Snowvale
 async function takeWeeklySnapshot() {
   try {

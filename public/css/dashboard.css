@@ -1135,6 +1135,7 @@
   #tab-weapon-armor table,
   #tab-medical-items table,
   #tab-drugs table,
+  #tab-utilities-inventory table,
   #tab-members-overview table {
     font-size: 0.78rem;
     min-width: 760px;
@@ -1150,6 +1151,8 @@
   #tab-medical-items td,
   #tab-drugs th,
   #tab-drugs td,
+  #tab-utilities-inventory th,
+  #tab-utilities-inventory td,
   #tab-members-overview th,
   #tab-members-overview td {
     padding: 0.45rem 0.5rem;
@@ -1163,6 +1166,7 @@
   #tab-weapon-armor thead th,
   #tab-medical-items thead th,
   #tab-drugs thead th,
+  #tab-utilities-inventory thead th,
   #tab-members-overview thead th {
     position: sticky;
     top: 0;
@@ -1174,6 +1178,7 @@
   #admin-weapon-armor-data > .card,
   #admin-medical-items-data > .card,
   #admin-drugs-data > .card,
+  #admin-utilities-inventory-data > .card,
   #admin-members-data > .card {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;

@@ -2570,6 +2570,67 @@ app.get('/api/admin/drug-inventory', isAuthenticated, isLeadershipOrOwnership, a
   }
 });
 
+// ─── OC 2.0 Item Roles (Utilities armory) ─────────────────────────────────────
+// Each organized crime has a set of Tools (loaned out from the Utilities armory and
+// returned after the crime) and Materials (consumed / used up during the crime — no
+// return needed). An item can be a tool in one crime and a material in another
+// (e.g. Hand Drill), so classification is keyed by crime name, NOT only by item.
+// Quantities (e.g. "2 x Jemmy") are collapsed — we only need the canonical name.
+const OC_ITEM_ROLES = {
+  'First Aid and Abet':    { tools: ['Lockpicks'],                          materials: ['Shaving Foam'] },
+  'Mob Mentality':         { tools: ['Jemmy'],                              materials: [] },
+  'Pet Project':           { tools: ['Net', 'Lockpicks'],                   materials: ['Dog Treats'] },
+  'Thou Shalt Not Steal':  { tools: ['Lockpicks', 'Cassock'],               materials: ['Cell Phone'] },
+  'Cash Me If You Can':    { tools: [],                                     materials: ['ID Badge', 'ATM Key'] },
+  'Best of the Lot':       { tools: ['Lockpicks', 'Police Badge'],          materials: [] },
+  'Smoke and Wing Mirrors':{ tools: ['DSLR Camera', 'RF Detector'],         materials: [] },
+  'Market Forces':         { tools: [],                                     materials: ['Gasoline'] },
+  'Gaslight the Way':      { tools: ['Construction Helmet'],                materials: ['ID Badge'] },
+  'Snow Blind':            { tools: [],                                     materials: ['PCP'] },
+  'Plucking the Lotus Petal': { tools: [],                                  materials: ['Blank Casino Chips'] },
+  'Stage Fright':          { tools: ['Binoculars'],                         materials: [] },
+  'Guardian Angels':       { tools: [],                                     materials: ['Hand Drill'] },
+  'Honey Trap':            { tools: ['Billfold'],                           materials: [] },
+  'Counter Offer':         { tools: ['Wire Cutters', 'Lockpicks'],          materials: ['Zip Ties', 'Polymorphic Virus'] },
+  'No Reserve':            { tools: ['Bolt Cutters'],                       materials: ['Spray Paint', 'Chloroform'] },
+  'Bidding War':           { tools: ['Jemmy', 'Dental Mirror'],             materials: ['C4 Explosive', 'Flash Grenade'] },
+  'Leave No Trace':        { tools: ['Police Badge'],                       materials: [] },
+  'Dish It Out':           { tools: ['Bolt Cutters', 'Wire Cutters'],       materials: ['Thermite', 'Ipecac Syrup'] },
+  'Sneaky Git Grab':       { tools: ['Wireless Dongle'],                    materials: ['Tunneling Virus'] },
+  'Blast from the Past':   { tools: ['Core Drill'],                         materials: ['Zip Ties', 'Shaped Charge', 'Firewalk Virus'] },
+  'Window of Opportunity': { tools: ['Wire Cutters', 'Ladder', 'Angle Grinder'], materials: ['Razor Wire', 'Floor Cleaner'] },
+  'Break the Bank':        { tools: ['Hand Drill'],                         materials: ['Zip Ties'] },
+  'Stacking the Deck':     { tools: ['Jemmy'],                              materials: ['Smoke Grenade', 'ID Badge', 'Stealth Virus'] },
+  'Manifest Cruelty':      { tools: ['Cigar Cutter', 'Car Battery'],        materials: ['Zip Ties', 'Stealth Virus'] },
+  'Ace in the Hole':       { tools: [],                                     materials: ['ID Badge'] },
+  'Gone Fission':          { tools: ['DSLR Camera', 'Cut-Throat Razor'],    materials: ['Zip Ties', 'Thermite', 'C4 Explosive'] }
+};
+
+// Normalize an item name for matching (case/punctuation/whitespace insensitive)
+function normalizeItemName(name) {
+  return String(name || '')
+    .toLowerCase()
+    .replace(/\b(?:x\d+|\d+\s*x)\b/gi, ' ') // strip "2 x" / "2x" quantity markers
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Check whether the given item is a Tool or Material for a specific crime
+function isCrimeItemType(crimeName, itemName, column) {
+  const roles = OC_ITEM_ROLES[crimeName];
+  if (!roles || !Array.isArray(roles[column])) return false;
+  const target = normalizeItemName(itemName);
+  if (!target) return false;
+  return roles[column].some(n => {
+    const norm = normalizeItemName(n);
+    if (!norm) return false;
+    if (norm === target) return true;
+    // Lenient fallback for short/plural mismatches (e.g. "Lockpick" vs "Lockpicks").
+    // Only applied when one name is reasonably long to avoid false positives.
+    return (target.length >= 4 && (target.includes(norm) || norm.includes(target)));
+  });
+}
 // ─── API: Faction Loans (Armor & Weapons) ──────────────────────────────────────
 app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
@@ -2747,6 +2808,146 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
       members: Object.values(loansData),
       totals,
       armoryItems
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Utilities Inventory & Loans (Utilities armory + OC tie-in) ──────────
+app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const factionKey = await getFactionApiKey();
+    if (!factionKey) return res.status(400).json({ error: 'No faction API key configured.' });
+
+    // Fetch the Utilities armory inventory from the Torn faction API
+    let utilitiesData = [];
+    try {
+      const utilsRes = await axios.get(`https://api.torn.com/faction/?selections=utilities&key=${encodeURIComponent(factionKey)}`);
+      const raw = utilsRes.data;
+      if (Array.isArray(raw?.utilities)) utilitiesData = raw.utilities;
+      else if (Array.isArray(raw?.items)) utilitiesData = raw.items;
+      else if (Array.isArray(raw)) utilitiesData = raw;
+    } catch (err) {
+      console.error('Error fetching utilities data:', err.message);
+    }
+
+    // Fetch faction members for id -> name mapping
+    let memberMap = {};
+    try {
+      const membersRes = await axios.get(`https://api.torn.com/v2/faction/members?key=${encodeURIComponent(factionKey)}`);
+      const members = membersRes.data.members || [];
+      members.forEach(m => { memberMap[m.id] = m.name; });
+    } catch (err) {
+      console.error('Error fetching faction members:', err.message);
+    }
+
+    // Build inventory summary (mirrors the Weapon & Armor tab)
+    const items = utilitiesData.map(item => ({
+      id: item.id || null,
+      name: item.name || 'Unknown',
+      type: item.type || '',
+      total: item.quantity || 0,
+      loaned: item.loaned || 0,
+      available: item.available || 0
+    }));
+
+    // Collect loans (each utilities item loaned out to member(s))
+    const playerIds = new Set();
+    const loanTasks = [];
+    utilitiesData.forEach(item => {
+      if (!item.loaned_to || item.loaned === 0) return;
+      let ids = [];
+      if (typeof item.loaned_to === 'string') ids = item.loaned_to.split(',').map(s => s.trim());
+      else if (Array.isArray(item.loaned_to)) ids = item.loaned_to;
+      else ids = [String(item.loaned_to)];
+
+      ids.forEach(id => {
+        const playerId = parseInt(id);
+        if (isNaN(playerId)) return;
+        if (!playerIds.has(playerId)) playerIds.add(playerId);
+        loanTasks.push({ playerId, itemId: item.id || null, itemName: item.name || 'Unknown' });
+      });
+    });
+
+    // Best-effort refresh of OC data so loan -> crime mapping stays current (non-fatal)
+    try {
+      const { refreshFactionCrimes } = require('./services/tornCrimesService');
+      await refreshFactionCrimes(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000));
+    } catch (err) {
+      console.error('Utilities tab: OC refresh error (non-fatal):', err.message);
+    }
+// Load the most recent tracked crime for each loaned player
+    const playerCrimeMap = {};
+    for (const playerId of [...playerIds]) {
+      try {
+        const crime = await OrganizedCrime.findOne({
+          factionId: SSG_FACTION_ID,
+          'participants.playerId': playerId
+        }).sort({ timeStarted: -1 }).lean();
+        playerCrimeMap[playerId] = crime;
+      } catch (err) {
+        console.error(`Utilities tab: error loading crime for player ${playerId}:`, err.message);
+        playerCrimeMap[playerId] = null;
+      }
+    }
+
+    // Assemble per-loan records tied to the player and their OC
+    const loans = loanTasks.map(task => {
+      const crime = playerCrimeMap[task.playerId];
+      let role = '';
+      let ocRoleMatch = false;
+      let consumed = false;
+
+      if (crime) {
+        const participant = (crime.participants || []).find(p => p.playerId === task.playerId);
+        role = participant?.role || '';
+        ocRoleMatch = !!(participant?.tool) && normalizeItemName(participant.tool) === normalizeItemName(task.itemName);
+        const roleToolColumn = participant?.tool || task.itemName;
+        consumed = isCrimeItemType(crime.crimeName, task.itemName, 'materials') ||
+                   isCrimeItemType(crime.crimeName, roleToolColumn, 'materials');
+      }
+
+      let status;
+      let requiresReturn;
+      if (crime && consumed) {
+        status = 'CONSUMED';
+        requiresReturn = false;
+      } else if (crime && crime.isComplete) {
+        status = 'RETURN DUE';
+        requiresReturn = true;
+      } else if (crime) {
+        status = 'IN USE';
+        requiresReturn = true;
+      } else {
+        status = 'NO OC';
+        requiresReturn = true;
+      }
+
+      return {
+        playerId: task.playerId,
+        playerName: memberMap[task.playerId] || ('#' + task.playerId),
+        itemId: task.itemId,
+        itemName: task.itemName,
+        crimeId: crime?.crimeId ?? null,
+        crimeName: crime?.crimeName ?? '',
+        role: role,
+        ocRoleMatch: ocRoleMatch,
+        crimeStatus: crime?.status ?? '',
+        isComplete: crime?.isComplete ?? true,
+        timeStarted: crime?.timeStarted ?? null,
+        timeReady: crime?.timeReady ?? null,
+        timeCompleted: crime?.timeCompleted ?? null,
+        consumed: consumed,
+        requiresReturn: requiresReturn,
+        status: status
+      };
+    });
+
+    res.json({
+      items,
+      memberCount: playerIds.size,
+      loans
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

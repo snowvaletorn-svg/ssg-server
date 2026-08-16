@@ -1155,6 +1155,8 @@
                   onclick="showAdminTab('medical-inventory', this)">💊 Medical Inventory</button>
                 <button class="admin-tab" data-tab="drug-inventory" onclick="showAdminTab('drug-inventory', this)">💉
                   Drug Inventory</button>
+                <button class="admin-tab" data-tab="utilities-inventory" onclick="showAdminTab('utilities-inventory', this)">🧰
+                  Utilities</button>
                 <button class="admin-tab" data-tab="weekly-snapshot" onclick="showAdminTab('weekly-snapshot', this)">📊
                   Weekly Snapshot</button>
               </div>
@@ -1243,6 +1245,24 @@
                   <div class="empty-state">
                     <span class="empty-icon">💉</span>
                     <p>Click Refresh to load drug inventory.</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Tab Content: Utilities Inventory -->
+              <div id="tab-utilities-inventory" class="admin-tab-content">
+                <div class="section-header" style="margin-top:0;">
+                  <h3>Utilities Inventory</h3>
+                  <button class="btn btn-primary btn-small" onclick="fetchUtilitiesInventory()">↻ Refresh</button>
+                </div>
+                <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                  Utilities armory (OC &amp; crime items). Loaned items are tied to each member's organized crime — tools
+                  should be returned when the crime completes, while materials are consumed.
+                </p>
+                <div id="admin-utilities-inventory-data">
+                  <div class="empty-state">
+                    <span class="empty-icon">🧰</span>
+                    <p>Click Refresh to load the Utilities inventory.</p>
                   </div>
                 </div>
               </div>
