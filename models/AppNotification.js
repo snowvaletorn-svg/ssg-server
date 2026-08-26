@@ -4,7 +4,7 @@ const appNotificationSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['application', 'weekly_report', 'employee_removal']
+    enum: ['application', 'weekly_report', 'employee_removal', 'utilities_request', 'utilities_fulfilled']
   },
   title: {
     type: String,
@@ -28,6 +28,14 @@ const appNotificationSchema = new mongoose.Schema({
   employeeId: { type: Number, default: null },
   companyName: { type: String, default: null },
   companyId: { type: Number, default: null },
+  // For utilities armory request notifications - store requester + item details
+  requesterId: { type: Number, default: null },
+  requesterName: { type: String, default: null },
+  itemId: { type: Number, default: null },
+  itemName: { type: String, default: null },
+  // Targeted recipient for notifications addressed to a single player (e.g. the
+  // requester receiving a 'utilities_fulfilled' notification). Null = visible to all.
+  recipientId: { type: Number, default: null },
   // Read tracking
   readBy: [{ type: Number }], // array of tornPlayerIds who have read it
   createdAt: { type: Date, default: Date.now }
@@ -36,5 +44,6 @@ const appNotificationSchema = new mongoose.Schema({
 // Index for efficient querying - most recent first
 appNotificationSchema.index({ createdAt: -1 });
 appNotificationSchema.index({ type: 1, createdAt: -1 });
+appNotificationSchema.index({ recipientId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('AppNotification', appNotificationSchema);

@@ -210,6 +210,9 @@ function showSection(sectionId, el) {
 }
 
 // ── My Day Dashboard ──────────────────────────────────────────────────────────
+// Available Utilities armory items used to populate the request dropdown
+let utilityItems = [];
+
 async function fetchMyDay() {
   const container = document.getElementById('my-day-data');
   container.innerHTML = '<div class="channel-loading">LOADING YOUR DAY...</div>';
@@ -217,6 +220,16 @@ async function fetchMyDay() {
     const res = await fetch('/api/my-day');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    // Load the list of available Utilities armory items for the request dropdown (non-fatal)
+    try {
+      const itemsRes = await fetch('/api/utilities/available');
+      if (itemsRes.ok) {
+        const itemsData = await itemsRes.json();
+        utilityItems = itemsData.items || [];
+      }
+    } catch (e) {
+      console.error('Failed to load utilities items:', e);
+    }
     container.innerHTML = renderMyDay(data);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -297,7 +310,7 @@ function renderMyDay(d) {
           ${d.ocItemNeeded
             ? (d.ocItemHave
                 ? `<div class="myday-card-hint">✅ You have the required item: <strong>${d.ocItemNeeded}</strong></div>`
-                : `<div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — Request it in <a href="${d.ocItemChannelLink}" target="_blank" rel="noopener" style="color:#4a90e2;text-decoration:underline;">#resource-request</a></div>`
+                                : `<div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — <span style="color:#e74c3c;font-weight:600;">Request Item</span> below in the Utilities Armory Request card</div>`
             )
             : '<div class="myday-card-hint">✅ No item needed for your role.</div>'}
         </div>
@@ -332,6 +345,24 @@ function renderMyDay(d) {
     `);
   }
 
+  // ── Utilities Armory Request Ticket ──
+  cards.push(renderUtilitiesRequestCard());
+
+  // ── Pending Item Requests (visible to Utility Loaning holders) ──
+  if (d.canLoanUtilities) {
+    cards.push(renderPendingRequestsCard(d.pendingRequests || []));
+  }
+
+  // ── Requester's own requests + fulfillment notices ──
+  if ((d.myRequestStatus && d.myRequestStatus.length) || (d.fulfilledRequests && d.fulfilledRequests.length)) {
+    cards.push(renderMyRequestsCard(d.myRequestStatus || [], d.fulfilledRequests || []));
+  }
+
+  // ── Items Loaned to this user (Utilities armory) ──
+  if (d.loanedItems && d.loanedItems.length) {
+    cards.push(renderLoanedItemsCard(d.loanedItems));
+  }
+
   // If no cards at all, show a message
   if (cards.length === 0) {
     return `
@@ -342,6 +373,195 @@ function renderMyDay(d) {
   }
 
   return `<div class="myday-grid">${cards.join('')}</div>`;
+}
+
+// ── Utilities Armory Request Ticket card (all faction members) ────────────────
+function renderUtilitiesRequestCard() {
+  const options = utilityItems.length
+    ? utilityItems.map(it => `<option value="${escapeHtml(it.name)}" data-item-id="${it.id || ''}">${escapeHtml(it.name)}${it.available > 0 ? ` (${it.available} avail)` : ' (out of stock)'}</option>`).join('')
+    : '<option value="">Loading items...</option>';
+
+  return `
+    <div class="myday-card myday-request" id="utilities-request-card">
+      <div class="myday-card-icon">🧰</div>
+      <div class="myday-card-body">
+        <div class="myday-card-title">Utilities Armory Request</div>
+        <div class="myday-card-value" style="font-size:0.95rem;">Request an item from the Utilities armory.</div>
+        <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.5rem;">
+          <select id="utilities-request-select" style="flex:1;min-width:180px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:6px 8px;font-size:0.85rem;">
+            ${options}
+          </select>
+          <button class="btn btn-primary btn-small" onclick="submitUtilityRequest()">Request Item</button>
+        </div>
+        <div id="utilities-request-status" style="font-size:0.8rem;color:#888;margin-top:0.35rem;"></div>
+        ${utilityItems.length ? '' : '<div class="myday-card-hint">⚠️ Could not load available items.</div>'}
+      </div>
+    </div>`;
+}
+
+// ── Pending item requests card (Utility Loaning holders) ──────────────────────
+function renderPendingRequestsCard(requests) {
+  const rows = requests.length
+    ? requests.map(r => {
+        const time = new Date(r.createdAt).toLocaleString();
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid #2a2828;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.85rem;">🧰 ${escapeHtml(r.itemName)}</div>
+              <div style="font-size:0.75rem;color:#888;">Requested by <a href="https://www.torn.com/profiles.php?XID=${r.requesterId}" target="_blank" rel="noopener" style="color:#a78df5;text-decoration:none;">${escapeHtml(r.requesterName || ('#' + r.requesterId))}</a> &middot; ${time}</div>
+            </div>
+                        <button class="btn btn-small" onclick="openTornArmory()" style="flex-shrink:0;margin-right:0.25rem;">🔗 Open Armory</button>
+            <button class="btn btn-small btn-success" onclick="fulfillUtilityRequest('${r._id}')" style="flex-shrink:0;">✅ Fulfill</button>
+          </div>`;
+      }).join('')
+    : '<div class="myday-card-hint">No open item requests.</div>';
+
+  return `
+    <div class="myday-card myday-request">
+      <div class="myday-card-icon">📦</div>
+      <div class="myday-card-body">
+        <div class="myday-card-title">Pending Item Requests</div>
+        <div class="myday-card-value" style="font-size:0.95rem;">${requests.length} open request(s)</div>
+        <div style="margin-top:0.5rem;">${rows}</div>
+      </div>
+    </div>`;
+}
+
+// ── Requester's own requests + fulfillment notices card ───────────────────────
+function renderMyRequestsCard(myRequests, fulfilled) {
+    // Filter out fulfilled notifications for items that were never actually loaned
+  // (loaned === 0 in the Torn armory). Items that are currently loaned (even to the
+  // requester themselves) should keep their fulfilled notification visible until the
+  // item is returned (at which point loaned goes back to 0).
+  // utilityItems is a module-level variable loaded when My Day renders,
+  // containing items with their loaned/available counts.
+  const nonLoanedItems = utilityItems.filter(i => (i.loaned || 0) === 0).map(i => i.name.toLowerCase());
+  const nonLoanedItemNames = new Set(nonLoanedItems);
+  
+  const myRows = myRequests.length
+    ? myRequests.map(r => {
+        const time = new Date(r.createdAt).toLocaleString();
+        return `
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid #2a2828;">
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:0.85rem;">🧰 ${escapeHtml(r.itemName)} — <span style="color:#f39c12;">⏳ Awaiting fulfilment</span></div>
+              <div style="font-size:0.75rem;color:#888;">Requested ${time}</div>
+            </div>
+            <button class="btn btn-small btn-outline" onclick="cancelUtilityRequest('${r._id}')" style="flex-shrink:0;">✕ Cancel</button>
+          </div>`;
+      }).join('')
+    : '';
+
+    const fulfilledRows = fulfilled.length
+    ? fulfilled.filter(r => !nonLoanedItemNames.has((r.itemName || '').toLowerCase())).map(r => {
+        const time = new Date(r.createdAt).toLocaleString();
+        return `
+          <div style="padding:0.5rem 0;border-bottom:1px solid #2a2828;">
+            <div style="font-size:0.85rem;color:#2ecc71;">✅ ${escapeHtml(r.itemName)} — Fulfilled</div>
+            <div style="font-size:0.75rem;color:#888;">${escapeHtml(r.message || '')} &middot; ${time}</div>
+          </div>`;
+      }).join('')
+    : '';
+
+  if (!myRows && !fulfilledRows) return '';
+
+  return `
+    <div class="myday-card myday-request">
+      <div class="myday-card-icon">📋</div>
+      <div class="myday-card-body">
+        <div class="myday-card-title">Your Utilities Requests</div>
+        ${myRows ? `<div style="margin-top:0.5rem;">${myRows}</div>` : ''}
+        ${fulfilledRows ? `<div style="margin-top:0.5rem;">${fulfilledRows}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ── Utilities request actions ─────────────────────────────────────────────────
+async function submitUtilityRequest() {
+  const select = document.getElementById('utilities-request-select');
+  const statusEl = document.getElementById('utilities-request-status');
+  if (!select || !statusEl) return;
+  const name = select.value;
+  const option = select.selectedOptions && select.selectedOptions[0];
+  const itemId = option ? option.getAttribute('data-item-id') : null;
+  if (!name) { statusEl.textContent = '⚠️ Please select an item first.'; return; }
+
+  statusEl.textContent = 'Submitting...';
+  try {
+    const res = await fetch('/api/utilities/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemId: itemId ? parseInt(itemId) : null, itemName: name })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.textContent = `⚠️ ${data.error || 'Failed to submit request.'}`;
+      return;
+    }
+    statusEl.textContent = `✅ Request submitted for ${name}. A Utility Loaning holder has been notified.`;
+    setTimeout(fetchMyDay, 800);
+  } catch (err) {
+    statusEl.textContent = `⚠️ ${err.message}`;
+  }
+}
+
+async function fulfillUtilityRequest(id) {
+  if (!confirm('Mark this item request as fulfilled after loaning it in Torn? The requester will be notified.')) return;
+  try {
+    const res = await fetch(`/api/utilities/requests/${id}/fulfill`, { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(`⚠️ ${data.error || 'Failed to fulfil request.'}`); return; }
+    // Refresh the current My Day view to reflect the fulfilled status
+    fetchMyDay();
+    // Notify the user that the requester has been sent a notification
+    alert('✅ Request marked as fulfilled. A notification has been sent to the requester.');
+  } catch (err) {
+    alert(`⚠️ ${err.message}`);
+  }
+}
+
+// ─── Open the Torn faction armory utilities page in a new window ──────────────
+function openTornArmory() {
+  const win = window.open('https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0&sub=utilities', '_blank');
+  if (win) win.focus();
+}
+
+// ─── Items Loaned to the user (Utilities armory) card ─────────────────────────
+// Each loaned item gets a "Return Item" button that opens the Torn item page where
+// the user can return the item after they are done using it.
+function renderLoanedItemsCard(loanedItems) {
+  const rows = loanedItems.map(item => `
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid #2a2828;">
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:0.85rem;">🧰 ${escapeHtml(item.itemName)}</div>
+        <div style="font-size:0.75rem;color:#888;">Loaned to you &middot; ${item.loaned || 0} in use</div>
+      </div>
+      <a href="https://www.torn.com/item.php" target="_blank" rel="noopener"
+         class="btn btn-small btn-success" style="flex-shrink:0;text-decoration:none;">↩️ Return Item</a>
+    </div>`).join('');
+
+  return `
+    <div class="myday-card myday-request">
+      <div class="myday-card-icon">🧰</div>
+      <div class="myday-card-body">
+        <div class="myday-card-title">Items Loaned</div>
+        <div class="myday-card-value" style="font-size:0.95rem;">${loanedItems.length} item(s) loaned to you</div>
+        <div style="margin-top:0.5rem;">${rows}</div>
+        <div class="myday-card-hint" style="margin-top:0.35rem;">Click <strong>Return Item</strong> to go to your Torn item page and return it once you are done.</div>
+      </div>
+    </div>`;
+}
+
+async function cancelUtilityRequest(id) {
+  if (!confirm('Cancel this request?')) return;
+  try {
+    const res = await fetch(`/api/utilities/requests/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(`⚠️ ${data.error || 'Failed to cancel request.'}`); return; }
+    fetchMyDay();
+  } catch (err) {
+    alert(`⚠️ ${err.message}`);
+  }
 }
 
 // ── Personal Torn API Key ─────────────────────────────────────────────────────
@@ -5260,6 +5480,9 @@ function utilitiesStatusBadge(status) {
 
 function formatLoanReturnTime(loan) {
   if (loan.consumed) return 'N/A (consumed)';
+  // If the player's OC role does not require this item, the return is based
+  // on user completion rather than the crime end time.
+  if (!loan.ocRoleMatch) return 'Upon user completion';
   if (loan.status === 'RETURN DUE') return 'Now — should be returned';
   if (loan.status === 'IN USE' && loan.timeReady) {
     return `When crime completes (ready ${new Date(loan.timeReady).toLocaleDateString()} ${new Date(loan.timeReady).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;

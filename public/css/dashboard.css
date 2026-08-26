@@ -1031,6 +1031,11 @@
   border-left-color: #888;
 }
 
+.myday-request {
+  border-left-color: #a78df5;
+  color: #c0bcbc;
+}
+
 /* ── Scrollbar styling ─────────────────────────────────────────────────── */
 .channel-feed::-webkit-scrollbar { width: 6px; }
 .channel-feed::-webkit-scrollbar-track { background: #0f0f0f; }

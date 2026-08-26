@@ -458,6 +458,102 @@ const isFactionMember = (req, res, next) => {
   next();
 };
 
+// ─── UTILITY LOANING PERMISSION ───────────────────────────────────────────────
+// The "Utility Loaning" permission is granted by a faction position whose armory
+// access includes the Utilities (Temporary) category. We detect it by querying
+// Torn's faction positions API and reading each position's armory loan capacity.
+//
+// Note: utilities / OC crime items map to Torn's "temporary" armory category.
+// We treat a position as having Utility Loaning when its temporary (or a possible
+// dedicated utilities) loan capacity is > 0, OR the position is ownership/leadership.
+let utilityLoaningCache = null;
+let utilityLoaningCacheAt = 0;
+const UTILITY_LOANING_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// Detect the set of faction position names that can loan from the Utilities armory
+async function fetchUtilityLoaningPositions() {
+  const factionKey = await getFactionApiKey();
+  if (!factionKey) return new Set();
+
+  const posRes = await axios.get(
+    `https://api.torn.com/faction/?selections=positions&key=${encodeURIComponent(factionKey)}`,
+    { timeout: 10000 }
+  );
+  const raw = posRes.data;
+  const positions = raw?.positions || raw || {};
+
+  const set = new Set();
+  // Always include ownership/leadership as capable of fulfilling (sensible fallback).
+  POSITIONS.ownership.forEach(p => set.add(p));
+  POSITIONS.leadership.forEach(p => set.add(p));
+
+  if (Array.isArray(positions)) {
+    positions.forEach(pos => {
+      if (pos && typeof pos === 'object' && hasUtilityLoanCapacity(pos)) {
+        if (pos.name) set.add(pos.name);
+      }
+    });
+  } else if (positions && typeof positions === 'object') {
+    Object.values(positions).forEach(pos => {
+      if (pos && typeof pos === 'object' && hasUtilityLoanCapacity(pos)) {
+        if (pos.name) set.add(pos.name);
+      }
+    });
+  }
+
+  return set;
+}
+
+// Does a single position object allow loaning from the Utilities/Temporary armory?
+function hasUtilityLoanCapacity(pos) {
+  // The Utilities / OC crime items fall under the "temporary" armory category.
+  // Some API versions may expose a dedicated "utilities" field. Accept either.
+  const rawTemp = pos.temporary;
+  const rawUtil = pos.utilities;
+  if (typeof rawTemp === 'number') return rawTemp > 0;
+  if (typeof rawUtil === 'number') return rawUtil > 0;
+  if (typeof rawTemp === 'boolean') return rawTemp === true;
+  if (typeof rawUtil === 'boolean') return rawUtil === true;
+  // String capacities like "5" or comma lists
+  if (typeof rawTemp === 'string' && rawTemp.trim() !== '' && rawTemp.trim() !== '0') return true;
+  if (typeof rawUtil === 'string' && rawUtil.trim() !== '' && rawUtil.trim() !== '0') return true;
+  return false;
+}
+
+// Cached wrapper around fetchUtilityLoaningPositions
+async function getUtilityLoaningPositions() {
+  if (Date.now() - utilityLoaningCacheAt < UTILITY_LOANING_CACHE_TTL && utilityLoaningCache) {
+    return utilityLoaningCache;
+  }
+  const positions = await fetchUtilityLoaningPositions();
+  utilityLoaningCache = positions;
+  utilityLoaningCacheAt = Date.now();
+  return positions;
+}
+
+// Does a given session user have the Utility Loaning permission?
+async function isUtilityLoaningUser(user) {
+  if (!user?.factionPosition) return false;
+  // Ownership / leadership always qualify
+  if (hasPositionGroup(user, 'ownership') || hasPositionGroup(user, 'leadership')) return true;
+  try {
+    const positions = await getUtilityLoaningPositions();
+    return positions.has(user.factionPosition);
+  } catch (err) {
+    console.error('Utility Loaning permission check failed:', err.message);
+    return false;
+  }
+}
+
+// Express middleware for endpoints that require the Utility Loaning permission
+const isUtilityLoaning = async (req, res, next) => {
+  const ok = await isUtilityLoaningUser(req.session.user);
+  if (!ok) {
+    return res.status(403).json({ error: 'Utility Loaning permission required.' });
+  }
+  next();
+};
+
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
 // Home page
@@ -814,7 +910,8 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       availableRoles: [],
       isDirector: true, // Employees see the Companies nav item (their own company)
       isEmployee: true,
-      isTestUser: !!req.session.user?.isTestUser
+      isTestUser: !!req.session.user?.isTestUser,
+      isUtilityLoaning: false
     });
   }
 
@@ -862,7 +959,8 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     availableRoles: Object.keys(POSITIONS),
     isDirector,
     isEmployee: false,
-    isTestUser: false
+    isTestUser: false,
+    isUtilityLoaning: await isUtilityLoaningUser(req.session.user)
   });
 });
 
@@ -1910,13 +2008,48 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       return res.status(400).json({ error: 'No FFScouter API key available. Please save one in the Targets section.' });
     }
 
-    // Get enemy members from war attacks (defenders)
+    // Fetch the enemy faction's full roster from Torn first so enemy stats are
+    // available even before any war attacks have been logged (important when a
+    // war has just been matched).
     const warStart = rankedWar.start;
     const warEnd = rankedWar.end || null;
-    
-    // Fetch attacks to get enemy member IDs and names
-    // Map of player ID -> name from attack data
-    const enemyMemberMap = new Map();
+    const tornMemberMap = {};
+    const enemyMembersMap = new Map();
+
+    try {
+      const encodedFactionKey = encodeURIComponent(factionKey.trim());
+      const enemyFactionRes = await axios.get(
+        `https://api.torn.com/v2/faction/${enemyFactionId}?selections=basic,members&key=${encodedFactionKey}`
+      );
+
+      // Torn API v2 returns members as an object keyed by player ID (fall back
+      // to a plain array just in case). Normalize to a real array of members.
+      const rawEnemyMembers = enemyFactionRes.data.members || {};
+      const enemyMembers = Array.isArray(rawEnemyMembers)
+        ? rawEnemyMembers
+        : Object.values(rawEnemyMembers);
+
+      console.log('[Enemy Stats] Found', enemyMembers.length, 'enemy faction members.');
+
+      enemyMembers.forEach(m => {
+        if (!m.id) return;
+        tornMemberMap[m.id] = {
+          level: m.level,
+          status: m.status?.description || m.status?.state || 'Unknown',
+          statusState: m.status?.state || 'Unknown',
+          statusColor: m.status?.color || null,
+          name: m.name,
+          isRevivable: m.is_revivable
+        };
+        enemyMembersMap.set(m.id, m.name || null);
+      });
+    } catch (err) {
+      console.error('Error fetching enemy faction members:', err.message);
+    }
+
+    // Fall back to scanning war attacks to pick up any enemy members who may
+    // have been missed by the roster (e.g. recent joiners/leavers), but never
+    // require attacks to have happened before showing stats.
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
 
@@ -1928,24 +2061,19 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       for (const attack of attacks) {
         if (attack.started < warStart) { reachedWarStart = true; break; }
         if (warEnd && attack.started > warEnd) continue;
-        
-        // Check if this is a ranked war attack
-        if (attack.is_ranked_war) {
-          // Capture defenders (enemy members we attacked)
-          if (attack.defender?.faction?.id === enemyFactionId) {
-            const defenderId = attack.defender.id;
-            const defenderName = attack.defender.name;
-            if (defenderId && !enemyMemberMap.has(defenderId)) {
-              enemyMemberMap.set(defenderId, defenderName || null);
-            }
-          }
-          // Capture attackers (enemy members who attacked us)
-          if (attack.attacker?.faction?.id === enemyFactionId) {
-            const attackerId = attack.attacker.id;
-            const attackerName = attack.attacker.name;
-            if (attackerId && !enemyMemberMap.has(attackerId)) {
-              enemyMemberMap.set(attackerId, attackerName || null);
-            }
+
+        if (!attack.is_ranked_war) continue;
+
+        const candidates = [];
+        if (attack.defender?.faction?.id === enemyFactionId) {
+          candidates.push([attack.defender.id, attack.defender.name]);
+        }
+        if (attack.attacker?.faction?.id === enemyFactionId) {
+          candidates.push([attack.attacker.id, attack.attacker.name]);
+        }
+        for (const [pid, pname] of candidates) {
+          if (pid && !enemyMembersMap.has(pid)) {
+            enemyMembersMap.set(pid, pname || null);
           }
         }
       }
@@ -1953,60 +2081,40 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       nextUrl = !reachedWarStart && prevLink ? prevLink + `&key=${factionKey}` : null;
     }
 
-    if (enemyMemberMap.size === 0) {
-      return res.json({ enemies: [], message: 'No enemy members found in war attacks.' });
+    if (enemyMembersMap.size === 0) {
+      return res.json({ enemies: [], message: 'No enemy members found for this war.' });
     }
 
-    // Get player IDs for FFScouter stats lookup
-    const targetIds = Array.from(enemyMemberMap.keys()).join(',');
-
-    // Call FFScouter get-stats API with the target IDs
-    const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
-      params: { key: dbUser.ffScouterKey, targets: targetIds },
-      timeout: 15000
-    });
-
-    if (ffRes.data?.error) {
-      return res.status(400).json({ error: 'FFScouter error: ' + ffRes.data.error });
-    }
-
-    // Build a map of stats by player ID
-    // FFScouter returns an array directly (not nested under .stats)
+    // Get player IDs for FFScouter stats lookup, batching in chunks so we stay
+    // within FFScouter's per-request target limit (205).
+    const targetIdsList = Array.from(enemyMembersMap.keys());
+    const FF_BATCH_SIZE = 150;
     const statsMap = {};
-    const ffStats = Array.isArray(ffRes.data) ? ffRes.data : (ffRes.data?.stats || []);
-    if (Array.isArray(ffStats)) {
-      ffStats.forEach(s => {
-        if (s.player_id) statsMap[s.player_id] = s;
-      });
-    }
 
-    // Fetch enemy member details from Torn API for level and status
-    const tornMemberMap = {};
-    try {
-      const encodedFactionKey = encodeURIComponent(factionKey.trim());
-      const enemyFactionRes = await axios.get(
-        `https://api.torn.com/v2/faction/${enemyFactionId}?selections=basic,members&key=${encodedFactionKey}`
-      );
-      const enemyMembers = enemyFactionRes.data.members || [];
-      if (enemyMembers.length > 0) {
-        console.log('[Enemy Stats] Sample Torn member:', JSON.stringify(enemyMembers[0]).substring(0, 500));
-      }
-      enemyMembers.forEach(m => {
-        tornMemberMap[m.id] = {
-          level: m.level,
-          status: m.status?.description || m.status?.state || 'Unknown',
-          statusState: m.status?.state || 'Unknown',
-          statusColor: m.status?.color || null,
-          name: m.name,
-          isRevivable: m.is_revivable
-        };
+    for (let i = 0; i < targetIdsList.length; i += FF_BATCH_SIZE) {
+      const chunk = targetIdsList.slice(i, i + FF_BATCH_SIZE);
+      const targetIds = chunk.join(',');
+
+      const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
+        params: { key: dbUser.ffScouterKey, targets: targetIds },
+        timeout: 15000
       });
-    } catch (err) {
-      console.error('Error fetching enemy faction members:', err.message);
+
+      if (ffRes.data?.error) {
+        return res.status(400).json({ error: 'FFScouter error: ' + ffRes.data.error });
+      }
+
+      // FFScouter returns an array directly (not nested under .stats)
+      const ffStats = Array.isArray(ffRes.data) ? ffRes.data : (ffRes.data?.stats || []);
+      if (Array.isArray(ffStats)) {
+        ffStats.forEach(s => {
+          if (s.player_id) statsMap[s.player_id] = s;
+        });
+      }
     }
 
     // Process enemy members with data from both Torn API and FFScouter
-    const enemies = Array.from(enemyMemberMap.entries()).map(([id, attackName]) => {
+    const enemies = Array.from(enemyMembersMap.entries()).map(([id, attackName]) => {
       const tornData = tornMemberMap[id] || {};
       const stats = statsMap[id] || {};
       // Name priority: Torn API > FFScouter > Attack data > fallback
@@ -2115,8 +2223,31 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       }
     }
 
-    // Get enemy members with stats from FFScouter
+    // Get enemy members from the enemy faction's full roster (matching the Enemy
+    // Stats table) so the comparison is based on the war faction's members
+    // rather than only on players who have appeared in war attacks.
     const enemyMemberMap = new Map();
+
+    try {
+      const encodedFactionKey = encodeURIComponent(factionKey.trim());
+      const enemyFactionRes = await axios.get(
+        `https://api.torn.com/v2/faction/${enemyFactionId}?selections=basic,members&key=${encodedFactionKey}`
+      );
+
+      const rawEnemyMembers = enemyFactionRes.data.members || {};
+      const enemyFactionMembers = Array.isArray(rawEnemyMembers)
+        ? rawEnemyMembers
+        : Object.values(rawEnemyMembers);
+
+      enemyFactionMembers.forEach(m => {
+        if (m.id) enemyMemberMap.set(m.id, m.name || null);
+      });
+    } catch (err) {
+      console.error('Error fetching enemy faction members for comparison:', err.message);
+    }
+
+    // Fall back to scanning war attacks to pick up any enemy members who may
+    // have been missed by the roster (e.g. recent joiners/leavers).
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
 
@@ -2129,20 +2260,18 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
         if (attack.started < rankedWar.start) { reachedWarStart = true; break; }
         if (rankedWar.end && attack.started > rankedWar.end) continue;
 
-        if (attack.is_ranked_war) {
-          if (attack.defender?.faction?.id === enemyFactionId) {
-            const defenderId = attack.defender.id;
-            const defenderName = attack.defender.name;
-            if (defenderId && !enemyMemberMap.has(defenderId)) {
-              enemyMemberMap.set(defenderId, defenderName || null);
-            }
-          }
-          if (attack.attacker?.faction?.id === enemyFactionId) {
-            const attackerId = attack.attacker.id;
-            const attackerName = attack.attacker.name;
-            if (attackerId && !enemyMemberMap.has(attackerId)) {
-              enemyMemberMap.set(attackerId, attackerName || null);
-            }
+        if (!attack.is_ranked_war) continue;
+
+        const candidates = [];
+        if (attack.defender?.faction?.id === enemyFactionId) {
+          candidates.push([attack.defender.id, attack.defender.name]);
+        }
+        if (attack.attacker?.faction?.id === enemyFactionId) {
+          candidates.push([attack.attacker.id, attack.attacker.name]);
+        }
+        for (const [pid, pname] of candidates) {
+          if (pid && !enemyMemberMap.has(pid)) {
+            enemyMemberMap.set(pid, pname || null);
           }
         }
       }
@@ -2151,7 +2280,7 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     }
 
     if (enemyMemberMap.size === 0) {
-      return res.status(400).json({ error: 'No enemy members found in war attacks.' });
+      return res.status(400).json({ error: 'No enemy members found for this war.' });
     }
 
     // Find a user with FFScouter key
@@ -2160,22 +2289,30 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       return res.status(400).json({ error: 'No FFScouter API key available. Please save one in the Targets section.' });
     }
 
-    const targetIds = Array.from(enemyMemberMap.keys()).join(',');
-    const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
-      params: { key: dbUserWithKey.ffScouterKey, targets: targetIds },
-      timeout: 15000
-    });
-
-    if (ffRes.data?.error) {
-      return res.status(400).json({ error: 'FFScouter error: ' + ffRes.data.error });
-    }
-
+    // Fetch FFScouter stats in batches to stay within the per-request limit (205).
+    const targetIdsList = Array.from(enemyMemberMap.keys());
+    const FF_BATCH_SIZE = 150;
     const statsMap = {};
-    const ffStats = Array.isArray(ffRes.data) ? ffRes.data : (ffRes.data?.stats || []);
-    if (Array.isArray(ffStats)) {
-      ffStats.forEach(s => {
-        if (s.player_id) statsMap[s.player_id] = s;
+
+    for (let i = 0; i < targetIdsList.length; i += FF_BATCH_SIZE) {
+      const chunk = targetIdsList.slice(i, i + FF_BATCH_SIZE);
+      const targetIds = chunk.join(',');
+
+      const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
+        params: { key: dbUserWithKey.ffScouterKey, targets: targetIds },
+        timeout: 15000
       });
+
+      if (ffRes.data?.error) {
+        return res.status(400).json({ error: 'FFScouter error: ' + ffRes.data.error });
+      }
+
+      const ffStats = Array.isArray(ffRes.data) ? ffRes.data : (ffRes.data?.stats || []);
+      if (Array.isArray(ffStats)) {
+        ffStats.forEach(s => {
+          if (s.player_id) statsMap[s.player_id] = s;
+        });
+      }
     }
 
     // Build enemy members array
@@ -2954,6 +3091,177 @@ app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnersh
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// UTILITIES ARMORY REQUEST TICKETS
+// ═══════════════════════════════════════════════════════════════════════════════
+// Members request a Utilities armory item from a dropdown on My Day. Each request
+// is stored as an AppNotification (type 'utilities_request') that appears on the
+// My Day of everyone with the Utility Loaning permission until it is fulfilled.
+// Fulfilment creates a 'utilities_fulfilled' notification targeted to the requester
+// and deletes the open request. The Utilities armory page reflects the actual loan
+// automatically through the existing Torn API integration.
+
+// ─── Helper: Fetch the available Utilities armory items (name, id, available) ──
+async function fetchUtilitiesArmoryItems() {
+  const factionKey = await getFactionApiKey();
+  if (!factionKey) return [];
+  let utilitiesData = [];
+  try {
+    const utilsRes = await axios.get(`https://api.torn.com/faction/?selections=utilities&key=${encodeURIComponent(factionKey)}`);
+    const raw = utilsRes.data;
+    if (Array.isArray(raw?.utilities)) utilitiesData = raw.utilities;
+    else if (Array.isArray(raw?.items)) utilitiesData = raw.items;
+    else if (Array.isArray(raw)) utilitiesData = raw;
+  } catch (err) {
+    console.error('Error fetching utilities data:', err.message);
+  }
+    return utilitiesData.map(item => ({
+    id: item.id || null,
+    name: item.name || 'Unknown',
+    available: item.available || 0,
+    loaned: item.loaned || 0,
+    total: item.quantity || 0
+  }));
+}
+
+// ─── API: List available utilities armory items (for the request dropdown) ────
+app.get('/api/utilities/available', isAuthenticated, isFactionMember, async (req, res) => {
+  try {
+    const items = await fetchUtilitiesArmoryItems();
+    res.json({ items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Open a new utilities item request (ticket) ──────────────────────────
+app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req, res) => {
+  try {
+    const { itemId, itemName } = req.body || {};
+    if (!itemId && !itemName) {
+      return res.status(400).json({ error: 'An item must be selected.' });
+    }
+    const requesterId = parseInt(req.session.userId);
+    const dbUser = await User.findOne({ tornPlayerId: requesterId });
+    const requesterName = dbUser?.tornName || dbUser?.username || ('#' + requesterId);
+
+    // Prevent duplicate open requests from the same requester for the same item
+    const dupFilter = { type: 'utilities_request', requesterId };
+    if (itemId) dupFilter.itemId = itemId;
+    else dupFilter.itemName = itemName;
+    const existing = await AppNotification.findOne(dupFilter);
+    if (existing) {
+      return res.status(409).json({ error: 'You already have an open request for this item.' });
+    }
+
+    const notification = await AppNotification.create({
+      type: 'utilities_request',
+      title: `🧰 Utilities Request: ${itemName}`,
+      message: `${requesterName} is requesting ${itemName} from the Utilities armory.`,
+      requesterId,
+      requesterName,
+      itemId: itemId || null,
+      itemName,
+      recipientId: null
+    });
+
+    res.status(201).json({ success: true, request: notification });
+  } catch (err) {
+    console.error('Error creating utilities request:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Get utilities requests (requester's own + all open for holders) ─────
+app.get('/api/utilities/requests', isAuthenticated, isFactionMember, async (req, res) => {
+  try {
+    const userId = parseInt(req.session.userId);
+    const canLoan = await isUtilityLoaningUser(req.session.user);
+
+    const myRequests = await AppNotification.find({
+      type: 'utilities_request',
+      requesterId: userId
+    }).sort({ createdAt: -1 }).lean();
+
+    let allOpenRequests = [];
+    let fulfilledRequests = [];
+    if (canLoan) {
+      allOpenRequests = await AppNotification.find({ type: 'utilities_request' })
+        .sort({ createdAt: -1 }).lean();
+    }
+    // The requester's fulfillment notifications
+    fulfilledRequests = await AppNotification.find({
+      type: 'utilities_fulfilled',
+      recipientId: userId
+    }).sort({ createdAt: -1 }).lean();
+
+    res.json({ canLoan, myRequests, allOpenRequests, fulfilledRequests });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Fulfil a utilities request (creates requester notification + deletes) ─
+app.post('/api/utilities/requests/:id/fulfill', isAuthenticated, isFactionMember, isUtilityLoaning, async (req, res) => {
+  try {
+    const request = await AppNotification.findOne({
+      _id: req.params.id,
+      type: 'utilities_request'
+    });
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found or already fulfilled.' });
+    }
+
+    const fulfilledBy = req.session.user?.tornName || req.session.user?.username || ('#' + req.session.userId);
+
+    // Notify the requester (only if they're still a faction member with an account)
+    const requester = await User.findOne({ tornPlayerId: request.requesterId });
+    if (requester) {
+      await AppNotification.create({
+        type: 'utilities_fulfilled',
+        title: `✅ Your Utilities Request Was Fulfilled`,
+        message: `${request.itemName} has been loaned to you by ${fulfilledBy}.`,
+        requesterId: request.requesterId,
+        requesterName: request.requesterName,
+        itemId: request.itemId,
+        itemName: request.itemName,
+        recipientId: request.requesterId
+      });
+    }
+
+    // Remove the open request
+    await AppNotification.deleteOne({ _id: request._id });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error fulfilling utilities request:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Cancel / delete an open utilities request ──────────────────────────
+app.delete('/api/utilities/requests/:id', isAuthenticated, isFactionMember, async (req, res) => {
+  try {
+    const request = await AppNotification.findOne({
+      _id: req.params.id,
+      type: 'utilities_request'
+    });
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found or already fulfilled.' });
+    }
+    const userId = parseInt(req.session.userId);
+    const canLoan = await isUtilityLoaningUser(req.session.user);
+    // Only the requester or a Utility Loaning holder can cancel
+    if (request.requesterId !== userId && !canLoan) {
+      return res.status(403).json({ error: 'You can only cancel your own requests.' });
+    }
+    await AppNotification.deleteOne({ _id: request._id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── API: Level progress via HOF ──────────────────────────────────────────────
 app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
   try {
@@ -3439,26 +3747,51 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
       energy: null,
       nerve: null,
       activeOc: null,
-      ocItemNeeded: null,
+             ocItemNeeded: null,
+       ocItemHave: null,
       ocItemChannelLink: null,
       war: null,
-      hasApiKey: !!dbUser?.tornApiKey
+      hasApiKey: !!dbUser?.tornApiKey,
+      canLoanUtilities: false,
+      pendingRequests: [],
+      myRequestStatus: [],
+      fulfilledRequests: [],
+      loanedItems: []
     };
 
-    // 1. Fetch user bars (nerve, energy) if they have an API key
+                          // 1. Fetch user bars (nerve, energy) if they have an API key
+    let playerItems = [];
     if (dbUser?.tornApiKey) {
       try {
-        const tornRes = await axios.get(
-          `https://api.torn.com/user/?selections=bars&key=${encodeURIComponent(dbUser.tornApiKey)}`,
-          { timeout: 10000 }
-        );
-        if (!tornRes.data.error) {
-          result.energy = tornRes.data.energy || null;
-          result.nerve = tornRes.data.nerve || null;
+          const tornRes = await axios.get(
+            `https://api.torn.com/user/?selections=bars&key=${encodeURIComponent(dbUser.tornApiKey)}`,
+            { timeout: 10000 }
+          );
+          if (!tornRes.data.error) {
+            result.energy = tornRes.data.energy || null;
+            result.nerve = tornRes.data.nerve || null;
+          }
+        } catch (err) {
+          console.error('My Day: Error fetching user bars:', err.message);
         }
-      } catch (err) {
-        console.error('My Day: Error fetching user bars:', err.message);
-      }
+        // 1b. Separately fetch player inventory items (non-fatal if this fails)
+        try {
+          const itemsRes = await axios.get(
+            `https://api.torn.com/user/?selections=items&key=${encodeURIComponent(dbUser.tornApiKey)}`,
+            { timeout: 10000 }
+          );
+          if (!itemsRes.data.error && itemsRes.data.items) {
+            if (Array.isArray(itemsRes.data.items)) {
+              playerItems = itemsRes.data.items.filter(i => (i.quantity || 0) > 0);
+            } else if (typeof itemsRes.data.items === 'object') {
+              playerItems = Object.entries(itemsRes.data.items)
+                .filter(([, q]) => (q || 0) > 0)
+                .map(([id]) => ({ id: parseInt(id) }));
+            }
+          }
+        } catch (err) {
+          console.error('My Day: Error fetching user items:', err.message);
+        }
     }
 
     // 2. Check for active OC participation
@@ -3496,6 +3829,38 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
           if (participant && participant.tool && participant.tool !== 'N/A') {
             result.ocItemNeeded = participant.tool;
             result.ocItemChannelLink = 'https://discord.com/channels/1432576178383753309/1461808457869951077';
+
+            // Check if the player currently has this item in their inventory
+            if (playerItems.length > 0) {
+              // Build a name -> item ID lookup from cached playerItems IDs
+              // playerItems contains entries like { id: <int> } or { item_id: <int> }
+              const playerItemIds = new Set(
+                playerItems.map(i => String(i.id || i.item_id))
+              );
+
+              // Fetch the Torn item catalog to map item name -> item ID
+              let catalogNameToId = {};
+              try {
+                const catalogRes = await axios.get(
+                  `https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(factionKey)}`
+                );
+                if (!catalogRes.data.error && catalogRes.data.items) {
+                  Object.entries(catalogRes.data.items).forEach(([id, item]) => {
+                    if (item.name) {
+                      catalogNameToId[normalizeItemName(item.name)] = parseInt(id);
+                    }
+                  });
+                }
+              } catch (err) {
+                console.error('My Day: Error fetching item catalog for ocItemHave:', err.message);
+              }
+
+              // Find the item ID matching the needed item name, then check inventory
+              const neededItemId = catalogNameToId[normalizeItemName(participant.tool)];
+              result.ocItemHave = !!neededItemId && playerItemIds.has(String(neededItemId));
+            } else {
+              result.ocItemHave = false;
+            }
           }
         }
       } catch (err) {
@@ -3528,6 +3893,71 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
       } catch (err) {
         console.error('My Day: Error checking war status:', err.message);
       }
+    }
+
+    // 4. Utilities armory request tickets
+    try {
+      result.canLoanUtilities = await isUtilityLoaningUser(req.session.user);
+
+      // Requester's own open requests + fulfillment notifications
+      result.myRequestStatus = await AppNotification.find({
+        type: 'utilities_request',
+        requesterId: userId
+      }).sort({ createdAt: -1 }).lean();
+      result.fulfilledRequests = await AppNotification.find({
+        type: 'utilities_fulfilled',
+        recipientId: userId
+      }).sort({ createdAt: -1 }).lean();
+
+      // Open requests visible to anyone with the Utility Loaning permission
+      if (result.canLoanUtilities) {
+        result.pendingRequests = await AppNotification.find({ type: 'utilities_request' })
+          .sort({ createdAt: -1 }).lean();
+      }
+    } catch (err) {
+      console.error('My Day: Error loading utilities requests:', err.message);
+    }
+
+    // 5. Utilities armory items currently loaned to this user
+    try {
+      result.loanedItems = [];
+      if (factionKey) {
+        const utilsRes = await axios.get(
+          `https://api.torn.com/faction/?selections=utilities&key=${encodeURIComponent(factionKey)}`
+        );
+        const raw = utilsRes.data;
+        let utilsData = [];
+        if (Array.isArray(raw?.utilities)) utilsData = raw.utilities;
+        else if (Array.isArray(raw?.items)) utilsData = raw.items;
+        else if (Array.isArray(raw)) utilsData = raw;
+
+        const myLoaned = [];
+        utilsData.forEach(item => {
+          if (!item.loaned_to || (item.loaned || 0) === 0) return;
+          let ids = [];
+          if (typeof item.loaned_to === 'string') ids = item.loaned_to.split(',').map(s => s.trim());
+          else if (Array.isArray(item.loaned_to)) ids = item.loaned_to;
+          else ids = [String(item.loaned_to)];
+
+          const loanedToMe = ids.some(idStr => {
+            const pid = parseInt(idStr);
+            return !isNaN(pid) && pid === userId;
+          });
+
+          if (loanedToMe) {
+            myLoaned.push({
+              itemId: item.id || null,
+              itemName: item.name || 'Unknown',
+              total: item.quantity || 0,
+              loaned: item.loaned || 0,
+              available: item.available || 0
+            });
+          }
+        });
+        result.loanedItems = myLoaned;
+      }
+    } catch (err) {
+      console.error('My Day: Error loading loaned utilities items:', err.message);
     }
 
     res.json(result);
