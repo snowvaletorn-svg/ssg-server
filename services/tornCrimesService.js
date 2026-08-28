@@ -35,13 +35,26 @@ function transformCrimeData(apiCrime, factionId = 53272) {
     apiCrime.slots.forEach(slot => {
       // Get item/tool info for this position - use static mapping first, then API data
       let toolName = 'N/A';
-      
-      // Check if role has a static tool requirement
+      let toolId = null;
+      let toolAvailable = null;
+
+      // The v2 API provides the EXACT item ID required for this position (item_requirement.id)
+      // and whether that item has been checked in / is available for this slot
+      // (item_requirement.is_available). These are authoritative signals for the OC item
+      // question — different crimes reuse the same-named position (e.g. "Picklock") with
+      // different specific items, so we cannot rely on name matching alone. Capture both
+      // here and persist them on the participant.
+      if (slot.item_requirement && slot.item_requirement.id) {
+        toolId = parseInt(slot.item_requirement.id);
+      }
+      if (slot.item_requirement) {
+        toolAvailable = slot.item_requirement.is_available === true;
+      }
+
+      // Check if role has a static tool requirement (used only for the display name,
+      // since the v2 API's item_requirement does not include a name)
       if (slot.position && ROLE_TOOLS[slot.position]) {
         toolName = ROLE_TOOLS[slot.position];
-      } else if (slot.item_requirement && slot.item_requirement.name) {
-        // Fall back to API-provided item name
-        toolName = slot.item_requirement.name;
       }
       
       // Only add participants for slots that have a user assigned
@@ -68,7 +81,9 @@ function transformCrimeData(apiCrime, factionId = 53272) {
           playerId: slot.user.id,
           playerName: '', // Will be enriched later from faction members
           role: fullRoleName, // The full position name (e.g., "Thief #1", "Looter #3")
-          tool: toolName, // Tool/item required for this position
+          tool: toolName, // Tool/item required for this position (display name)
+          toolId: toolId, // Exact item ID required for this position (authoritative for inventory checks)
+          toolAvailable: toolAvailable, // Whether the item is checked in/available for this slot
           status: {
             color: 'blue', // Default color
             description: '',

@@ -4,7 +4,9 @@ const participantSchema = new mongoose.Schema({
   playerId: { type: Number, required: true },
   playerName: { type: String, default: '' },
   role: { type: String, default: '' }, // OC position (e.g., "Picklock", "Car Thief")
-  tool: { type: String, default: 'N/A' }, // Tool/item required for this position
+  tool: { type: String, default: 'N/A' }, // Tool/item required for this position (display name)
+  toolId: { type: Number, default: null }, // Exact item ID required for this position (from item_requirement.id)
+  toolAvailable: { type: Boolean, default: null }, // Whether the required item is checked in / available for this slot (from item_requirement.is_available)
   status: {
     color: { type: String, enum: ['blue', 'green', 'red'], default: 'blue' },
     description: { type: String, default: '' },

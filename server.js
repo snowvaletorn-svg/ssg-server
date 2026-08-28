@@ -3848,37 +3848,62 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
             result.ocItemNeeded = participant.tool;
             result.ocItemChannelLink = 'https://discord.com/channels/1432576178383753309/1461808457869951077';
 
-            // Check if the player currently has this item in their inventory
-            if (playerItems.length > 0) {
-              // Build a name -> item ID lookup from cached playerItems IDs
+            // Determine if the player currently has this item for their OC.
+            // Priority of signals (most authoritative first):
+            //   1. toolAvailable — the crime slot tells us the item is checked in/available
+            //      for this member right now (item_requirement.is_available). This works even
+            //      if the inventory call below is empty/fails.
+            //   2. toolId in inventory — we know the exact required item ID (item_requirement.id).
+            //   3. Legacy name-based catalog lookup — only for records saved before toolId existed.
+            result.ocItemHave = participant.toolAvailable === true;
+
+            if (!result.ocItemHave && playerItems.length > 0) {
               // playerItems contains entries like { id: <int> } or { item_id: <int> }
               const playerItemIds = new Set(
                 playerItems.map(i => String(i.id || i.item_id))
               );
 
-              // Fetch the Torn item catalog to map item name -> item ID
-              let catalogNameToId = {};
-              try {
-                const catalogRes = await axios.get(
-                  `https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(factionKey)}`
-                );
-                if (!catalogRes.data.error && catalogRes.data.items) {
-                  Object.entries(catalogRes.data.items).forEach(([id, item]) => {
-                    if (item.name) {
-                      catalogNameToId[normalizeItemName(item.name)] = parseInt(id);
-                    }
-                  });
+              if (participant.toolId) {
+                // Authoritative path: exact item ID from the v2 crime API — no name catalog lookup.
+                result.ocItemHave = playerItemIds.has(String(participant.toolId));
+              } else {
+                // Legacy fallback: records created before toolId existed only have a display name
+                // (e.g. "Picklocks"). Resolve it to an ID via the Torn item catalog.
+                let catalogNameToId = {};
+                try {
+                  const catalogRes = await axios.get(
+                    `https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(factionKey)}`
+                  );
+                  if (!catalogRes.data.error && catalogRes.data.items) {
+                    Object.entries(catalogRes.data.items).forEach(([id, item]) => {
+                      if (item.name) {
+                        catalogNameToId[normalizeItemName(item.name)] = parseInt(id);
+                      }
+                    });
+                  }
+                } catch (err) {
+                  console.error('My Day: Error fetching item catalog for ocItemHave:', err.message);
                 }
-              } catch (err) {
-                console.error('My Day: Error fetching item catalog for ocItemHave:', err.message);
-              }
 
-              // Find the item ID matching the needed item name, then check inventory
-              const neededItemId = catalogNameToId[normalizeItemName(participant.tool)];
-              result.ocItemHave = !!neededItemId && playerItemIds.has(String(neededItemId));
-            } else {
-              result.ocItemHave = false;
+                // Find the item ID matching the needed item name, then check inventory
+                const neededItemId = catalogNameToId[normalizeItemName(participant.tool)];
+                result.ocItemHave = !!neededItemId && playerItemIds.has(String(neededItemId));
+              }
             }
+
+            // Diagnostic logging to help trace why the ownership check returned its value
+            console.log(
+              '[My Day] OC item check',
+              JSON.stringify({
+                userId,
+                role: participant.role,
+                tool: participant.tool,
+                toolId: participant.toolId,
+                toolAvailable: participant.toolAvailable,
+                playerItemCount: playerItems.length,
+                ocItemHave: result.ocItemHave
+              })
+            );
           }
         }
       } catch (err) {
