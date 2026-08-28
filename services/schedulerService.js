@@ -44,6 +44,17 @@ async function takeDailyStockSnapshot() {
       const dividendPerShare = totalShares > 0 ? dividend / totalShares : 0;
       const dividendYield = price > 0 ? (dividendPerShare / price) * 100 : 0;
 
+      // Torn's `stock.benefit` is an object (e.g. { type, frequency, requirement, description }).
+      // The schema's `benefit` field is a String, so flatten it into a readable description
+      // that matches how server.js displays benefit info on the dashboard.
+      const benefitObj = stock.benefit || {};
+      const benefitDescription = benefitObj.description || '';
+      const benefitFrequency = benefitObj.frequency || 0;
+      let benefit = benefitDescription;
+      if (benefitFrequency > 0 && benefit) {
+        benefit += ` (every ${benefitFrequency} days)`;
+      }
+
       // Check if tiered (most stocks are, except the exchange indices)
       const NON_TIERED = ['None', 'TCSE', 'SSE', 'ENX', 'HKSE', 'LSE', 'ASX', 'TSX', 'FSE', 'SGX', 'BSE', 'JSE'];
       const isTiered = !NON_TIERED.includes(stockName);
@@ -115,7 +126,7 @@ async function takeDailyStockSnapshot() {
         investors: stock.investors || 0,
         availableShares: stock.available_shares || 0,
         dividend: stock.dividend || 0,
-        benefit: stock.benefit || '',
+        benefit: benefit,
         benefitValue: dividendYield,
         isTiered,
         tiers

@@ -2768,6 +2768,16 @@ function isCrimeItemType(crimeName, itemName, column) {
     return (target.length >= 4 && (target.includes(norm) || norm.includes(target)));
   });
 }
+
+// Check whether an item is associated with a specific crime at all — i.e. it is
+// either a Tool (loaned out and returned) or a Material (consumed) for that crime.
+// Items such as personal-crime tools (e.g. Bucket, Cemetery Key) are NOT part of any
+// OC, so although the holding member may have an active/complete crime, the loaned
+// item itself is unrelated to that OC and should be reported as "No OC".
+function isCrimeItem(crimeName, itemName) {
+  return isCrimeItemType(crimeName, itemName, 'tools') ||
+         isCrimeItemType(crimeName, itemName, 'materials');
+}
 // ─── API: Faction Loans (Armor & Weapons) ──────────────────────────────────────
 app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
@@ -3040,9 +3050,11 @@ app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnersh
         const participant = (crime.participants || []).find(p => p.playerId === task.playerId);
         role = participant?.role || '';
         ocRoleMatch = !!(participant?.tool) && normalizeItemName(participant.tool) === normalizeItemName(task.itemName);
-        const roleToolColumn = participant?.tool || task.itemName;
-        consumed = isCrimeItemType(crime.crimeName, task.itemName, 'materials') ||
-                   isCrimeItemType(crime.crimeName, roleToolColumn, 'materials');
+        // An item is "consumed" only if the ITEM ITSELF is a material of the crime.
+        // It must NOT be inferred from the participant's role tool column: a member's
+        // role may require a material (e.g. "Dog Treats" in Pet Project), but that has
+        // no bearing on a DIFFERENT item that member is holding (e.g. a Cemetery Key).
+        consumed = isCrimeItemType(crime.crimeName, task.itemName, 'materials');
       }
 
       let status;
@@ -3050,13 +3062,19 @@ app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnersh
       if (crime && consumed) {
         status = 'CONSUMED';
         requiresReturn = false;
-      } else if (crime && crime.isComplete) {
-        status = 'RETURN DUE';
-        requiresReturn = true;
-      } else if (crime) {
-        status = 'IN USE';
-        requiresReturn = true;
+      } else if (crime && isCrimeItem(crime.crimeName, task.itemName)) {
+        // The item is a tool required by / associated with the member's OC.
+        if (crime.isComplete) {
+          status = 'RETURN DUE';
+          requiresReturn = true;
+        } else {
+          status = 'IN USE';
+          requiresReturn = true;
+        }
       } else {
+        // No tracked crime, or the item is not part of that crime (e.g. a personal-crime
+        // item like a Bucket or Cemetery Key held by a member who also has an OC on file).
+        // The item is not tied to any OC → report as "No OC".
         status = 'NO OC';
         requiresReturn = true;
       }

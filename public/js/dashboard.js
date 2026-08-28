@@ -346,7 +346,7 @@ function renderMyDay(d) {
   }
 
   // ── Utilities Armory Request Ticket ──
-  cards.push(renderUtilitiesRequestCard());
+    cards.push(renderUtilitiesRequestCard());
 
   // ── Pending Item Requests (visible to Utility Loaning holders) ──
   if (d.canLoanUtilities) {
@@ -3585,7 +3585,7 @@ const HELP_CONTENT = {
         heading: 'Utilities Inventory',
         content: `
           <p class="help-text">The Utilities armory holds items used for Organized Crimes and personal crimes. This tab shows the inventory (total, loaned, available) and every loaned item tied to the member holding it <strong style="color:#c0bcbc;">and their organized crime</strong>.</p>
-          <div class="help-callout">💡 Each loan shows the crime, the member&apos;s role, and a status: <strong style="color:#f39c12;">In Use</strong> (item should be returned when the crime completes), <strong style="color:#e74c3c;">Return Due</strong> (their crime already finished and the item is a tool), <strong style="color:#2ecc71;">Consumed</strong> (a material that is used up — no return needed), or <strong style="color:#888;">No OC</strong>.</div>
+          <div class="help-callout">💡 Each loan shows the crime, the member&apos;s role, and a status: <strong style="color:#f39c12;">In Use</strong> (item should be returned when the crime completes), <strong style="color:#e74c3c;">Return Due</strong> (their crime already finished and the item is a tool), <strong style="color:#2ecc71;">Consumed</strong> (a material that is used up — no return needed), or <strong style="color:#888;">Not for OC</strong>.</div>
           <div class="help-callout">💡 A 🧰 marker on an item means it matches that member&apos;s OC role requirement. Materials (consumed) and Tools (returned) are classified per the Torn OC 2.0 wiki — an item can be a tool in one crime and a material in another.</div>
         `
       }
@@ -5472,7 +5472,7 @@ function utilitiesStatusBadge(status) {
     'IN USE': { label: '🔄 In Use', color: '#f39c12' },
     'RETURN DUE': { label: '⬅️ Return Due', color: '#e74c3c' },
     'CONSUMED': { label: '💨 Consumed', color: '#2ecc71' },
-    'NO OC': { label: '➖ No OC', color: '#888' }
+    'NO OC': { label: '➖ Not for OC', color: '#888' }
   };
   const s = map[status] || { label: status, color: '#888' };
   return `<span style="color:${s.color};font-weight:600;">${s.label}</span>`;
@@ -5537,10 +5537,10 @@ function renderUtilitiesInventory(items, loans, memberCount) {
           <span style="color:#555;font-size:0.7rem;"> [${l.playerId}]</span>
         </td>
         <td>${escapeHtml(l.itemName)}${l.ocRoleMatch ? ' <span title="Matches this member\'s OC role requirement" style="cursor:help;font-size:0.7rem;color:#f39c12;">🧰</span>' : ''}</td>
-        <td>${escapeHtml(l.crimeName || '—')}</td>
-        <td style="text-align:center;">${escapeHtml(l.role || '—')}</td>
+        <td>${l.status === 'NO OC' ? '—' : escapeHtml(l.crimeName || '—')}</td>
+        <td style="text-align:center;">${l.status === 'NO OC' ? '—' : escapeHtml(l.role || '—')}</td>
         <td style="text-align:center;white-space:nowrap;">${utilitiesStatusBadge(l.status)}</td>
-        <td style="text-align:center;">${escapeHtml(l.crimeStatus || '')}</td>
+        <td style="text-align:center;">${l.status === 'NO OC' ? '' : escapeHtml(l.crimeStatus || '')}</td>
         <td style="font-size:0.75rem;">${formatLoanReturnTime(l)}</td>
       </tr>`).join('');
 
