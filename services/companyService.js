@@ -81,6 +81,192 @@ function getCompanyTypeName(typeId) {
   return COMPANY_TYPES[id] || `Type ${typeId}`;
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Position stat requirements + employee efficiency (Torn Stats style matrix)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// In-memory cache for the static /torn/…?selections=companies payload.
+// Torn's company-type definitions only change on game updates, so re-fetching
+// at most once per day per director is plenty and avoids redundant API calls.
+const companyTypesCache = new Map();   // directorApiKey -> { fetchedAt, payload }
+const COMPANY_TYPES_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+/**
+ * Fetch the full torn `companies` payload (all company types + their
+ * positions and stat requirements). Cached per API key.
+ * NOTE: the selection is `companies` (there is no `companytypes` selection —
+ * requesting it returns API error 4 "Wrong fields").
+ * @param {string} directorApiKey Director's Full/Limited access Torn API key.
+ * @returns {Promise<object|null>} The `companies` object or null on failure.
+ */
+async function fetchCompanyTypesPayload(directorApiKey) {
+  if (!directorApiKey) return null;
+
+  const cached = companyTypesCache.get(directorApiKey);
+  if (cached && Date.now() < cached.fetchedAt + COMPANY_TYPES_TTL) {
+    return cached.payload;
+  }
+
+  try {
+    const res = await axios.get(
+      `https://api.torn.com/torn/?selections=companies&key=${encodeURIComponent(directorApiKey)}`
+    );
+    if (res.data.error) throw new Error(res.data.error.error);
+    const payload = res.data.companies || null;
+    companyTypesCache.set(directorApiKey, { fetchedAt: Date.now(), payload });
+    return payload;
+  } catch (err) {
+    console.error('Error fetching companies (company types) from Torn API:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Get the normalized list of positions + stat requirements for a company type.
+ * Source: GET /torn/?selections=companies — positions are keyed by NAME and
+ * expose `man_required`, `int_required`, `end_required` (plus `*_gain` daily
+ * gains) and `special_ability` (the literal string "None" when absent).
+ * Each normalized position: { id, name, specialAbility, intelligence,
+ * manuallabor, endurance, primaryStat, secondaryStat }.
+ * @param {number} typeId Torn numeric company type id.
+ * @param {string} directorApiKey Director's Torn API key (for the fetch).
+ * @returns {Promise<Array>} Normalized positions array (empty on failure).
+ */
+async function getPositionsForCompanyType(typeId, directorApiKey) {
+  const typeIdNum = parseInt(typeId);
+  if (!typeIdNum) return [];
+
+  const payload = await fetchCompanyTypesPayload(directorApiKey);
+  if (!payload) return [];
+
+  const type = payload[typeIdNum];
+  if (!type || !type.positions) return [];
+
+  const positions = [];
+  for (const [posName, pos] of Object.entries(type.positions)) {
+    if (!pos) continue;
+
+    const intelligence = parseInt(pos.int_required) || 0;
+    const manuallabor = parseInt(pos.man_required) || 0;
+    const endurance = parseInt(pos.end_required) || 0;
+
+    // Primary = the higher required stat; secondary = the lower required stat.
+    const required = [
+      { key: 'INT', val: intelligence },
+      { key: 'MAN', val: manuallabor },
+      { key: 'END', val: endurance }
+    ].filter(r => r.val > 0).sort((a, b) => b.val - a.val);
+
+    positions.push({
+      id: posName,
+      name: posName,
+      specialAbility: pos.special_ability && pos.special_ability !== 'None' ? pos.special_ability : '',
+      intelligence,
+      manuallabor,
+      endurance,
+      primaryStat: required[0] ? required[0].key : null,
+      secondaryStat: required[1] ? required[1].key : null
+    });
+  }
+
+  // Keep positions in the order Torn reports them.
+  return positions;
+}
+
+/**
+ * Effectiveness contribution for a single required stat, matching Torn's
+ * community "effectiveness mechanism" (see TheEffectivenessMechanism repo):
+ *   base = floor(min(45, stat/required * 45))      -- capped base
+ *   bonus = stat > required ? floor(max(0, 5*log2(stat/required))) : 0
+ *   returns base + bonus
+ * Base is capped at 45; the log2 bonus rewards over-qualification beyond that.
+ * @param {number} stat        Employee's value for this stat.
+ * @param {number} required    The position's requirement for this stat.
+ * @returns {number} 0..(45 + bonus)
+ */
+function statEffectiveness(stat, required) {
+  const s = parseInt(stat) || 0;
+  const r = parseInt(required) || 0;
+  if (r <= 0) return 0;
+  try {
+    const base = Math.floor(Math.min(45, (s / r) * 45));
+    let bonus = 0;
+    if (s > r) {
+      bonus = Math.floor(Math.max(0, 5 * Math.log2(s / r)));
+    }
+    return base + bonus;
+  } catch {
+    return 0; // guard against log of non-positive numbers
+  }
+}
+
+/**
+ * Compute an employee's effectiveness at a single position using the same
+ * formula as Torn's community "effectiveness mechanism": the position requires
+ * a primary stat (the higher requirement) plus a secondary stat (the lower
+ * requirement); effectiveness = statEffectiveness(primary) + statEffectiveness(secondary).
+ * Stats the position does not require contribute 0.
+ * @param {object} employee { manualLabor, intelligence, endurance }
+ * @param {object} position { intelligence, manuallabor, endurance }
+ * @returns {number} Effectiveness points (typically 0..~90+ with log2 bonuses).
+ */
+function computeEfficiencyForPosition(employee, position) {
+  // Work stat key is `manualLabor` (capital L) elsewhere in this codebase.
+  const manuallabor = employee.manualLabor !== undefined ? employee.manualLabor : employee.manuallabor;
+  const stats = [
+    { stat: employee.intelligence, req: position.intelligence },
+    { stat: manuallabor, req: position.manuallabor },
+    { stat: employee.endurance, req: position.endurance }
+  ];
+
+  // Only the two required stats matter. The higher requirement = primary,
+  // the lower requirement = secondary (matches role definitions: e.g. Sexpert
+  // INT 10000 primary > END 5000 secondary).
+  const required = stats.filter(s => (parseInt(s.req) || 0) > 0);
+  if (required.length === 0) return 90; // role with no stat requirements
+  required.sort((a, b) => (parseInt(b.req) || 0) - (parseInt(a.req) || 0));
+
+  const [primary, secondary] = required;
+  return statEffectiveness(primary.stat, primary.req) +
+         (secondary ? statEffectiveness(secondary.stat, secondary.req) : 0);
+}
+
+/**
+ * Build the efficiency matrix for every employee against every position.
+ * @param {Array} employees Normalized employee list (with work stats).
+ * @param {Array} positions Normalized positions for the company type.
+ */
+function buildEfficiencyMatrix(employees, positions) {
+  // Employees carry `manualLabor` (capital L) from getCompanyData; accept both
+  // spellings so a MAN-only employee is never dropped from the matrix.
+  const populated = employees.filter(e =>
+    e && (e.intelligence || e.manualLabor || e.manuallabor || e.endurance)
+  );
+
+  return positions.map(position => {
+    let best = null;
+    const perEmployee = populated.map(employee => {
+      const pct = computeEfficiencyForPosition(employee, position);
+      if (!best || pct > best.pct) best = { playerId: employee.playerId, pct };
+      return { playerId: employee.playerId, pct };
+    });
+
+    return {
+      id: position.id,
+      name: position.name,
+      specialAbility: position.specialAbility,
+      intelligence: position.intelligence,
+      manuallabor: position.manuallabor,
+      endurance: position.endurance,
+      primaryStat: position.primaryStat || null,
+      secondaryStat: position.secondaryStat || null,
+      bestPlayerId: best ? best.playerId : null,
+      bestEfficiency: best ? best.pct : 0,
+      employees: perEmployee
+    };
+  });
+}
+
 // Fetch company data from Torn API using the director's API key
 async function fetchCompanyDataFromApi(companyId, directorApiKey) {
   try {
@@ -187,7 +373,8 @@ async function addCompany(companyId, directorPlayerId, addedBy) {
   // 4. Extract basic info
   const profile = companyData.company || companyData;
   const companyName = profile.name || `Company ${companyId}`;
-  const companyType = getCompanyTypeName(profile.company_type);
+  const companyTypeId = parseInt(profile.company_type);
+  const companyType = getCompanyTypeName(companyTypeId);
   const dailyIncome = profile.daily_income || 0;
 
   // 5. Save to database
@@ -196,6 +383,7 @@ async function addCompany(companyId, directorPlayerId, addedBy) {
       companyId: parseInt(companyId),
       companyName,
       companyType,
+      companyTypeId,
       directorPlayerId: parseInt(directorPlayerId),
       directorName: factionCheck.member?.name || directorUser.tornName || '',
       stars: profile.rating || 0,
@@ -242,6 +430,9 @@ async function getCompanyData(companyId, requestingPlayerId) {
   const dbByTornId = {};
   dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
+  // Numeric company type id (needed to look up position stat requirements).
+  const companyTypeId = parseInt(profile.company_type);
+
   for (const [empId, emp] of Object.entries(employeesData)) {
     if (!emp || !emp.name) continue;
 
@@ -273,12 +464,32 @@ async function getCompanyData(companyId, requestingPlayerId) {
     return a.name.localeCompare(b.name);
   });
 
+  // 4b. Fetch this company type's positions + evaluate each employee's
+  //     efficiency against every position (Torn Stats style matrix).
+  const positions = await getPositionsForCompanyType(companyTypeId, directorUser.tornApiKey);
+  const efficiencyMatrix = buildEfficiencyMatrix(employees, positions);
+
+  // Attach each employee's per-position efficiency + their best position.
+  const matrixByPlayer = {};
+  for (const pos of efficiencyMatrix) {
+    for (const cell of pos.employees) {
+      if (!matrixByPlayer[cell.playerId]) matrixByPlayer[cell.playerId] = [];
+      matrixByPlayer[cell.playerId].push({ positionId: pos.id, name: pos.name, pct: cell.pct });
+    }
+  }
+  employees.forEach(emp => {
+    const perPos = matrixByPlayer[emp.playerId] || [];
+    perPos.sort((a, b) => b.pct - a.pct);
+    emp.efficiency = { byPosition: perPos, best: perPos[0] || null };
+  });
+
   // 5. Detect departed employees and notify ownership (deduped)
   await detectDepartedEmployees(companyId, employeeIds);
 
   // 6. Update cached info in DB
   company.companyName = profile.name || company.companyName;
-  company.companyType = getCompanyTypeName(profile.company_type);
+  company.companyType = getCompanyTypeName(companyTypeId);
+  company.companyTypeId = companyTypeId;
   company.stars = profile.rating || company.stars;
   company.dailyIncome = dailyIncome;
   company.lastFetchedAt = new Date();
@@ -289,13 +500,15 @@ async function getCompanyData(companyId, requestingPlayerId) {
       id: company.companyId,
       name: company.companyName,
       type: company.companyType,
+      typeId: company.companyTypeId,
       director: company.directorName,
       directorId: company.directorPlayerId,
       stars: company.stars,
       dailyIncome,
       lastFetchedAt: company.lastFetchedAt
     },
-    employees
+    employees,
+    positions: efficiencyMatrix
   };
 }
 
@@ -317,5 +530,9 @@ module.exports = {
   removeCompany,
   verifyDirectorInFaction,
   detectDepartedEmployees,
-  fetchCompanyDataFromApi
+  fetchCompanyDataFromApi,
+  getPositionsForCompanyType,
+  computeEfficiencyForPosition,
+  statEffectiveness,
+  buildEfficiencyMatrix
 };

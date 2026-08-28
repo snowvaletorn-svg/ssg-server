@@ -3381,8 +3381,10 @@ const HELP_CONTENT = {
         heading: 'Viewing Company Details',
         content: `
           <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to load your accessible companies</div></div>
-          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click on any company card to view detailed employee information</div></div>
-          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Employee details include work stats (Manual, Intelligence, Endurance) and addiction levels</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Click on any company card to view the detailed employee efficiency matrix</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Each column is a job position (with its <strong style="color:#c0bcbc;">★ primary</strong> and secondary stat requirements); each row is an employee. The value in each cell is that employee's <strong style="color:#c0bcbc;">effectiveness ⚡</strong> for the role — computed from how well their primary &amp; secondary stats meet the position's requirements (each capped at 45 base, so 90⚡ = fully meeting requirements, with a log₂ bonus for over-qualification)</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Green = 90⚡+ (fully/over-qualified), yellow = partially qualified, red = well short. The <span style="color:#3498db;">●</span> marks an employee's current role, and the bottom row shows the best-matched employee for each position</div></div>
+          <div class="help-callout">💡 Use this to spot who to move into open positions for the best results — an employee who fully meets a role's requirements (90⚡+) unlocks the position's special ability.</div>
           <div class="help-callout">💡 Ownership can add new companies using the <strong style="color:#c0bcbc;">➕ Add Company</strong> button with the company ID and director's Torn ID.</div>
         `
       }
@@ -4054,19 +4056,99 @@ async function openCompanyDetail(companyId) {
 
     const company = data.company;
     const employees = data.employees || [];
+    const positions = data.positions || [];
 
-    let employeeRows = '';
-    if (employees.length > 0) {
-      employeeRows = employees.map(emp => `
-        <tr>
-          <td>${escapeHtml(emp.name)}</td>
-          <td>${escapeHtml(emp.position)}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.manualLabor)}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.intelligence)}</td>
-          <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.endurance)}</td>
-          <td style="text-align:center;">${emp.addiction}%</td>
-        </tr>`).join('');
+    // Efficiency cell styling, based on effectiveness points. A position's
+    // effectiveness = primary stat + secondary stat, each capped at 45 base,
+    // so meeting all requirements exactly = 90 points (plus a bonus for
+    // over-qualification).
+    function effColor(pct, loading) {
+      if (loading) return { bg: '#1a1919', fg: '#555' };
+      if (pct >= 90) return { bg: 'rgba(46,204,113,0.16)', fg: '#2ecc71' };
+      if (pct >= 45) return { bg: 'rgba(241,196,15,0.16)', fg: '#f1c40f' };
+      return { bg: 'rgba(231,76,60,0.18)', fg: '#e74c3c' };
     }
+
+    // Per-employee lookup: playerId -> { positionId: pct }
+    const effByEmp = {};
+    employees.forEach(emp => {
+      const map = {};
+      (emp.efficiency?.byPosition || []).forEach(p => { map[p.positionId] = p.pct; });
+      effByEmp[emp.playerId] = map;
+    });
+
+    // Position column headers (name, special ability, required stats).
+    // Primary stat is marked with a ★; secondary with a ·.
+    const posHeaders = positions.map(pos => {
+      const statOf = {
+        INT: pos.intelligence,
+        MAN: pos.manuallabor,
+        END: pos.endurance
+      };
+      const req = [];
+      if (pos.primaryStat) req.push('<span style="color:#e0c060;">★ ' + pos.primaryStat + ' ' + formatNum(statOf[pos.primaryStat]) + '</span>');
+      if (pos.secondaryStat) req.push(pos.secondaryStat + ' ' + formatNum(statOf[pos.secondaryStat]));
+      const ability = pos.specialAbility ? `<div style="font-size:0.62rem;color:#9b59b6;font-weight:600;letter-spacing:0.03em;">✦ ${escapeHtml(pos.specialAbility)}</div>` : '';
+      return `<th style="min-width:96px;text-align:center;vertical-align:middle;">
+        <div style="white-space:nowrap;">${escapeHtml(pos.name)}</div>
+        ${ability}
+        <div style="font-size:0.62rem;color:#777;white-space:nowrap;">${req.join(' · ')}</div>
+      </th>`;
+    }).join('');
+
+    const hasStats = employees.some(e => (e.intelligence || e.manualLabor || e.endurance));
+
+    // Employee rows: sticky identity + one effectiveness cell per position.
+    const employeeRows = employees.map(emp => {
+      const empMap = effByEmp[emp.playerId] || {};
+      const posCells = positions.map(pos => {
+        const pct = empMap[pos.id];
+        const value = (pct === undefined || pct === null) ? null : pct;
+        const c = effColor(value, !hasStats);
+        const held = emp.position && pos.name && emp.position.trim().toLowerCase() === pos.name.trim().toLowerCase();
+        const cellVal = value === null ? '—' : value + '⚡';
+        const heldMark = held ? '<span title="Currently in this role" style="color:#3498db;margin-right:3px;">●</span>' : '';
+        const heldOutline = held ? 'outline:1px solid #3498db;outline-offset:-2px;' : '';
+        return `<td style="text-align:center;background:${c.bg};color:${c.fg};font-family:'Share Tech Mono',monospace;font-size:0.8rem;${heldOutline}">${heldMark}${cellVal}</td>`;
+      }).join('');
+
+      const best = emp.efficiency?.best;
+      const bestHint = best && best.pct != null
+        ? `<div style="font-size:0.66rem;color:#27ae60;font-weight:600;white-space:nowrap;">Best: ${escapeHtml(best.name)} ${best.pct}⚡</div>` : '';
+
+      return `<tr>
+        <td style="position:sticky;left:0;background:#131313;z-index:2;border-right:1px solid #2a2a2a;white-space:nowrap;">
+          <div>${escapeHtml(emp.name)}</div>
+          <div style="font-size:0.68rem;color:#888;">${escapeHtml(emp.position || '—')}</div>
+          ${bestHint}
+        </td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:0.74rem;">${formatNumFull(emp.manualLabor)}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:0.74rem;">${formatNumFull(emp.intelligence)}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;font-size:0.74rem;">${formatNumFull(emp.endurance)}</td>
+        <td style="text-align:center;font-size:0.74rem;">${emp.addiction}%</td>
+        ${posCells}
+      </tr>`;
+    }).join('');
+
+    // Footer: best-matched employee for each position.
+    let bestRow = '';
+    if (positions.length > 0 && hasStats) {
+      const bestCells = positions.map(pos => {
+        const bestEmp = employees.find(e => e.playerId === pos.bestPlayerId);
+        if (!bestEmp) return '<td style="text-align:center;color:#555;">—</td>';
+        const pct = bestEmp.efficiency?.byPosition?.find(p => p.positionId === pos.id)?.pct;
+        const c = effColor(pct, false);
+        return `<td style="text-align:center;color:${c.fg};font-family:'Share Tech Mono',monospace;font-size:0.74rem;">${escapeHtml(bestEmp.name)}<br>${pct}⚡</td>`;
+      }).join('');
+      bestRow = `<tr style="border-top:1px solid #2a2a2a;">
+        <td colspan="5" style="font-weight:600;font-size:0.74rem;color:#888;">Best matched employee</td>
+        ${bestCells}
+      </tr>`;
+    }
+
+    const typeLabel = positions.length > 0
+      ? `<div style="font-size:0.72rem;color:#777;margin-top:0.35rem;padding:0 1.25rem;">Effectiveness (⚡) each role: ★primary stat + secondary stat, both capped at 45 base — <strong style="color:#c0bcbc;">90⚡ = meeting all requirements</strong>, plus a log₂ bonus for over-qualification. ● = employee's current role. Green ▮ = 90⚡+.</div>`
+      : '';
 
     bodyEl.innerHTML = `
       <div class="stats-grid" style="margin-bottom:1.5rem;">
@@ -4075,36 +4157,62 @@ async function openCompanyDetail(companyId) {
         ${statTile(company.stars + '★', 'Star Level')}
         ${statTile('$' + formatNumFull(company.dailyIncome), 'Daily Income')}
       </div>
-      
+
       <div class="card">
         <div class="card-header">
-          👥 Employees (${employees.length})
-          <span style="float:right;font-size:0.8rem;color:#555;">Sorted by position</span>
+          👥 Employees — Efficiency Matrix (${employees.length})
+          <span style="float:right;font-size:0.8rem;color:#555;">Scroll sideways to see every position</span>
         </div>
-        ${employees.length > 0 ? `
-        <div style="overflow-x:auto;">
-          <table class="members-table">
+        ${typeLabel}
+        ${employees.length > 0 && positions.length > 0 ? `
+        <div style="overflow-x:auto;max-height:560px;overflow-y:auto;">
+          <table class="members-table" style="border-collapse:separate;border-spacing:0;">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Position</th>
-                <th style="text-align:right;">Manual</th>
-                <th style="text-align:right;">Intelligence</th>
-                <th style="text-align:right;">Endurance</th>
-                <th style="text-align:center;">Addiction</th>
+                <th style="position:sticky;top:0;left:0;background:#1f1e1e;z-index:3;border-right:1px solid #2a2a2a;">Employee</th>
+                <th style="position:sticky;top:0;background:#1f1e1e;z-index:2;text-align:right;">Manual</th>
+                <th style="position:sticky;top:0;background:#1f1e1e;z-index:2;text-align:right;">Intelligence</th>
+                <th style="position:sticky;top:0;background:#1f1e1e;z-index:2;text-align:right;">Endurance</th>
+                <th style="position:sticky;top:0;background:#1f1e1e;z-index:2;text-align:center;">Addiction</th>
+                ${posHeaders}
               </tr>
             </thead>
-            <tbody>${employeeRows}</tbody>
+            <tbody>
+              ${employeeRows}
+              ${bestRow}
+            </tbody>
           </table>
-        </div>` : '<div class="card-body"><p class="muted">No employee data available.</p></div>'}
+        </div>` : (employees.length > 0
+          ? '<div class="card-body"><p class="muted">Position requirements could not be loaded for this company type, so an efficiency matrix is unavailable. Raw work stats are shown below.</p>' + renderRawEmployees(employees) + '</div>'
+          : '<div class="card-body"><p class="muted">No employee data available.</p></div>')}
       </div>
-      
+
       <p style="font-size:0.75rem;color:#444;margin-top:1rem;">
         Last fetched: ${company.lastFetchedAt ? new Date(company.lastFetchedAt).toLocaleString() : 'Never'}
       </p>`;
   } catch (err) {
     bodyEl.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
+}
+
+// Fallback: simple employee stats table when position requirements are unknown.
+function renderRawEmployees(employees) {
+  const rows = employees.map(emp => `<tr>
+      <td>${escapeHtml(emp.name)}</td>
+      <td>${escapeHtml(emp.position || '—')}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.manualLabor)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.intelligence)}</td>
+      <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(emp.endurance)}</td>
+      <td style="text-align:center;">${emp.addiction}%</td>
+    </tr>`).join('');
+  return `<div style="overflow-x:auto;"><table class="members-table">
+    <thead><tr>
+      <th>Name</th><th>Position</th>
+      <th style="text-align:right;">Manual</th><th style="text-align:right;">Intelligence</th>
+      <th style="text-align:right;">Endurance</th><th style="text-align:center;">Addiction</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 function closeCompanyDetail(event) {

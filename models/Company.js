@@ -4,6 +4,7 @@ const companySchema = new mongoose.Schema({
   companyId: { type: Number, required: true, unique: true },
   companyName: { type: String, default: '' },
   companyType: { type: String, default: '' },
+  companyTypeId: { type: Number, default: null },
   directorPlayerId: { type: Number, required: true },
   directorName: { type: String, default: '' },
   stars: { type: Number, default: 0 },
