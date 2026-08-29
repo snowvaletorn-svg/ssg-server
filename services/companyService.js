@@ -401,20 +401,120 @@ async function addCompany(companyId, directorPlayerId, addedBy) {
   }
 }
 
+/**
+ * Keep the stored director in sync with Torn's live company profile.
+ * If `profile.director` differs from the stored `directorPlayerId`, update the
+ * record and notify Ownership (deduped — one open 'director_change'
+ * notification per company until it is marked read). Returns the list of
+ * changes made (for logging) without throwing on failure.
+ * @param {object} company Mongoose Company document (saved by caller)
+ * @param {number|null} liveDirectorId Director player ID from the live profile
+ * @param {string} companyName Company name for the notification
+ * @returns {Promise<Array<{field: string, from: any, to: any}>>}
+ */
+async function syncDirectorFromProfile(company, liveDirectorId, companyName) {
+  const changes = [];
+  const parsed = parseInt(liveDirectorId) || null;
+
+  if (!parsed || parsed === company.directorPlayerId) return changes;
+
+  // Resolve the new director's name from their saved user record, if present
+  let newDirectorName = `Player ${parsed}`;
+  try {
+    const User = require('../models/User');
+    const directorUser = await User.findOne({ tornPlayerId: parsed }, 'tornName');
+    if (directorUser?.tornName) newDirectorName = directorUser.tornName;
+  } catch (err) {
+    console.error('Director name lookup failed:', err.message);
+  }
+
+  changes.push({ field: 'directorPlayerId', from: company.directorPlayerId, to: parsed });
+  changes.push({ field: 'directorName', from: company.directorName, to: newDirectorName });
+  const previousDirectorName = changes[1].from;
+  company.directorPlayerId = parsed;
+  company.directorName = newDirectorName;
+
+  // Notify Ownership (deduped: skip if an unread director_change notification
+  // already exists for this company)
+  try {
+    const AppNotification = require('../models/AppNotification');
+    const existing = await AppNotification.findOne({
+      type: 'director_change',
+      companyId: company.companyId
+    }).lean();
+    if (!existing) {
+      await AppNotification.create({
+        type: 'director_change',
+        title: `🏢 Director Changed: ${companyName || company.companyName}`,
+        message: `The director of ${companyName || company.companyName} changed from ${changes[0].from} (${previousDirectorName || 'unknown'}) to ${newDirectorName} (${parsed}). Company access records were updated automatically.`,
+        companyId: company.companyId,
+        companyName: companyName || company.companyName
+      });
+    }
+  } catch (err) {
+    console.error('Director change notification failed:', err.message);
+  }
+
+  console.log(`[Company ${company.companyId}] Director auto-synced: ${changes[0].from} → ${parsed} (${newDirectorName})`);
+  return changes;
+}
+
 // Get full company data (director or ownership)
 async function getCompanyData(companyId, requestingPlayerId) {
   // 1. Get company from DB
   const company = await Company.findOne({ companyId: parseInt(companyId) });
   if (!company) throw new Error('Company not found');
 
-  // 2. Look up director's API key
-  const directorUser = await User.findOne({ tornPlayerId: company.directorPlayerId });
-  if (!directorUser || !directorUser.tornApiKey) {
-    throw new Error('Company director has no API key saved. Data cannot be refreshed.');
+  // 2. Find an API key to fetch with: the stored director first, then the
+  //    requesting user, then any other member with a saved key. (The stored
+  //    director may be stale — e.g. after a leadership change in Torn — and
+  //    the live profile fetched below is what reveals the true director.)
+  //    Keys are tried in order until one succeeds, so an expired/insufficient
+  //    key never blocks a refresh that another saved key could perform.
+  const keyCandidates = [];
+
+  const storedDirector = await User.findOne({ tornPlayerId: company.directorPlayerId });
+  if (storedDirector?.tornApiKey) {
+    keyCandidates.push({ key: storedDirector.tornApiKey, source: `stored director ${company.directorPlayerId}` });
+  }
+  if (requestingPlayerId) {
+    const requester = await User.findOne({ tornPlayerId: parseInt(requestingPlayerId) });
+    if (requester?.tornApiKey) {
+      keyCandidates.push({ key: requester.tornApiKey, source: `requesting user ${requestingPlayerId}` });
+    }
+  }
+  const anyKeyed = await User.findOne(
+    { tornApiKey: { $exists: true, $nin: [null, ''] } },
+    'tornPlayerId tornApiKey'
+  );
+  if (anyKeyed?.tornApiKey) {
+    keyCandidates.push({ key: anyKeyed.tornApiKey, source: `faction member ${anyKeyed.tornPlayerId}` });
   }
 
-  // 3. Fetch company data from Torn API
-  const companyData = await fetchCompanyDataFromApi(companyId, directorUser.tornApiKey);
+  if (!keyCandidates.length) {
+    throw new Error('No API key available to fetch company data. The director and requesting user have no saved key.');
+  }
+
+  // 3. Fetch company data from Torn API, trying each key until one works
+  let companyData = null;
+  let fetchKey = null;
+  let fetchKeySource = null;
+  let lastError = null;
+  for (const candidate of keyCandidates) {
+    try {
+      companyData = await fetchCompanyDataFromApi(companyId, candidate.key);
+      fetchKey = candidate.key;
+      fetchKeySource = candidate.source;
+      break;
+    } catch (err) {
+      lastError = err;
+      console.warn(`[Company ${companyId}] Fetch failed with key from ${candidate.source}: ${err.message}`);
+    }
+  }
+  if (!companyData) {
+    throw new Error(`Unable to fetch company data with any available key: ${lastError?.message || 'unknown error'}`);
+  }
+  console.log(`[Company ${companyId}] Fetched company data using key from ${fetchKeySource}`);
   const profile = companyData.company || companyData;
   const dailyIncome = profile.daily_income || 0;
 
@@ -466,7 +566,7 @@ async function getCompanyData(companyId, requestingPlayerId) {
 
   // 4b. Fetch this company type's positions + evaluate each employee's
   //     efficiency against every position (Torn Stats style matrix).
-  const positions = await getPositionsForCompanyType(companyTypeId, directorUser.tornApiKey);
+  const positions = await getPositionsForCompanyType(companyTypeId, fetchKey);
   const efficiencyMatrix = buildEfficiencyMatrix(employees, positions);
 
   // Attach each employee's per-position efficiency + their best position.
@@ -492,6 +592,9 @@ async function getCompanyData(companyId, requestingPlayerId) {
   company.companyTypeId = companyTypeId;
   company.stars = profile.rating || company.stars;
   company.dailyIncome = dailyIncome;
+  // Keep the stored director in sync with the live profile (e.g. after a
+  // leadership change in Torn) and notify ownership of the correction.
+  await syncDirectorFromProfile(company, profile.director, profile.name || company.companyName);
   company.lastFetchedAt = new Date();
   await company.save();
 
@@ -528,6 +631,7 @@ module.exports = {
   getCompanyData,
   listCompanies,
   removeCompany,
+  syncDirectorFromProfile,
   verifyDirectorInFaction,
   detectDepartedEmployees,
   fetchCompanyDataFromApi,

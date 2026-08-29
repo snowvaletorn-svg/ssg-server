@@ -4,7 +4,7 @@ const appNotificationSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['application', 'weekly_report', 'employee_removal', 'utilities_request', 'utilities_fulfilled']
+    enum: ['application', 'weekly_report', 'employee_removal', 'utilities_request', 'utilities_fulfilled', 'director_change']
   },
   title: {
     type: String,

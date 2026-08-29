@@ -42,7 +42,8 @@ const {
   addCompany,
   getCompanyData,
   listCompanies,
-  removeCompany
+  removeCompany,
+  verifyDirectorInFaction
 } = require('./services/companyService');
 // ═══════════════════════════════════════════════════════════════════════════════
 // CAT SCRIPT BACKEND — COMMENTED OUT FOR FUTURE USE
@@ -242,10 +243,30 @@ async function isPlayerInCompany(playerId, companyId) {
 
     const directorUser = await User.findOne({ tornPlayerId: company.directorPlayerId });
     if (!directorUser || !directorUser.tornApiKey) {
-      return { inCompany: false, error: 'Company director has no API key saved. Please contact ownership.' };
+      // Fallback: the stored director may be stale or keyless — use any saved
+      // key (the company profile is readable with any valid key).
+      const anyKeyed = await User.findOne(
+        { tornApiKey: { $exists: true, $nin: [null, ''] } },
+        'tornPlayerId tornApiKey'
+      );
+      if (!anyKeyed?.tornApiKey) {
+        return { inCompany: false, error: 'Company director has no API key saved. Please contact ownership.' };
+      }
+      return await checkCompanyRoster(playerId, companyId, anyKeyed.tornApiKey);
     }
 
-    const companyData = await fetchCompanyDataFromApi(companyId, directorUser.tornApiKey);
+    return await checkCompanyRoster(playerId, companyId, directorUser.tornApiKey);
+  } catch (err) {
+    return { inCompany: false, error: err.message };
+  }
+}
+
+// Shared roster check for isPlayerInCompany — fetches the company profile with
+// the given API key and reports whether the player is on the current roster.
+async function checkCompanyRoster(playerId, companyId, apiKey) {
+  try {
+    const { fetchCompanyDataFromApi } = require('./services/companyService');
+    const companyData = await fetchCompanyDataFromApi(companyId, apiKey);
     const employeesObj = companyData.company?.employees || companyData.employees || {};
     const employeeIds = Object.keys(employeesObj).map(id => parseInt(id));
 
@@ -4550,6 +4571,43 @@ app.delete('/api/admin/companies/:companyId', isAuthenticated, isOwnership, asyn
     } else {
       res.status(404).json({ error: 'Company not found' });
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Set company director (Ownership only) ──────────────────────────────
+// Corrects a stale/wrong director record. Verifies the new director is in the
+// faction, resolves their name, and updates the company record immediately.
+app.put('/api/admin/companies/:companyId/director', isAuthenticated, isOwnership, async (req, res) => {
+  try {
+    const companyId = parseInt(req.params.companyId);
+    const { directorPlayerId } = req.body;
+    const parsedDirectorId = parseInt(directorPlayerId);
+
+    if (!parsedDirectorId) {
+      return res.status(400).json({ error: 'directorPlayerId is required.' });
+    }
+
+    const Company = require('./models/Company');
+    const company = await Company.findOne({ companyId });
+    if (!company) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Verify the new director is a member of the faction (same check as addCompany)
+    const factionCheck = await verifyDirectorInFaction(parsedDirectorId);
+    if (!factionCheck.valid) {
+      return res.status(400).json({ error: 'New director is not a member of SSG faction or could not be verified.' });
+    }
+
+    const previousDirector = company.directorName || company.directorPlayerId;
+    company.directorPlayerId = parsedDirectorId;
+    company.directorName = factionCheck.member?.name || `Player ${parsedDirectorId}`;
+    await company.save();
+
+    console.log(`[Company ${companyId}] Director manually set by ownership: ${previousDirector} → ${company.directorName} (${parsedDirectorId})`);
+    res.json({ success: true, company });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

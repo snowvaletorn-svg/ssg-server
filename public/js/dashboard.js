@@ -4158,6 +4158,19 @@ async function openCompanyDetail(companyId) {
         ${statTile('$' + formatNumFull(company.dailyIncome), 'Daily Income')}
       </div>
 
+      ${(typeof IS_OWNER !== 'undefined' && IS_OWNER) ? `
+      <div class="card" style="margin-bottom:1.5rem;">
+        <div class="card-header">🛠️ Director Correction (Ownership)</div>
+        <div class="card-body" style="padding:0.85rem 1.25rem;">
+          <p class="muted" style="margin:0 0 0.5rem 0;font-size:0.8rem;">If the director shown above is wrong (e.g. leadership changed in Torn), enter the new director's Torn ID and correct it. The next data refresh syncs the record from Torn automatically.</p>
+          <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+            <input id="set-director-id-${company.id}" type="number" placeholder="New director's Torn ID" style="background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:6px 10px;font-size:0.85rem;width:200px;">
+            <button class="btn btn-primary btn-small" onclick="setCompanyDirector(${company.id})">✅ Set Director</button>
+            <span id="set-director-status-${company.id}" style="font-size:0.8rem;"></span>
+          </div>
+        </div>
+      </div>` : ''}
+
       <div class="card">
         <div class="card-header">
           👥 Employees — Efficiency Matrix (${employees.length})
@@ -4264,6 +4277,41 @@ async function addCompany() {
     }, 2000);
   } catch (err) {
     statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;
+  }
+}
+
+// ── Director correction (Ownership) ───────────────────────────────────────────
+async function setCompanyDirector(companyId) {
+  const input = document.getElementById(`set-director-id-${companyId}`);
+  const statusEl = document.getElementById(`set-director-status-${companyId}`);
+  const directorPlayerId = parseInt(input?.value);
+
+  if (!directorPlayerId) {
+    if (statusEl) statusEl.innerHTML = '<span style="color:#ff4444;">Enter the new director\'s Torn ID.</span>';
+    return;
+  }
+  if (!confirm(`Set player ${directorPlayerId} as director of company ${companyId}?`)) return;
+
+  if (statusEl) statusEl.innerHTML = '<span class="muted">Updating director...</span>';
+  try {
+    const res = await fetch(`/api/admin/companies/${companyId}/director`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ directorPlayerId })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      if (statusEl) statusEl.innerHTML = `<span style="color:#ff4444;">❌ ${data.error}</span>`;
+      return;
+    }
+    if (statusEl) statusEl.innerHTML = `<span style="color:#2ecc71;">✅ Director is now ${escapeHtml(data.company.directorName)} (${directorPlayerId}).</span>`;
+    input.value = '';
+    fetchCompanies();
+    // Reload the open modal with fresh data after a moment so the success
+    // message stays visible briefly.
+    setTimeout(() => openCompanyDetail(companyId), 1500);
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = `<span style="color:#ff4444;">❌ ${err.message}</span>`;
   }
 }
 
