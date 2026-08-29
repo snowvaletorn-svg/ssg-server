@@ -554,6 +554,91 @@ const isUtilityLoaning = async (req, res, next) => {
   next();
 };
 
+// ─── COMPANY PAGE ACCESS ──────────────────────────────────────────────────────
+// Every faction member can open the Companies page. Each member sees the
+// companies they direct (registered by Ownership) plus any company they
+// currently work at (detected live from their own saved Torn API key's `job`
+// selection). Ownership sees everything. Employees keep their logged-in
+// company. Membership lookups are cached to limit Torn API calls.
+
+const USER_COMPANY_MEMBERSHIP_CACHE_TTL = 10 * 60 * 1000; // 10 min for "has job"
+const USER_NO_COMPANY_CACHE_TTL = 5 * 60 * 1000;          // 5 min for "no job"
+
+/**
+ * Determine which company (if any) a user currently works at, using their own
+ * saved Torn API key with the `job` selection. The result is cached in-memory
+ * (positive result longer than negative) to keep Torn API usage low.
+ * @param {number} playerId
+ * @param {string} apiKey User's own Torn API key
+ * @returns {Promise<number|null>} company ID the user works at, or null
+ */
+async function detectUserCompany(playerId, apiKey) {
+  const cacheKey = `user-company:${playerId}`;
+  const cached = getCached(cacheKey);
+  if (cached !== null && cached !== undefined) return cached.hasCompany ? cached.companyId : null;
+
+  const result = await deduplicateRequest(cacheKey, async () => {
+    try {
+      const encodedKey = encodeURIComponent(apiKey.trim());
+      const res = await axios.get(
+        `https://api.torn.com/user/?selections=job&key=${encodedKey}`,
+        { timeout: 10000 }
+      );
+      if (res.data.error) return { hasCompany: false, companyId: null };
+      const job = res.data.job || {};
+      // v1 shape: { job: { company_id, company_name, ... }, jobpoints: {...} }
+      const companyId = parseInt(job.company_id || job.companyId || job.company?.id);
+      return { hasCompany: !!companyId, companyId: companyId || null };
+    } catch (err) {
+      console.error(`Company membership lookup failed for player ${playerId}:`, err.message);
+      return { hasCompany: false, companyId: null };
+    }
+  });
+
+  setCached(cacheKey, result, result.hasCompany ? USER_COMPANY_MEMBERSHIP_CACHE_TTL : USER_NO_COMPANY_CACHE_TTL);
+  return result.hasCompany ? result.companyId : null;
+}
+
+/**
+ * Resolve which registered companies the session user may see.
+ * Ownership → all companies. Employees → their logged-in company only.
+ * Faction members → companies they direct + companies they work at (live
+ * lookup via their own API key, cached).
+ * @param {object} req Express request (requires an authenticated session)
+ * @returns {Promise<Array>} Company documents the user can view
+ */
+async function getAccessibleCompaniesForUser(req) {
+  const Company = require('./models/Company');
+  const user = req.session.user;
+  const userId = parseInt(req.session.userId);
+  const positionGroup = getEffectivePositionGroup(req);
+  const allCompanies = await Company.find().sort({ companyName: 1 }).lean();
+
+  if (positionGroup === 'ownership') return allCompanies;
+
+  if (user?.accountType === 'employee') {
+    return allCompanies.filter(c => c.companyId === user.companyId);
+  }
+
+  // Faction member: companies they direct...
+  const directed = allCompanies.filter(c => c.directorPlayerId === userId);
+
+  // ...plus any company they currently work at (by Torn ID across all rosters)
+  const memberCompanyIds = new Set(directed.map(c => c.companyId));
+  const dbUser = await User.findOne({ tornPlayerId: userId }, 'tornApiKey tornPlayerId');
+  if (dbUser?.tornApiKey) {
+    const workCompanyId = await detectUserCompany(userId, dbUser.tornApiKey);
+    if (workCompanyId) {
+      const workCompany = allCompanies.find(c => c.companyId === workCompanyId);
+      if (workCompany && !memberCompanyIds.has(workCompanyId)) {
+        directed.push(workCompany);
+      }
+    }
+  }
+
+  return directed;
+}
+
 // ─── ROUTES ───────────────────────────────────────────────────────────────────
 
 // Home page
@@ -908,7 +993,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       isImpersonating: false,
       impersonatedRole: null,
       availableRoles: [],
-      isDirector: true, // Employees see the Companies nav item (their own company)
+      isCompaniesAccess: true, // Employees see the Companies nav item (their own company)
       isEmployee: true,
       isTestUser: !!req.session.user?.isTestUser,
       isUtilityLoaning: false
@@ -932,10 +1017,10 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
 
-  // Check if user is a company director or ownership (for Companies nav item)
-  const Company = require('./models/Company');
-  const userDirectorCompanies = await Company.find({ directorPlayerId: parseInt(req.session.userId) });
-  const isDirector = isOwner || userDirectorCompanies.length > 0;
+  // Companies page access: every faction member can view (they see their own
+  // companies — directed and/or worked at); employees see their logged-in company.
+  const accessibleCompanies = await getAccessibleCompaniesForUser(req);
+  const isCompaniesAccess = accessibleCompanies.length > 0;
 
   const factionKey = await getFactionApiKey();
 
@@ -957,7 +1042,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     isImpersonating,
     impersonatedRole: req.session.impersonateRole || null,
     availableRoles: Object.keys(POSITIONS),
-    isDirector,
+    isCompaniesAccess,
     isEmployee: false,
     isTestUser: false,
     isUtilityLoaning: await isUtilityLoaningUser(req.session.user)
@@ -4405,24 +4490,10 @@ app.delete('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, a
 // COMPANY TRACKING API
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ─── API: List all companies (company directors + ownership) ──────────────────
+// ─── API: List all companies (all faction members; filtered to what they can see) ──
 app.get('/api/companies', isAuthenticated, async (req, res) => {
   try {
-    const userId = parseInt(req.session.userId);
-    const positionGroup = getEffectivePositionGroup(req);
-    const isOwner = positionGroup === 'ownership';
-
-    const companies = await listCompanies();
-
-    // Filter: ownership sees all, directors see only their own companies,
-    // employees see only their own company
-    let accessible = companies;
-    if (req.session.user?.accountType === 'employee') {
-      accessible = companies.filter(c => c.companyId === req.session.user?.companyId);
-    } else if (!isOwner) {
-      accessible = companies.filter(c => c.directorPlayerId === userId);
-    }
-
+    const accessible = await getAccessibleCompaniesForUser(req);
     res.json(accessible);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -4434,21 +4505,12 @@ app.get('/api/company/:companyId', isAuthenticated, async (req, res) => {
   try {
     const companyId = parseInt(req.params.companyId);
     const userId = parseInt(req.session.userId);
-    const positionGroup = getEffectivePositionGroup(req);
-    const isOwner = positionGroup === 'ownership';
 
-    // Access check: must be owner or director of this company
-    const company = await listCompanies();
-    const targetCompany = company.find(c => c.companyId === companyId);
-    if (!targetCompany) {
-      return res.status(404).json({ error: 'Company not found' });
-    }
-
-    const isDirector = targetCompany.directorPlayerId === userId;
-    const isEmployeeCompany = req.session.user?.accountType === 'employee' &&
-      targetCompany.companyId === req.session.user?.companyId;
-    if (!isOwner && !isDirector && !isEmployeeCompany) {
-      return res.status(403).json({ error: 'Access denied. Only the company director, the employee of this company, or Ownership can view this data.' });
+    // Access check: company must be in the user's accessible set
+    // (ownership: all; directors/employees/faction members: their own)
+    const accessible = await getAccessibleCompaniesForUser(req);
+    if (!accessible.some(c => c.companyId === companyId)) {
+      return res.status(403).json({ error: 'Access denied. You can only view companies you direct, work at, or that employ you.' });
     }
 
     const data = await getCompanyData(companyId, userId);

@@ -3374,7 +3374,7 @@ const HELP_CONTENT = {
         heading: 'Company Management',
         content: `
           <p class="help-text">View and manage faction-owned companies. Shows company type, star rating, director, daily income, and employee details with work stats.</p>
-          <div class="help-callout warning">⚠️ This section is only visible to company directors and Leadership.</div>
+          <div class="help-callout warning">⚠️ Every faction member can view this page — you'll see any faction companies you direct or currently work at. Ownership sees all companies.</div>
         `
       },
       {
@@ -4006,7 +4006,7 @@ async function fetchCompanies() {
     const companies = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${companies.error}</div>`; return; }
     if (!companies.length) {
-      container.innerHTML = `<div class="empty-state"><span class="empty-icon">🏢</span><p>No companies found.</p></div>`;
+      container.innerHTML = `<div class="empty-state"><span class="empty-icon">🏢</span><p>You don't currently work at or direct a faction company.</p><p class="muted">When you join a faction-owned company, it will appear here automatically.</p></div>`;
       return;
     }
     container.innerHTML = renderCompanyCards(companies);

@@ -70,7 +70,7 @@
             <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
             <% } %>
             <a href="#scripts" class="nav-item" onclick="showSection('scripts', this)">📜 Scripts</a>
-            <% if (isOwner || isDirector) { %>
+            <% if (isEmployee ? isCompaniesAccess : true) { %>
               <a href="#companies" class="nav-item" onclick="showSection('companies', this)">🏢 Companies</a>
               <% } %>
                 <% if (isOwner || isLeadership) { %>
