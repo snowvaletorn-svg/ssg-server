@@ -45,6 +45,12 @@ const {
   removeCompany,
   verifyDirectorInFaction
 } = require('./services/companyService');
+const {
+  estimateLandingWindow,
+  statSplitFromPercentages,
+  computeStatPercentages,
+  fetchSpyUser
+} = require('./services/intelService');
 // ═══════════════════════════════════════════════════════════════════════════════
 // CAT SCRIPT BACKEND — COMMENTED OUT FOR FUTURE USE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1251,6 +1257,57 @@ app.get('/api/user/check-ffscouter-key', isAuthenticated, async (req, res) => {
   }
 });
 
+// ─── API: Save TornStats API key (free; enables enemy stat-split fallback) ────
+// TornStats is a free third-party service. The key must belong to an account
+// created at tornstats.com and linked to the owner's Torn API key.
+app.post('/api/user/tornstats-key', isAuthenticated, async (req, res) => {
+  const { tornStatsKey } = req.body;
+
+  if (!tornStatsKey || tornStatsKey.trim() === '') {
+    return res.status(400).json({ error: 'TornStats API key is required' });
+  }
+
+  const trimmedKey = tornStatsKey.trim();
+
+  // Best-effort validation: TornStats answers with JSON (status true/false) for
+  // keys it recognizes. HTML or non-JSON replies indicate a bad endpoint/key.
+  try {
+    const testRes = await axios.get(
+      `https://www.tornstats.com/api/v2/${encodeURIComponent(trimmedKey)}/spy/user/1`,
+      { timeout: 10000, validateStatus: () => true }
+    );
+    const body = testRes.data;
+    if (!body || typeof body !== 'object' || body.status === undefined) {
+      return res.status(400).json({ error: 'TornStats did not recognize this key. Make sure you created a (free) account at tornstats.com and saved this key there.' });
+    }
+  } catch (err) {
+    return res.status(400).json({ error: 'Could not reach TornStats to validate the key. Please try again.' });
+  }
+
+  try {
+    await User.updateOne(
+      { tornPlayerId: req.session.userId },
+      {
+        tornStatsKey: trimmedKey,
+        updatedAt: new Date()
+      }
+    );
+    res.json({ success: true, message: 'TornStats API key saved. Spy-based stat splits will appear for enemies when data exists.' });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to save TornStats API key' });
+  }
+});
+
+// ─── API: Check TornStats key status ─────────────────────────────────────────
+app.get('/api/user/check-tornstats-key', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId }, 'tornStatsKey');
+    res.json({ hasKey: !!dbUser?.tornStatsKey });
+  } catch (err) {
+    res.json({ hasKey: false });
+  }
+});
+
 // ─── API: Save user email address ─────────────────────────────────────────────
 app.post('/api/user/email', isAuthenticated, async (req, res) => {
   const { email } = req.body;
@@ -1766,6 +1823,22 @@ app.get('/js/ssg-stock-observer.user.js', (req, res) => {
   });
 });
 
+// ─── War Flight Times userscript install endpoint ─────────────────────────
+app.get('/js/ssg-war-flights.user.js', (req, res) => {
+  const fs = require('fs');
+  const path = require('path');
+  const scriptPath = path.join(__dirname, 'public', 'js', 'ssg-war-flights.user.js');
+
+  fs.readFile(scriptPath, 'utf8', (err, data) => {
+    if (err) {
+      return res.status(404).send('Userscript not found');
+    }
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Content-Disposition', 'attachment; filename="ssg-war-flights.user.js"');
+    res.send(data);
+  });
+});
+
 // ─── API: YATA foreign stock data ────────────────────────────────────────────
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
@@ -2145,6 +2218,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
           statusState: m.status?.state || 'Unknown',
           statusColor: m.status?.color || null,
           name: m.name,
+          lastAction: m.last_action?.timestamp || null,
           isRevivable: m.is_revivable
         };
         enemyMembersMap.set(m.id, m.name || null);
@@ -2219,7 +2293,25 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       }
     }
 
+    // Stat splits: FFScouter premium `distribution` comes free with the batch
+    // stats call above. For enemies without it, fall back to TornStats spy data
+    // (free crowdsourced) using any saved TornStats key. All spy lookups run in
+    // parallel with caching; failures/misses resolve to null and show as "—".
+    let tornStatsKey = null;
+    try {
+      const tsUser = await User.findOne({ tornStatsKey: { $ne: null } }, 'tornStatsKey');
+      tornStatsKey = tsUser?.tornStatsKey || null;
+    } catch (e) { /* non-fatal */ }
+
+    const fallbackIds = targetIdsList.filter(id => !(statsMap[id]?.distribution?.stats_percentage));
+    const spyResults = {};
+    if (tornStatsKey && fallbackIds.length) {
+      const spies = await Promise.all(fallbackIds.map(id => fetchSpyUser(tornStatsKey, id)));
+      fallbackIds.forEach((id, i) => { spyResults[id] = spies[i]; });
+    }
+
     // Process enemy members with data from both Torn API and FFScouter
+    const nowSec = Math.floor(Date.now() / 1000);
     const enemies = Array.from(enemyMembersMap.entries()).map(([id, attackName]) => {
       const tornData = tornMemberMap[id] || {};
       const stats = statsMap[id] || {};
@@ -2232,6 +2324,24 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       const totalStats = stats.bs_estimate || 0;
       const fairFight = stats.fair_fight || null;
 
+      // Landing-window estimate for members currently mid-flight (free method:
+      // Torn status text + public flight-duration constants). Null when not
+      // flying / already abroad / unknown destination.
+      let travel = null;
+      if (tornData.statusState === 'Traveling' && tornData.status) {
+        const win = estimateLandingWindow({ description: tornData.status, lastAction: tornData.lastAction, now: nowSec });
+        if (win) travel = { destination: win.destination, earliestArrival: win.latestArrival ? win.earliestArrival : null, latestArrival: win.latestArrival };
+      }
+
+      // Top-two stat split: FFScouter premium distribution, else TornStats spy.
+      let statSplit = null;
+      const distPct = stats.distribution?.stats_percentage;
+      if (distPct) {
+        statSplit = statSplitFromPercentages(distPct);
+      } else if (spyResults[id]) {
+        statSplit = computeStatPercentages(spyResults[id]);
+      }
+
       return {
         id: parseInt(id),
         name: name,
@@ -2241,7 +2351,8 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
         status: status,
         statusState: tornData.statusState || 'Unknown',
         statusColor: tornData.statusColor || null,
-        travel: null,
+        travel: travel,
+        statSplit: statSplit,
         isRevivable: tornData.isRevivable !== undefined ? tornData.isRevivable : null
       };
     });

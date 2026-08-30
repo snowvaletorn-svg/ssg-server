@@ -32,7 +32,10 @@ const userSchema = new mongoose.Schema({
   email: { type: String, default: null },
 
   // FFScouter API key (per-user, for target finder feature)
-  ffScouterKey: { type: String, default: null }
+  ffScouterKey: { type: String, default: null },
+
+  // TornStats API key (per-user, free service; enables spy-based enemy stat splits)
+  tornStatsKey: { type: String, default: null }
 });
 
 userSchema.pre('save', function(next) {

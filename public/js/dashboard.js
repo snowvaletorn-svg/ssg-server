@@ -205,7 +205,7 @@ function showSection(sectionId, el) {
   if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
   if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); fetchEnemyStats(); }
-  if (sectionId === 'targets') { checkFFScouterKeyStatus(); fetchTargets(); }
+  if (sectionId === 'targets') { checkFFScouterKeyStatus(); checkTornStatsKeyStatus(); fetchTargets(); }
   if (sectionId === 'stocks') { fetchStocks(); }
 }
 
@@ -2463,6 +2463,7 @@ async function fetchEnemyStats() {
     }
     enemyStats = data.enemies || [];
     renderEnemyStats(data);
+    startLandingCountdowns();
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
   }
@@ -2484,6 +2485,7 @@ function renderEnemyStats(data) {
 
   // Sort by total stats descending
   const sorted = [...enemies].sort((a, b) => b.totalStats - a.totalStats);
+  const hasSpyData = enemies.some(e => e.statSplit?.source === 'tornstats-spy');
 
   const rows = sorted.map((e, i) => {
     // Determine status icon, text, and color based on statusState from Torn API
@@ -2526,6 +2528,26 @@ function renderEnemyStats(data) {
       revivableColor = '#ff4444';
     }
 
+    // Top-two stat split display: FFScouter premium distribution or TornStats spy
+    let statSplitDisplay;
+    if (e.statSplit?.top1) {
+      const t2 = e.statSplit.top2 ? ` · ${e.statSplit.top2.stat.slice(0, 3).toUpperCase()} ${e.statSplit.top2.pct}%` : '';
+      const src = e.statSplit.source === 'ffscouter-premium' ? '' : '<span style="color:#555;font-size:0.7rem;"> (spy)</span>';
+      statSplitDisplay = `<span style="font-family:'Share Tech Mono',monospace;font-size:0.82rem;color:#00ADB5;">${e.statSplit.top1.stat.slice(0, 3).toUpperCase()} ${e.statSplit.top1.pct}%${t2}</span>${src}`;
+    } else {
+      statSplitDisplay = `<span style="color:#555;">—</span>`;
+    }
+
+    // Travel/landing display: destination + data attrs for the live ticker
+    let travelAttr = '';
+    let landingSpan = '';
+    if (e.travel?.destination) {
+      travelAttr = ` data-earliest="${e.travel.earliestArrival ?? ''}" data-latest="${e.travel.latestArrival ?? ''}"`;
+      if (e.travel.latestArrival) {
+        landingSpan = `<div class="landing-countdown" style="font-size:0.75rem;margin-top:0.15rem;"><span style="color:#888;">lands in</span> <span class="cd-window" style="font-family:'Share Tech Mono',monospace;color:#3498db;">…</span></div>`;
+      }
+    }
+
     return `<tr>
       <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
       <td>
@@ -2535,8 +2557,9 @@ function renderEnemyStats(data) {
       </td>
       <td style="text-align:center;">${e.level}</td>
       <td style="text-align:center;font-weight:bold;color:#c0bcbc;">${formatNum(e.totalStats)}</td>
-      <td style="text-align:center;">
-        <span style="color:${statusColor};">${statusIcon} ${statusText}</span>
+      <td style="text-align:center;">${statSplitDisplay}</td>
+      <td style="text-align:center;"${travelAttr}>
+        <span style="color:${statusColor};">${statusIcon} ${statusText}</span>${landingSpan}
       </td>
       <td style="text-align:center;color:${revivableColor};">${revivableIcon}</td>
     </tr>`;
@@ -2551,6 +2574,7 @@ function renderEnemyStats(data) {
             <th>Name</th>
             <th style="text-align:center;">Level</th>
             <th style="text-align:center;">Est. Total Stats</th>
+            <th style="text-align:center;">Top Stats</th>
             <th style="text-align:center;">Status</th>
             <th style="text-align:center;">Revivable</th>
           </tr>
@@ -2559,8 +2583,9 @@ function renderEnemyStats(data) {
       </table>
     </div>
     <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
-      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Data from FFScouter.
+      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}; landing times are estimates.
     </p>`;
+  updateLandingCountdowns();
 }
 
 // ── War Data Overview ─────────────────────────────────────────────────────
@@ -3406,6 +3431,7 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">🛒</div><div class="help-step-text"><strong style="color:#c0bcbc;">Bazaar Items in Market</strong> — Shows bazaar listings directly in the item market. Requires a Torn API key.</div></div>
           <div class="help-step"><div class="help-step-num">💰</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crime Profitability</strong> — Displays value per nerve on the crimes page to help you choose the most profitable crimes.</div></div>
           <div class="help-step"><div class="help-step-num">✈️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Warn Before Flights</strong> — Alerts you if an active Organized Crime would be impacted by your flight, preventing accidental OC disruption.</div></div>
+          <div class="help-step"><div class="help-step-num">⚔️</div><div class="help-step-text"><strong style="color:#c0bcbc;">War Flight Times</strong> — Shows live landing-window estimates beside flying members on the ranked-war page (#/war). <a href="/js/ssg-war-flights.user.js" target="_blank" rel="noopener" style="color:#a78df5;">📥 Install/Update Userscript</a> via Tampermonkey (PC) or Torn PDA (mobile). Optional: paste a faction-access API key (in <code>SSGWarFlights.setApiKey()</code>) to restrict pills to the enemy roster. Landing times are estimates.</div></div>
           <div class="help-callout">💡 All scripts work with Tampermonkey on PC browsers. Install by clicking the script link, then click "Install" in Tampermonkey.</div>
         `
       }
@@ -6080,6 +6106,92 @@ async function saveFFScouterKey() {
     }
 
     statusEl.innerHTML = '<p class="success-text">✅ FFScouter API key saved successfully!</p>';
+    input.value = '';
+  } catch (err) {
+    statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;
+  }
+}
+
+// ── Landing countdown ticker (Enemy Stats Status column) ─────────────────────
+let landingCountdownInterval = null;
+
+function formatLandingWindow(nowMs, earliestSec, latestSec) {
+  const fmtHMS = s => {
+    if (s <= 0) return 'now';
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
+    return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : (m > 0 ? `${m}m ${String(sec).padStart(2, '0')}s` : `${sec}s`);
+  };
+  const e = Math.floor((earliestSec * 1000 - nowMs) / 1000);
+  const l = Math.floor((latestSec * 1000 - nowMs) / 1000);
+  if (l <= 0) return 'landed';
+  if (e <= 0) return `any moment (≤ ${fmtHMS(l)})`;
+  return `~${fmtHMS(e)} – ${fmtHMS(l)}`;
+}
+
+function updateLandingCountdowns() {
+  const nowMs = Date.now();
+  document.querySelectorAll('#war-enemy-stats-data td[data-latest]').forEach(td => {
+    const el = td.querySelector('.cd-window');
+    if (!el) return;
+    const earliest = parseInt(td.dataset.earliest, 10);
+    const latest = parseInt(td.dataset.latest, 10);
+    if (!Number.isFinite(latest)) { el.textContent = ''; return; }
+    el.textContent = formatLandingWindow(
+      nowMs,
+      Number.isFinite(earliest) ? earliest : latest,
+      latest
+    );
+  });
+}
+
+function startLandingCountdowns() {
+  if (landingCountdownInterval) clearInterval(landingCountdownInterval);
+  landingCountdownInterval = setInterval(updateLandingCountdowns, 1000);
+}
+
+// ── Check TornStats key status ────────────────────────────────────────────────
+async function checkTornStatsKeyStatus() {
+  const statusEl = document.getElementById('tornstats-key-status');
+  try {
+    const res = await fetch('/api/user/check-tornstats-key');
+    const data = await res.json();
+    if (res.ok && data.hasKey) {
+      statusEl.innerHTML = '<p class="success-text">✅ TornStats API key is saved.</p>';
+    } else {
+      statusEl.innerHTML = '<p class="muted">No TornStats API key saved yet (optional).</p>';
+    }
+  } catch {
+    statusEl.innerHTML = '';
+  }
+}
+
+// ── Save TornStats API Key ────────────────────────────────────────────────────
+async function saveTornStatsKey() {
+  const input = document.getElementById('tornstats-key-input');
+  const statusEl = document.getElementById('tornstats-key-status');
+  const key = input.value.trim();
+
+  if (!key) {
+    statusEl.innerHTML = '<p style="color:#ff4444;">Please enter a TornStats API key.</p>';
+    return;
+  }
+
+  statusEl.innerHTML = '<p class="muted">Validating key...</p>';
+
+  try {
+    const res = await fetch('/api/user/tornstats-key', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tornStatsKey: key })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      statusEl.innerHTML = `<p style="color:#ff4444;">❌ ${data.error}</p>`;
+      return;
+    }
+
+    statusEl.innerHTML = '<p class="success-text">✅ TornStats API key saved successfully!</p>';
     input.value = '';
   } catch (err) {
     statusEl.innerHTML = `<p style="color:#ff4444;">❌ Error: ${err.message}</p>`;

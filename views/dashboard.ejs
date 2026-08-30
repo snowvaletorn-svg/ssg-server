@@ -407,6 +407,31 @@
               </div>
             </div>
 
+            <!-- TornStats API Key Card (free; enemy stat splits fallback) -->
+            <div class="card mt-2">
+              <div class="card-header">🥷 TornStats API Key <span class="muted" style="font-size:0.75rem;">(optional, free)</span></div>
+              <div class="card-body">
+                <p class="muted" style="font-size:0.85rem;">
+                  Powers enemy <strong>Top Stats</strong> (STR/DEX %) in the War panel using crowdsourced spy reports.
+                  Create a free account at
+                  <a href="https://tornstats.com/" target="_blank" rel="noopener" style="color:#00ADB5;">tornstats.com</a>
+                  and paste the API key from your TornStats profile page.
+                </p>
+                <div id="tornstats-key-status" class="mt-1"></div>
+                <div id="tornstats-key-form">
+                  <div class="input-group mt-1">
+                    <input type="text" id="tornstats-key-input" class="form-input"
+                      placeholder="Enter your TornStats API key..." />
+                    <button class="btn btn-primary" onclick="saveTornStatsKey()">Save Key</button>
+                  </div>
+                  <p class="hint" style="font-size:0.78rem;">
+                    Stat splits appear automatically for any enemy someone has spied. The more members who save a key
+                    (or spy targets via TornStats), the more coverage the faction gets.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             <!-- Filters -->
             <div class="card mt-2" style="background:#1a1919;border:1px solid #2a2828;">
               <div class="card-body">
