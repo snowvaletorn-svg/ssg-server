@@ -2558,6 +2558,8 @@ function renderEnemyStats(data) {
       <td style="text-align:center;">${e.level}</td>
       <td style="text-align:center;font-weight:bold;color:#c0bcbc;">${formatNum(e.totalStats)}</td>
       <td style="text-align:center;">${statSplitDisplay}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${e.warHits?.hits ?? 0}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;">${e.warHits?.assists > 0 ? 'A:' + e.warHits.assists : '—'}</td>
       <td style="text-align:center;"${travelAttr}>
         <span style="color:${statusColor};">${statusIcon} ${statusText}</span>${landingSpan}
       </td>
@@ -2575,6 +2577,8 @@ function renderEnemyStats(data) {
             <th style="text-align:center;">Level</th>
             <th style="text-align:center;">Est. Total Stats</th>
             <th style="text-align:center;">Top Stats</th>
+            <th style="text-align:center;">War Hits</th>
+            <th style="text-align:center;">Assists</th>
             <th style="text-align:center;">Status</th>
             <th style="text-align:center;">Revivable</th>
           </tr>
@@ -2583,7 +2587,7 @@ function renderEnemyStats(data) {
       </table>
     </div>
     <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
-      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}; landing times are estimates.
+      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}; landing times are estimates. War Hits count only in-war wins landed on SSG.
     </p>`;
   updateLandingCountdowns();
 }

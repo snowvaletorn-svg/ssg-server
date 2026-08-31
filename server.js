@@ -2229,7 +2229,11 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
 
     // Fall back to scanning war attacks to pick up any enemy members who may
     // have been missed by the roster (e.g. recent joiners/leavers), but never
-    // require attacks to have happened before showing stats.
+    // require attacks to have happened before showing stats. The same scan also
+    // tallies each enemy's in-war hits (mirror of the "my team" war-hit logic):
+    // only ranked-war attacks within the war window, where the enemy attacker
+    // landed a win on SSG. Outside (non-war) hits are never counted.
+    const enemyHitCounts = {};
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
 
@@ -2243,6 +2247,22 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
         if (warEnd && attack.started > warEnd) continue;
 
         if (!attack.is_ranked_war) continue;
+
+        // Tally in-war hits landed by the enemy faction on SSG (the attacker
+        // gains the respect, matching how "my team" hits are counted).
+        if (attack.attacker?.faction?.id === enemyFactionId &&
+            attack.defender?.faction?.id === SSG_FACTION_ID) {
+          const atkId = attack.attacker.id;
+          if (atkId) {
+            if (!enemyHitCounts[atkId]) enemyHitCounts[atkId] = { hits: 0, assists: 0, respect: 0 };
+            if (attack.result === 'Assist') {
+              enemyHitCounts[atkId].assists++;
+            } else if (attack.result === 'Attacked' || attack.result === 'Hospitalized') {
+              enemyHitCounts[atkId].hits++;
+              enemyHitCounts[atkId].respect += attack.respect_gain || 0;
+            }
+          }
+        }
 
         const candidates = [];
         if (attack.defender?.faction?.id === enemyFactionId) {
@@ -2353,7 +2373,10 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
         statusColor: tornData.statusColor || null,
         travel: travel,
         statSplit: statSplit,
-        isRevivable: tornData.isRevivable !== undefined ? tornData.isRevivable : null
+        isRevivable: tornData.isRevivable !== undefined ? tornData.isRevivable : null,
+        // In-war hits landed by this enemy on SSG (mirror of "my team" hits).
+        // Zero means their attacks were scanned but produced no in-war wins.
+        warHits: enemyHitCounts[id] || { hits: 0, assists: 0, respect: 0 }
       };
     });
 
