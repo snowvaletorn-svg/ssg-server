@@ -254,8 +254,18 @@ async function fetchFFScouterFlight(ffKey, targetId) {
       params: { key: ffKey, target: targetId },
       timeout: 10000
     });
-    const cur = res.data?.current;
-    if (!cur || !cur.takeoff_time) return null;
+    const body = res.data || {};
+    // Diagnostic: surface FFScouter's real payload/errors so we can see whether
+    // the premium call succeeds, is rate-limited, or requires premium.
+    if (body.error) {
+      console.warn(`[enemy-stats] player-flights error for ${targetId}:`, JSON.stringify(body.error));
+      return null;
+    }
+    const cur = body.current;
+    if (!cur || !cur.takeoff_time) {
+      console.log(`[enemy-stats] player-flights ${targetId}: no active trip (current=${body.current ? 'present' : 'null'})`);
+      return null;
+    }
     const travel = {
       destination: (cur.status_description || '').replace(/^Traveling\s+to\s+/i, '') || null,
       earliestArrival: cur.earliest_arrival_time || null,
@@ -263,9 +273,11 @@ async function fetchFFScouterFlight(ffKey, targetId) {
       exact: true,
       source: 'ffscouter-premium'
     };
+    console.log(`[enemy-stats] player-flights ${targetId}: exact window ${travel.earliestArrival}..${travel.latestArrival}`);
     return travel;
   } catch (err) {
     // Any error (incl. premium-required + key quality) → caller falls back.
+    console.warn(`[enemy-stats] player-flights ${targetId} failed:`, err.message);
     return null;
   }
 }
@@ -2394,6 +2406,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
     const travelingIds = Array.from(enemyMembersMap.keys()).filter(id => tornMemberMap[id]?.statusState === 'Traveling');
     const ffFlightsMap = {};
     const premiumFFKey = await getPremiumFFScouterKey();
+    console.log(`[enemy-stats] ${travelingIds.length} traveling enemy(s), premium FFScouter key ${premiumFFKey ? 'RESOLVED' : 'NOT FOUND/EMPTY'}`);
     if (premiumFFKey && travelingIds.length) {
       const CONCURRENCY = 3;
       const ffKeys = travelingIds.slice();
@@ -2408,6 +2421,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
         })());
       }
       await Promise.all(pool);
+      console.log(`[enemy-stats] FFScouter returned exact flights for ${Object.keys(ffFlightsMap).length} of ${travelingIds.length} traveling enemy(s)`);
     }
 
     const exactTravelMap = {};
