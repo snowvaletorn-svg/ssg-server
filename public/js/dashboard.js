@@ -2544,7 +2544,10 @@ function renderEnemyStats(data) {
     if (e.travel?.destination) {
       travelAttr = ` data-earliest="${e.travel.earliestArrival ?? ''}" data-latest="${e.travel.latestArrival ?? ''}"`;
       if (e.travel.latestArrival) {
-        landingSpan = `<div class="landing-countdown" style="font-size:0.75rem;margin-top:0.15rem;"><span style="color:#888;">lands in</span> <span class="cd-window" style="font-family:'Share Tech Mono',monospace;color:#3498db;">…</span></div>`;
+        const exactTag = e.travel.exact === true
+          ? '<span style="color:#2d8a4e;font-size:0.7rem;font-weight:600;"> exact</span>'
+          : '<span style="color:#888;font-size:0.7rem;"> est</span>';
+        landingSpan = `<div class="landing-countdown" style="font-size:0.75rem;margin-top:0.15rem;"><span style="color:#888;">lands in</span> <span class="cd-window" style="font-family:'Share Tech Mono',monospace;color:#3498db;">…</span>${exactTag}</div>`;
       }
     }
 
@@ -2587,7 +2590,7 @@ function renderEnemyStats(data) {
       </table>
     </div>
     <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
-      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}; landing times are estimates. War Hits count only in-war wins landed on SSG.
+      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}. Landing times are exact (FFScouter Premium or a saved Torn key) where available, estimated for the rest. War Hits count only in-war wins landed on SSG.
     </p>`;
   updateLandingCountdowns();
 }
@@ -6129,6 +6132,8 @@ function formatLandingWindow(nowMs, earliestSec, latestSec) {
   const l = Math.floor((latestSec * 1000 - nowMs) / 1000);
   if (l <= 0) return 'landed';
   if (e <= 0) return `any moment (≤ ${fmtHMS(l)})`;
+  // Exact timers have equal bounds — show one precise countdown.
+  if (earliestSec === latestSec) return fmtHMS(l);
   return `~${fmtHMS(e)} – ${fmtHMS(l)}`;
 }
 

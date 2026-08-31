@@ -219,6 +219,57 @@ async function getFactionApiKey() {
   return process.env.TORN_FACTION_API_KEY?.trim() || null;
 }
 
+// ─── HELPER: Resolve the FFScouter key to use for premium lookups ───────────
+// FFScouter Premium is a per-account subscription. We prefer the key belonging
+// to the faction's designated premium user (so premium-only endpoints such as
+// `player-flights` work), and fall back to any saved key otherwise.
+async function getPremiumFFScouterKey() {
+  try {
+    // Preferred premium user(s) for SSG (match by stored name, case-insensitive).
+    const preferred = ['rev_skippy', 'the_rev_skippy'];
+    const candidates = await User.find({ ffScouterKey: { $ne: null } }, 'tornName username ffScouterKey').lean();
+    if (!candidates.length) return null;
+
+    const norm = s => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const preferredNorm = preferred.map(norm);
+    const match = candidates.find(c =>
+      preferredNorm.includes(norm(c.tornName)) || preferredNorm.includes(norm(c.username))
+    );
+    return (match || candidates[0]).ffScouterKey.trim();
+  } catch (err) {
+    console.error('Error resolving FFScouter key:', err.message);
+    return null;
+  }
+}
+
+// ─── HELPER: Exact landing from FFScouter Premium player-flights ────────────
+// Returns { destination, earliestArrival, latestArrival } from `current`, or
+// null when no active trip / no premium window is available. Rate limit is
+// 100 req/min shared across the premium account, so callers must scope this to
+// travelling enemies only (handled at the call site).
+async function fetchFFScouterFlight(ffKey, targetId) {
+  if (!ffKey || !targetId) return null;
+  try {
+    const res = await axios.get('https://ffscouter.com/api/v1/player-flights', {
+      params: { key: ffKey, target: targetId },
+      timeout: 10000
+    });
+    const cur = res.data?.current;
+    if (!cur || !cur.takeoff_time) return null;
+    const travel = {
+      destination: (cur.status_description || '').replace(/^Traveling\s+to\s+/i, '') || null,
+      earliestArrival: cur.earliest_arrival_time || null,
+      latestArrival: cur.latest_arrival_time || cur.earliest_arrival_time || null,
+      exact: true,
+      source: 'ffscouter-premium'
+    };
+    return travel;
+  } catch (err) {
+    // Any error (incl. premium-required + key quality) → caller falls back.
+    return null;
+  }
+}
+
 // ─── HELPER: Validate Torn API key and get user data ─────────────────────────
 async function validateTornApiKey(apiKey) {
   try {
@@ -2330,6 +2381,64 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       fallbackIds.forEach((id, i) => { spyResults[id] = spies[i]; });
     }
 
+    // ── EXACT LANDING WINDOWS FOR FLYING ENEMIES ───────────────────────────────
+    // Torn does not expose flight timers for other factions' members, so the
+    // estimate below is a fallback. We improve accuracy from two exact sources:
+    //   1. FFScouter Premium `player-flights` (primary; The_Rev_Skippy's key)
+    //      returns each player's active trip with arrival times.
+    //   2. Any enemy who also has a Torn key saved in our DB is queried directly
+    //      via `user/?selections=travel` (mirrors the Faction-page enrichment).
+    // FFScouter player-flights is a per-player call with a 100 req/min shared
+    // premium limit, so we scope to traveling enemies only and run at a small
+    // concurrency to stay comfortably under the limit.
+    const travelingIds = Array.from(enemyMembersMap.keys()).filter(id => tornMemberMap[id]?.statusState === 'Traveling');
+    const ffFlightsMap = {};
+    const premiumFFKey = await getPremiumFFScouterKey();
+    if (premiumFFKey && travelingIds.length) {
+      const CONCURRENCY = 3;
+      const ffKeys = travelingIds.slice();
+      const pool = [];
+      for (let i = 0; i < CONCURRENCY; i++) {
+        pool.push((async () => {
+          let id;
+          while ((id = ffKeys.shift()) !== undefined) {
+            const res = await fetchFFScouterFlight(premiumFFKey, id);
+            if (res) ffFlightsMap[id] = res;
+          }
+        })());
+      }
+      await Promise.all(pool);
+    }
+
+    const exactTravelMap = {};
+
+    try {
+      const keyedUsers = await User.find(
+        { tornApiKey: { $ne: null }, tornPlayerId: { $in: travelingIds } },
+        'tornApiKey tornPlayerId'
+      ).lean();
+      const keyedById = {};
+      keyedUsers.forEach(u => { keyedById[Number(u.tornPlayerId)] = u.tornApiKey; });
+      const exactIds = Object.keys(keyedById);
+      await Promise.all(exactIds.map(async pid => {
+        const key = keyedById[pid];
+        if (!key) return;
+        try {
+          const tRes = await axios.get(`https://api.torn.com/user/?selections=travel&key=${encodeURIComponent(key)}`, { timeout: 10000 });
+          const tr = tRes.data?.travel;
+          if (tRes.data?.error || !tr) return;
+          exactTravelMap[pid] = {
+            destination: tr.destination || null,
+            takeoffTime: tr.takeoff_time || null,
+            latestArrival: tr.latest_arrival_time || null,
+            // Remaining seconds on the current flight when observed (epoch-dependent);
+            // convert to an absolute arrival if the takeoff+duration are missing.
+            timeLeft: tr.time_left || null
+          };
+        } catch (e) { /* non-fatal: fall back to estimate */ }
+      }));
+    } catch (e) { /* non-fatal: fall back to estimate */ }
+
     // Process enemy members with data from both Torn API and FFScouter
     const nowSec = Math.floor(Date.now() / 1000);
     const enemies = Array.from(enemyMembersMap.entries()).map(([id, attackName]) => {
@@ -2344,13 +2453,37 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       const totalStats = stats.bs_estimate || 0;
       const fairFight = stats.fair_fight || null;
 
-      // Landing-window estimate for members currently mid-flight (free method:
-      // Torn status text + public flight-duration constants). Null when not
-      // flying / already abroad / unknown destination.
+      // Landing info for members currently mid-flight. Accuracy precedence:
+      //   1. FFScouter Premium player-flights  → exact
+      //   2. Enemy's own Torn travel (saved key) → exact
+      //   3. Public flight-duration estimate    → estimate
       let travel = null;
-      if (tornData.statusState === 'Traveling' && tornData.status) {
-        const win = estimateLandingWindow({ description: tornData.status, lastAction: tornData.lastAction, now: nowSec });
-        if (win) travel = { destination: win.destination, earliestArrival: win.latestArrival ? win.earliestArrival : null, latestArrival: win.latestArrival };
+      if (tornData.statusState === 'Traveling') {
+        const ff = ffFlightsMap[id];
+        if (ff) {
+          travel = { ...ff, destination: ff.destination, earliestArrival: ff.earliestArrival, latestArrival: ff.latestArrival };
+        } else {
+          const exact = exactTravelMap[id];
+          if (exact) {
+            // Authoritative takeoff + latest-arrival from the enemy's own Torn data.
+            travel = {
+              destination: exact.destination || null,
+              earliestArrival: exact.latestArrival || null,
+              latestArrival: exact.latestArrival || null,
+              exact: true,
+              source: 'torn'
+            };
+            // If only time_left is present (no absolute arrival), reconstruct an
+            // absolute landing using the takeoff + observed remaining time.
+            if (!exact.latestArrival && exact.takeoffTime && exact.timeLeft != null) {
+              travel.latestArrival = exact.takeoffTime + exact.timeLeft;
+              travel.earliestArrival = travel.latestArrival;
+            }
+          } else if (tornData.status) {
+            const win = estimateLandingWindow({ description: tornData.status, lastAction: tornData.lastAction, now: nowSec });
+            if (win) travel = { destination: win.destination, earliestArrival: win.latestArrival ? win.earliestArrival : null, latestArrival: win.latestArrival, exact: false, source: 'estimate' };
+          }
+        }
       }
 
       // Top-two stat split: FFScouter premium distribution, else TornStats spy.
