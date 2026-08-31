@@ -2542,7 +2542,7 @@ function renderEnemyStats(data) {
     let travelAttr = '';
     let landingSpan = '';
     if (e.travel?.destination) {
-      travelAttr = ` data-earliest="${e.travel.earliestArrival ?? ''}" data-latest="${e.travel.latestArrival ?? ''}"`;
+      travelAttr = ` data-earliest="${e.travel.earliestArrival ?? ''}" data-latest="${e.travel.latestArrival ?? ''}" data-exact="${e.travel.exact === true ? '1' : '0'}"`;
       if (e.travel.latestArrival) {
         const exactTag = e.travel.exact === true
           ? '<span style="color:#2d8a4e;font-size:0.7rem;font-weight:600;"> exact</span>'
@@ -6122,7 +6122,7 @@ async function saveFFScouterKey() {
 // ── Landing countdown ticker (Enemy Stats Status column) ─────────────────────
 let landingCountdownInterval = null;
 
-function formatLandingWindow(nowMs, earliestSec, latestSec) {
+function formatLandingWindow(nowMs, earliestSec, latestSec, isExact) {
   const fmtHMS = s => {
     if (s <= 0) return 'now';
     const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
@@ -6131,8 +6131,11 @@ function formatLandingWindow(nowMs, earliestSec, latestSec) {
   const e = Math.floor((earliestSec * 1000 - nowMs) / 1000);
   const l = Math.floor((latestSec * 1000 - nowMs) / 1000);
   if (l <= 0) return 'landed';
+  // Exact (FFScouter/Torn-key) windows: show a single tight countdown to the
+  // latest arrival (the realistic "lands by" time), like FFScouter's own UI.
+  if (isExact) return `by ${fmtHMS(l)}`;
   if (e <= 0) return `any moment (≤ ${fmtHMS(l)})`;
-  // Exact timers have equal bounds — show one precise countdown.
+  // Exact timers with equal bounds — show one precise countdown.
   if (earliestSec === latestSec) return fmtHMS(l);
   return `~${fmtHMS(e)} – ${fmtHMS(l)}`;
 }
@@ -6145,10 +6148,12 @@ function updateLandingCountdowns() {
     const earliest = parseInt(td.dataset.earliest, 10);
     const latest = parseInt(td.dataset.latest, 10);
     if (!Number.isFinite(latest)) { el.textContent = ''; return; }
+    const isExact = td.dataset.exact === '1';
     el.textContent = formatLandingWindow(
       nowMs,
       Number.isFinite(earliest) ? earliest : latest,
-      latest
+      latest,
+      isExact
     );
   });
 }
