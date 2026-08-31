@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG War Flight Times
 // @namespace    https://ssg-server.onrender.com
-// @version      1.0.0
+// @version      1.0.1
 // @description  Show estimated landing windows for members flying during a war, directly on the Torn ranked-war page (#/war). Mirrors SSG dashboard's Enemy Stats flight timers.
 // @author       SSG
 // @license      MIT
@@ -21,16 +21,16 @@
 (function () {
     'use strict';
 
-    // â”€â”€â”€ CONFIGURATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── CONFIGURATION ─────────────────────────────────────────────────────────
     const CONFIG = {
-        version: '1.0.0',
+        version: '1.0.1',
         KEY_STORAGE: 'ssg_war_flights_api_key',
         refetchInterval: 30 * 1000,   // refresh the enemy roster when an API key is saved
         pollInterval: 2000,           // re-scan the DOM for new member rows
         tickInterval: 1000            // tick the live countdowns every second
     };
 
-    // â”€â”€â”€ PUBLIC GAME DATA: base one-way flight durations (minutes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── PUBLIC GAME DATA: base one-way flight durations (minutes) ─────────────
     // Ported verbatim from services/intelService.js (kept in sync with the
     // dashboard so the two cannot diverge). Source: in-game travel agency
     // values as published by the open-source TornTools extension.
@@ -47,7 +47,7 @@
         sou: { name: 'South Africa', minutes: 297 }
     };
 
-    // Status-text variants â†’ FLIGHT_TIMES keys (also used to recognise whether a
+    // Status-text variants → FLIGHT_TIMES keys (also used to recognise whether a
     // flying member is headed for an enemy-owned country).
     const COUNTRY_ALIASES = {
         'mexico': 'mex',
@@ -67,7 +67,7 @@
     // after the member's last recorded action.
     const BOOK_FACTOR = 0.5;
 
-    // â”€â”€â”€ PARSING + WINDOW ESTIMATION (mirrors services/intelService.js) â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── PARSING + WINDOW ESTIMATION (mirrors services/intelService.js) ────────
     function lookupCountryKey(text) {
         if (!text) return null;
         return COUNTRY_ALIASES[String(text).trim().toLowerCase()] || null;
@@ -168,7 +168,7 @@
         };
     }
 
-    // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── STATE ─────────────────────────────────────────────────────────────────
     const state = {
         apiKey: null,             // optional Torn faction-access key
         enemyRoster: [],          // [ { id, name, status, statusState, lastAction } ] from the API
@@ -180,6 +180,7 @@
         get(key, dv) { try { const v = localStorage.getItem(key); return v === null ? dv : (JSON.parse(v) ?? dv); } catch (e) { return dv; } },
         set(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) { /* ignore */ } }
     };
+
     // ─── STYLE + PILL RENDERER ─────────────────────────────────────────────────
     function ensureStyles() {
         if (document.getElementById('ssg-war-flights-styles')) return;
@@ -205,7 +206,7 @@
 
     function pad2(n) { return String(n).padStart(2, '0'); }
 
-    // "~12m 30s â€“ 20m" / "landing â‰¤ 25m" / "âœ… landed"
+    // "~12m 30s – 20m" / "landing ≤ 25m" / "✅ landed"
     function formatWindow(nowMs, earliestSec, latestSec) {
         const fmt = s => {
             if (s <= 0) return 'now';
@@ -214,9 +215,9 @@
         };
         const e = Math.floor((earliestSec * 1000 - nowMs) / 1000);
         const l = Math.floor((latestSec * 1000 - nowMs) / 1000);
-        if (l <= 0) return { text: 'âœ… landed', cls: 'ssg-fw-landed' };
-        if (e <= 0) return { text: `landing â‰¤ ${fmt(l)}`, cls: 'ssg-fw-urgent' };
-        return { text: `~${fmt(e)} â€“ ${fmt(l)}`, cls: '' };
+        if (l <= 0) return { text: '✅ landed', cls: 'ssg-fw-landed' };
+        if (e <= 0) return { text: `landing ≤ ${fmt(l)}`, cls: 'ssg-fw-urgent' };
+        return { text: `~${fmt(e)} – ${fmt(l)}`, cls: '' };
     }
 
     // Build the per-flyer display object. Uses an observed takeoff (WS/fetch) when
@@ -246,14 +247,14 @@
         if (fly.timer) {
             pill.dataset.e = String(fly.timer.e);
             pill.dataset.l = String(fly.timer.l);
-            pill.appendChild(document.createTextNode(`âœˆï¸ ${dest} `));
+            pill.appendChild(document.createTextNode(`✈️ ${dest} `));
             const timer = document.createElement('span');
             timer.className = 'ssg-fw-timer';
-            timer.textContent = 'â€¦';
+            timer.textContent = '…';
             pill.appendChild(timer);
         } else {
             pill.classList.add('ssg-fw-nokey');
-            pill.textContent = `âœˆï¸ ${dest} (no duration)`;
+            pill.textContent = `✈️ ${dest} (no duration)`;
             pill.title = 'Destination recognised but this country has no base flight duration.';
         }
         return pill;
@@ -264,13 +265,14 @@
         if (!timer) return;
         const e = parseInt(pill.dataset.e, 10);
         const l = parseInt(pill.dataset.l, 10);
-        if (!Number.isFinite(e) || !Number.isFinite(l)) { timer.textContent = 'â€¦'; return; }
+        if (!Number.isFinite(e) || !Number.isFinite(l)) { timer.textContent = '…'; return; }
         const { text, cls } = formatWindow(nowMs, e, l);
         timer.textContent = text;
         pill.classList.toggle('ssg-fw-urgent', cls === 'ssg-fw-urgent');
         pill.classList.toggle('ssg-fw-landed', cls === 'ssg-fw-landed');
     }
-// â”€â”€â”€ MEMBER ROW DISCOVERY + PILL INJECTION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+    // ─── MEMBER ROW DISCOVERY + PILL INJECTION ────────────────────────────────
     // Same DOM pattern proven by the SSG War Script:
     //   rows: '.desc-wrap li[class*="member"], .desc-wrap [class*="member___"]'
     //   id:   'a[href*="profiles.php?XID="]'
@@ -293,7 +295,7 @@
         if (!el) return '';
         const t = (el.textContent || '').replace(/\s+/g, ' ').trim();
         // Drop a trailing Torn countdown such as "(14s)" appended to the status.
-        return t.replace(/\s*$$\d+[shms]$$$/i, '').trim();
+        return t.replace(/\s*\(\d+[shms]\)$/i, '').trim();
     }
 
     function renderRows() {
@@ -309,7 +311,7 @@
 
             const parsed = parseTravelStatus(statusText);
             if (!parsed || parsed.type === 'abroad') {
-                // Not flying right now â€” clear any tracked takeoff (they landed).
+                // Not flying right now — clear any tracked takeoff (they landed).
                 if (id != null && state.takeoffTimes.has(Number(id))) {
                     state.takeoffTimes.delete(Number(id));
                 }
@@ -341,9 +343,9 @@
         document.querySelectorAll('.ssg-flight-pill').forEach(pill => updatePillText(pill, nowMs));
     }
 
-    // â”€â”€â”€ LIVE TAKEOFF OBSERVATION (WebSocket) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── LIVE TAKEOFF OBSERVATION (WebSocket) ─────────────────────────────────
     // Torn pushes user status changes over a WebSocket; we capture the exact
-    // takeoff instant the first moment a member appears "Travelingâ€¦", yielding a
+    // takeoff instant the first moment a member appears "Traveling…", yielding a
     // much tighter window than the last-action bound.
     function handleStatusPush(su) {
         if (!su || !su.status) return;
@@ -394,6 +396,7 @@
             });
         } catch (e) { /* ignore */ }
     }
+
     // ─── FACTION ROSTER VIA TORN API (optional; requires faction access) ───────
     function gmRequest(url) {
         return new Promise((resolve) => {
@@ -455,7 +458,7 @@
         renderRows();
     }
 
-    // â”€â”€â”€ KEY PROMPT (optional) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── KEY PROMPT (optional) ─────────────────────────────────────────────────
     function askForKey() {
         const existing = StorageUtil.get(CONFIG.KEY_STORAGE, null) || (typeof GM_getValue === 'function' ? GM_getValue(CONFIG.KEY_STORAGE, null) : null) || '';
         const input = window.prompt(
@@ -479,6 +482,7 @@
         state.enemyRoster = [];
         refreshEnemyRosterIfKey();
     }
+
     // ─── APP BOOTSTRAP ─────────────────────────────────────────────────────────
     async function applyApiKey() {
         const stored = (typeof GM_getValue === 'function' ? GM_getValue(CONFIG.KEY_STORAGE, '') : '')
