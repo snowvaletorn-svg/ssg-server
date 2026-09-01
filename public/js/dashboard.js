@@ -1774,11 +1774,11 @@ function renderFaction(d, statsMap = {}, travelMap = {}, skillsMap = {}) {
         const isReturning = m.status?.description?.toLowerCase().includes('returning')
           || (travelInfo?.travel?.destination === 'Torn')
           || (travelInfo?.description?.toLowerCase().includes('returning'));
-        if (travelInfo?.travel?.time_left > 0) {
-          travelCell = isReturning
-            ? `🔄 ${formatTimeLeft(travelInfo.travel.time_left)}`
-            : `✈️ ${formatTimeLeft(travelInfo.travel.time_left)}`;
-        } else if (travelInfo?.travel) {
+        const t = travelInfo?.travel;
+        if (t?.timestamp > 0 && t.timestamp * 1000 > Date.now()) {
+          // Show the absolute landing time in Torn City Time (UTC) instead of the remaining duration.
+          travelCell = `${isReturning ? '🔄' : '✈️'} lands ${formatLandingClock(t.timestamp)}`;
+        } else if (t) {
           travelCell = isReturning ? '🔄 Landing soon' : '🛬 Landing soon';
         } else {
           travelCell = isReturning ? '🔄 Returning' : '✈️ Traveling';
@@ -2017,7 +2017,7 @@ function renderTravelStatus(t) {
 
   // User is traveling — destination could be Torn (returning) or a foreign country (departing)
   const isReturning = t.destination === 'Torn';
-  const arrivalTime = t.timestamp ? new Date(t.timestamp * 1000).toLocaleString() : 'Unknown';
+  const arrivalTime = t.timestamp ? formatTornDateTime(t.timestamp) : 'Unknown';
   const timeLeft = t.time_left ? formatTimeLeft(t.time_left) : '';
 
   return `
@@ -2043,6 +2043,39 @@ function formatTimeLeft(seconds) {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+// ── Torn-time helpers ─────────────────────────────────────────────────────────
+// Torn's in-game clock is UTC (TCT, see services/schedulerService.js). All
+// landing times render in TCT so members in different time zones all read the
+// same clock the game shows.
+
+function tornClock(d) {
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+function tornSameUtcDay(ms) {
+  return new Date(ms).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10);
+}
+
+function tornWeekdayPrefix(d) {
+  return tornSameUtcDay(d.getTime()) ? '' : `${d.toLocaleDateString([], { weekday: 'short', timeZone: 'UTC' })} `;
+}
+
+// Absolute landing clock time in Torn City Time (UTC), e.g. "21:42 TCT".
+// Prefixes the weekday when the landing falls on a different UTC day than today
+// (long overnight flights can cross midnight).
+function formatLandingClock(epochSec) {
+  if (!epochSec || epochSec <= 0) return '';
+  const d = new Date(epochSec * 1000);
+  return `${tornWeekdayPrefix(d)}${tornClock(d)} TCT`;
+}
+
+// Full TCT timestamp for detail views, e.g. "Aug 30, 21:42 TCT".
+function formatTornDateTime(epochSec) {
+  if (!epochSec || epochSec <= 0) return 'Unknown';
+  const d = new Date(epochSec * 1000);
+  return `${d.toLocaleDateString([], { month: 'short', day: 'numeric', timeZone: 'UTC' })}, ${tornClock(d)} TCT`;
 }
 
 // ── YATA Foreign Stock ────────────────────────────────────────────────────────
@@ -2547,7 +2580,12 @@ function renderEnemyStats(data) {
         const exactTag = e.travel.exact === true
           ? '<span style="color:#2d8a4e;font-size:0.7rem;font-weight:600;"> exact</span>'
           : '<span style="color:#888;font-size:0.7rem;"> est</span>';
-        landingSpan = `<div class="landing-countdown" style="font-size:0.75rem;margin-top:0.15rem;"><span style="color:#888;">lands in</span> <span class="cd-window" style="font-family:'Share Tech Mono',monospace;color:#3498db;">…</span>${exactTag}</div>`;
+        const latestMs = parseInt(e.travel.latestArrival, 10) * 1000;
+        const tipD = new Date(latestMs);
+        const hoverTip = Number.isFinite(latestMs) && latestMs > 0
+          ? ` title="Lands ${tipD.toISOString().slice(0, 10)} ${tornClock(tipD)} TCT (Torn time)"`
+          : '';
+        landingSpan = `<div class="landing-countdown" style="font-size:0.75rem;margin-top:0.15rem;"><span style="color:#888;">lands</span> <span class="cd-window"${hoverTip} style="font-family:'Share Tech Mono',monospace;color:#3498db;">…</span>${exactTag}</div>`;
       }
     }
 
@@ -2590,7 +2628,7 @@ function renderEnemyStats(data) {
       </table>
     </div>
     <p style="font-size:0.75rem;color:#444;margin-top:0.5rem;padding:0 0.5rem;">
-      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}. Landing times are exact (FFScouter Premium or a saved Torn key) where available, estimated for the rest. War Hits count only in-war wins landed on SSG.
+      Showing ${enemies.length} members from ${escapeHtml(enemyFactionName)}. Stats from FFScouter${hasSpyData ? ' + TornStats spies' : ''}. Landing times are exact (FFScouter Premium or a saved Torn key) where available, estimated for the rest — all in TCT (Torn time). War Hits count only in-war wins landed on SSG.
     </p>`;
   updateLandingCountdowns();
 }
@@ -3438,7 +3476,6 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">🛒</div><div class="help-step-text"><strong style="color:#c0bcbc;">Bazaar Items in Market</strong> — Shows bazaar listings directly in the item market. Requires a Torn API key.</div></div>
           <div class="help-step"><div class="help-step-num">💰</div><div class="help-step-text"><strong style="color:#c0bcbc;">Crime Profitability</strong> — Displays value per nerve on the crimes page to help you choose the most profitable crimes.</div></div>
           <div class="help-step"><div class="help-step-num">✈️</div><div class="help-step-text"><strong style="color:#c0bcbc;">Warn Before Flights</strong> — Alerts you if an active Organized Crime would be impacted by your flight, preventing accidental OC disruption.</div></div>
-          <div class="help-step"><div class="help-step-num">⚔️</div><div class="help-step-text"><strong style="color:#c0bcbc;">War Flight Times</strong> — Shows live landing-window estimates beside flying members on the ranked-war page (#/war). <a href="/js/ssg-war-flights.user.js" target="_blank" rel="noopener" style="color:#a78df5;">📥 Install/Update Userscript</a> via Tampermonkey (PC) or Torn PDA (mobile). Optional: paste a faction-access API key (in <code>SSGWarFlights.setApiKey()</code>) to restrict pills to the enemy roster. Landing times are estimates.</div></div>
           <div class="help-callout">💡 All scripts work with Tampermonkey on PC browsers. Install by clicking the script link, then click "Install" in Tampermonkey.</div>
         `
       }
@@ -6123,21 +6160,14 @@ async function saveFFScouterKey() {
 let landingCountdownInterval = null;
 
 function formatLandingWindow(nowMs, earliestSec, latestSec, isExact) {
-  const fmtHMS = s => {
-    if (s <= 0) return 'now';
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = Math.floor(s % 60);
-    return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : (m > 0 ? `${m}m ${String(sec).padStart(2, '0')}s` : `${sec}s`);
-  };
-  const e = Math.floor((earliestSec * 1000 - nowMs) / 1000);
-  const l = Math.floor((latestSec * 1000 - nowMs) / 1000);
-  if (l <= 0) return 'landed';
-  // Exact (FFScouter/Torn-key) windows: show a single tight countdown to the
-  // latest arrival (the realistic "lands by" time), like FFScouter's own UI.
-  if (isExact) return `by ${fmtHMS(l)}`;
-  if (e <= 0) return `any moment (≤ ${fmtHMS(l)})`;
-  // Exact timers with equal bounds — show one precise countdown.
-  if (earliestSec === latestSec) return fmtHMS(l);
-  return `~${fmtHMS(e)} – ${fmtHMS(l)}`;
+  if (latestSec * 1000 <= nowMs) return 'landed';
+  const latest = new Date(latestSec * 1000);
+  const l = `${tornWeekdayPrefix(latest)}${tornClock(latest)}`;
+  // Exact (FFScouter/Torn-key) and single-point windows: the realistic "lands by" clock time.
+  if (isExact || earliestSec === latestSec) return `by ${l} TCT`;
+  const earliest = new Date(earliestSec * 1000);
+  if (earliest.getTime() <= nowMs) return `≤ ${l} TCT`;
+  return `~${tornWeekdayPrefix(earliest)}${tornClock(earliest)} – ${l} TCT`;
 }
 
 function updateLandingCountdowns() {

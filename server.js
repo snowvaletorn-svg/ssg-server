@@ -1886,22 +1886,6 @@ app.get('/js/ssg-stock-observer.user.js', (req, res) => {
   });
 });
 
-// ─── War Flight Times userscript install endpoint ─────────────────────────
-app.get('/js/ssg-war-flights.user.js', (req, res) => {
-  const fs = require('fs');
-  const path = require('path');
-  const scriptPath = path.join(__dirname, 'public', 'js', 'ssg-war-flights.user.js');
-
-  fs.readFile(scriptPath, 'utf8', (err, data) => {
-    if (err) {
-      return res.status(404).send('Userscript not found');
-    }
-    res.setHeader('Content-Type', 'application/javascript');
-    res.setHeader('Content-Disposition', 'attachment; filename="ssg-war-flights.user.js"');
-    res.send(data);
-  });
-});
-
 // ─── API: YATA foreign stock data ────────────────────────────────────────────
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
