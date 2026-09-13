@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const axios = require('axios');
 const { takeSnapshot, sendWeeklyReport } = require('./snapshotService');
 const StockPriceSnapshot = require('../models/StockPriceSnapshot');
+const { decryptOrRaw } = require('./keyCipher');
 
 let schedulerStarted = false;
 
@@ -15,7 +16,7 @@ async function takeDailyStockSnapshot() {
   try {
     const FactionConfig = require('../models/FactionConfig');
     const config = await FactionConfig.findOne({ key: 'config' });
-    const factionKey = config?.tornFactionApiKey?.trim() || process.env.TORN_FACTION_API_KEY?.trim();
+    const factionKey = decryptOrRaw(config?.tornFactionApiKey) || process.env.TORN_FACTION_API_KEY?.trim();
 
     if (!factionKey) {
       console.warn('[StockScheduler] No faction API key configured — skipping stock snapshot.');

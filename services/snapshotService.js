@@ -27,11 +27,13 @@ function getNotifyEmails() {
   return [];
 }
 
-// Helper function to get faction API key
+const { decryptOrRaw } = require('./keyCipher');
+
+// Helper function to get faction API key (decrypted at point of use)
 async function getFactionApiKey() {
   try {
     const config = await FactionConfig.findOne({ key: 'config' });
-    if (config?.tornFactionApiKey) return config.tornFactionApiKey;
+    if (config?.tornFactionApiKey) return decryptOrRaw(config.tornFactionApiKey);
   } catch (err) {
     console.error('Error fetching faction config:', err.message);
   }

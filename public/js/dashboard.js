@@ -593,6 +593,37 @@ async function saveTornKey() {
   }
 }
 
+// ─── Self-service key reveal (own key only; audit-logged server-side) ────────
+async function revealMyKey() {
+  const wrap = document.getElementById('my-key-reveal');
+  const valueEl = document.getElementById('my-key-value');
+  const statusEl = document.getElementById('my-key-status');
+  if (!wrap || !valueEl) return;
+
+  // Confirm before fetching — the key will be visible on screen
+  if (!confirm('Show your saved Torn API key on screen?')) return;
+
+  try {
+    const res = await fetch('/api/my-key');
+    const data = await res.json();
+    if (!res.ok) {
+      statusEl.innerHTML = `<p style="color:#ff4444;">Error: ${data.error}</p>`;
+      return;
+    }
+    valueEl.textContent = data.apiKey;
+    wrap.classList.remove('hidden');
+    if (data.updatedAt) {
+      const when = new Date(data.updatedAt).toLocaleString();
+      statusEl.innerHTML = `<span>Saved: ${when}</span>` +
+        (data.keySufficient === false
+          ? ` · <span style="color:#ffa726;">This key is no longer Full Access — some features will fail. Update it at torn.com → Preferences → API.</span>`
+          : '') ;
+    }
+  } catch (err) {
+    statusEl.innerHTML = `<p style="color:#ff4444;">Error: ${err.message}</p>`;
+  }
+}
+
 // ── Faction API Key (Ownership only) ─────────────────────────────────────────
 function showFactionKeyForm() {
   document.getElementById('faction-key-form').classList.remove('hidden');

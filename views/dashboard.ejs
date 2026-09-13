@@ -200,13 +200,18 @@
                 <div class="card mt-2">
                   <div class="card-header">🔑 Torn API Key</div>
                   <div class="card-body">
-                    <% if (tornApiKey) { %>
+                    <% if (hasSavedKey) { %>
                       <p class="success-text">✅ Torn API key is saved.</p>
                       <button class="btn btn-small btn-outline" onclick="showKeyForm()">Update Key</button>
+                      <button class="btn btn-small btn-outline" onclick="revealMyKey()">Reveal My Key</button>
+                      <div id="my-key-reveal" class="hidden" style="margin-top:8px;">
+                        <code id="my-key-value" style="user-select:all; word-break:break-all;"></code>
+                        <div id="my-key-status" class="hint" style="margin-top:4px;"></div>
+                      </div>
                       <% } else { %>
                         <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
                         <% } %>
-                          <div id="key-form" class="<%= tornApiKey ? 'hidden' : '' %>">
+                          <div id="key-form" class="<%= hasSavedKey ? 'hidden' : '' %>">
                             <div class="input-group mt-1">
                               <input type="text" id="torn-key-input" class="form-input"
                                 placeholder="Enter your Torn API key..." />

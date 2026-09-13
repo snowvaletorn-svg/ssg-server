@@ -30,6 +30,10 @@ const {
   getNotifyEmails
 } = require('./services/snapshotService');
 const { sendEmail } = require('./services/emailService');
+const { encrypt, decrypt, isEncrypted } = require('./services/keyCipher');
+const { checkKeySufficient } = require('./services/tornKeyInfo');
+const { logAudit } = require('./models/AuditLog');
+const { decryptOrRaw } = require('./services/keyCipher');
 const AppNotification = require('./models/AppNotification');
 const Announcement = require('./models/Announcement');
 const StockObservation = require('./models/StockObservation');
@@ -130,6 +134,66 @@ function formatTornApiError(code) {
   return messages[code] || `Torn API error (code ${code}).`;
 }
 
+// ─── KEY ACCESS LEVEL ENFORCEMENT ────────────────────────────────────────────
+// The dashboard requires Full Access Torn keys. New saves/logins are checked
+// via Torn's official key/info endpoint. Keys saved before enforcement get a
+// grace period before hard enforcement (see KEY_GRACE_DEADLINE below).
+const FULL_KEY_HINT =
+  'Generate or update one at https://www.torn.com/api (set your key to Full Access).';
+
+// Keys saved before enforcement was added get a grace window. Once this date
+// passes, below-Full keys are rejected at save/login like any other.
+const KEY_GRACE_DEADLINE = new Date('2026-09-28T00:00:00Z');
+
+function keyGraceActive() {
+  return Date.now() < KEY_GRACE_DEADLINE.getTime();
+}
+
+/**
+ * Check a Torn API key against the Full-access requirement.
+ * @param {string} apiKey raw key
+ * @param {object} [opts]
+ * @param {boolean} [opts.allowGrace] when true, below-Full keys are permitted
+ *        during the grace window (returns { sufficient: true, grace: true }).
+ * @returns {Promise<{sufficient: boolean, grace?: boolean, message?: string, info?: object}>}
+ *   message is a member-facing explanation when sufficient === false.
+ */
+async function enforceFullKeyAccess(apiKey, opts = {}) {
+  const check = await checkKeySufficient(apiKey);
+
+  if (check.sufficient) return { sufficient: true, info: check.info };
+
+  const reason = check.reason === 'Incorrect key' || check.info === null
+    ? (check.reason || 'Key could not be verified with Torn.')
+    : check.reason;
+
+  if (opts.allowGrace && keyGraceActive()) {
+    return { sufficient: true, grace: true, info: check.info };
+  }
+
+  const graceNote = keyGraceActive()
+    ? ` Note: existing keys keep working until ${KEY_GRACE_DEADLINE.toISOString().slice(0, 10)} (grace period), but new keys must be Full Access.`
+    : '';
+
+  return {
+    sufficient: false,
+    message: `This site requires a Full Access API key. ${reason} ${FULL_KEY_HINT}${graceNote}`,
+    info: check.info
+  };
+}
+
+// Audit helper: record a key security event without ever logging key material
+async function auditKeyEvent(action, req, { targetId = null, outcome = 'success', detail = null } = {}) {
+  await logAudit({
+    action,
+    actorId: req.session?.userId ?? null,
+    targetId,
+    outcome,
+    detail,
+    req
+  });
+}
+
 // Torn faction positions mapped to permission groups
 const POSITIONS = {
   ownership: ['Leader', 'Co-leader', 'Matriarch'],
@@ -212,7 +276,7 @@ const TRAINING_CHANNELS = [
 async function getFactionApiKey() {
   try {
     const config = await FactionConfig.findOne({ key: 'config' });
-    if (config?.tornFactionApiKey) return config.tornFactionApiKey.trim();
+    if (config?.tornFactionApiKey) return decryptOrRaw(config.tornFactionApiKey);
   } catch (err) {
     console.error('Error fetching faction config:', err.message);
   }
@@ -235,7 +299,7 @@ async function getPremiumFFScouterKey() {
     const match = candidates.find(c =>
       preferredNorm.includes(norm(c.tornName)) || preferredNorm.includes(norm(c.username))
     );
-    return (match || candidates[0]).ffScouterKey.trim();
+    return decryptOrRaw((match || candidates[0]).ffScouterKey);
   } catch (err) {
     console.error('Error resolving FFScouter key:', err.message);
     return null;
@@ -321,10 +385,10 @@ async function isPlayerInCompany(playerId, companyId) {
       if (!anyKeyed?.tornApiKey) {
         return { inCompany: false, error: 'Company director has no API key saved. Please contact ownership.' };
       }
-      return await checkCompanyRoster(playerId, companyId, anyKeyed.tornApiKey);
+      return await checkCompanyRoster(playerId, companyId, decryptOrRaw(anyKeyed.tornApiKey));
     }
 
-    return await checkCompanyRoster(playerId, companyId, directorUser.tornApiKey);
+    return await checkCompanyRoster(playerId, companyId, decryptOrRaw(directorUser.tornApiKey));
   } catch (err) {
     return { inCompany: false, error: err.message };
   }
@@ -717,7 +781,7 @@ async function getAccessibleCompaniesForUser(req) {
   const memberCompanyIds = new Set(directed.map(c => c.companyId));
   const dbUser = await User.findOne({ tornPlayerId: userId }, 'tornApiKey tornPlayerId');
   if (dbUser?.tornApiKey) {
-    const workCompanyId = await detectUserCompany(userId, dbUser.tornApiKey);
+    const workCompanyId = await detectUserCompany(userId, decryptOrRaw(dbUser.tornApiKey));
     if (workCompanyId) {
       const workCompany = allCompanies.find(c => c.companyId === workCompanyId);
       if (workCompany && !memberCompanyIds.has(workCompanyId)) {
@@ -849,7 +913,7 @@ app.post('/api/login/employee', async (req, res) => {
     let user = await User.findOne({ tornPlayerId: testUser.tornId });
     if (user) {
       user.tornName = testUser.tornName;
-      user.tornApiKey = savedKey;
+      user.tornApiKey = encrypt(savedKey);
       user.accountType = 'employee';
       user.companyId = testUser.companyId;
       user.username = testUser.tornName;
@@ -860,7 +924,7 @@ app.post('/api/login/employee', async (req, res) => {
       user = new User({
         tornPlayerId: testUser.tornId,
         tornName: testUser.tornName,
-        tornApiKey: savedKey,
+        tornApiKey: encrypt(savedKey),
         username: testUser.tornName,
         accountType: 'employee',
         companyId: testUser.companyId,
@@ -879,6 +943,7 @@ app.post('/api/login/employee', async (req, res) => {
       companyId: testUser.companyId,
       positionGroup: null,
       factionPosition: null,
+      // Raw key kept only in the active browser session; the DB copy is encrypted
       tornApiKey: savedKey,
       tornAvatar: null,
       isTestUser: true
@@ -903,6 +968,20 @@ app.post('/api/login/employee', async (req, res) => {
     return res.status(401).json({ error: `Invalid API key: ${validation.error}` });
   }
 
+  // Step 3b: Enforce Full Access key requirement (grace applies to logins)
+  const fullKeyCheck = await enforceFullKeyAccess(apiKey, { allowGrace: true });
+  if (!fullKeyCheck.sufficient) {
+    return res.status(403).json({ error: fullKeyCheck.message });
+  }
+  if (fullKeyCheck.grace) {
+    console.log(`[KEY GRACE] Login with below-Full key for player ${validation.playerId} (grace active)`);
+  }
+  await auditKeyEvent('key_access_check', req, {
+    targetId: validation.playerId,
+    outcome: fullKeyCheck.grace ? 'grace' : 'success',
+    detail: fullKeyCheck.grace ? 'Login permitted during grace period (key below Full)' : null
+  });
+
   // Step 3: Verify name and ID match
   if (validation.name !== tornName || validation.playerId !== tornId) {
     return res.status(401).json({ error: 'Torn name or ID does not match the API key.' });
@@ -923,7 +1002,7 @@ app.post('/api/login/employee', async (req, res) => {
   // Step 6: Upsert user record
   let user = await User.findOne({ tornPlayerId: tornId });
   if (user) {
-    user.tornApiKey = apiKey;
+    user.tornApiKey = encrypt(apiKey);
     user.tornName = tornName;
     user.tornKeyUpdatedAt = new Date();
     user.lastSeen = new Date();
@@ -934,7 +1013,7 @@ app.post('/api/login/employee', async (req, res) => {
     user = new User({
       tornPlayerId: tornId,
       tornName: tornName,
-      tornApiKey: apiKey,
+      tornApiKey: encrypt(apiKey),
       username: tornName,
       accountType: 'employee',
       companyId: parseInt(companyId),
@@ -953,7 +1032,8 @@ app.post('/api/login/employee', async (req, res) => {
     companyId: parseInt(companyId),
     positionGroup: null,
     factionPosition: null,
-    tornApiKey: user.tornApiKey,
+    // Raw key kept only in the active browser session; the DB copy is encrypted
+    tornApiKey: apiKey,
     tornAvatar: validation.data?.profile_image ?? null,
     isTestUser: false
   };
@@ -981,6 +1061,20 @@ app.post('/api/login', async (req, res) => {
     return res.status(401).json({ error: `Invalid API key: ${validation.error}` });
   }
 
+  // Step 1b: Enforce Full Access key requirement (grace applies to logins)
+  const fullKeyCheck = await enforceFullKeyAccess(apiKey, { allowGrace: true });
+  if (!fullKeyCheck.sufficient) {
+    return res.status(403).json({ error: fullKeyCheck.message });
+  }
+  if (fullKeyCheck.grace) {
+    console.log(`[KEY GRACE] Login with below-Full key for player ${validation.playerId} (grace active)`);
+  }
+  await auditKeyEvent('key_access_check', req, {
+    targetId: validation.playerId,
+    outcome: fullKeyCheck.grace ? 'grace' : 'success',
+    detail: fullKeyCheck.grace ? 'Login permitted during grace period (key below Full)' : null
+  });
+
   // Step 2: Verify name and ID match
   if (validation.name !== tornName || validation.playerId !== tornId) {
     return res.status(401).json({ error: 'Torn name or ID does not match the API key.' });
@@ -997,7 +1091,7 @@ app.post('/api/login', async (req, res) => {
 
   if (user) {
     // Existing user - update API key and login (ensure faction account type)
-    user.tornApiKey = apiKey;
+    user.tornApiKey = encrypt(apiKey);
     user.tornName = tornName;
     user.tornKeyUpdatedAt = new Date();
     user.lastSeen = new Date();
@@ -1009,7 +1103,7 @@ app.post('/api/login', async (req, res) => {
     user = new User({
       tornPlayerId: tornId,
       tornName: tornName,
-      tornApiKey: apiKey,
+      tornApiKey: encrypt(apiKey),
       username: tornName,
       accountType: 'faction',
       companyId: null,
@@ -1041,7 +1135,8 @@ app.post('/api/login', async (req, res) => {
     companyId: user.companyId || null,
     factionPosition: factionPosition,
     positionGroup: positionGroup,
-    tornApiKey: user.tornApiKey,
+    // Raw key kept only in the active browser session; the DB copy is encrypted
+    tornApiKey: apiKey,
     // Avatar is in profile_image field
     tornAvatar: validation.data?.profile_image ?? null
   };
@@ -1072,7 +1167,9 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     return res.render('dashboard', {
       user: req.session.user,
       accessibleTraining: [], // Employees get no training access
-      tornApiKey: user?.tornApiKey || null,
+      // Presence flag only — decrypted key material must never reach the HTML
+      hasSavedKey: !!user?.tornApiKey,
+      tornApiKey: null,
       userEmail: null,
       isOwner: false,
       realIsOwner: false,
@@ -1121,7 +1218,9 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   res.render('dashboard', {
     user: req.session.user,
     accessibleTraining,
-    tornApiKey: user?.tornApiKey || null,
+    // Presence flag only — decrypted key material must never reach the HTML
+    hasSavedKey: !!user?.tornApiKey,
+    tornApiKey: null,
     userEmail: user?.email || null,
     isOwner,
     realIsOwner,
@@ -1167,18 +1266,31 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
     if (tornRes.data.error) {
       return res.status(400).json({ error: 'Invalid Torn API key: ' + tornRes.data.error.error });
     }
+    // Enforce Full Access requirement (no grace — explicitly saving a key
+    // means the member can update it in Torn right now).
+    const fullKeyCheck = await enforceFullKeyAccess(apiKey.trim());
+    if (!fullKeyCheck.sufficient) {
+      await auditKeyEvent('key_save', req, {
+        targetId: tornRes.data.player_id,
+        outcome: 'rejected',
+        detail: fullKeyCheck.message
+      });
+      return res.status(403).json({ error: fullKeyCheck.message });
+    }
     await User.findOneAndUpdate(
       { tornPlayerId: req.session.userId },
       {
-        tornApiKey: apiKey.trim(),
+        tornApiKey: encrypt(apiKey.trim()),
         tornPlayerId: tornRes.data.player_id,
         tornName: tornRes.data.name,
         tornKeyUpdatedAt: new Date()
       },
       { upsert: true }
     );
-    // Update session
+    // Session stores a short-lived copy for the current browser session only;
+    // persisted sessions hold ciphertext.
     req.session.user.tornApiKey = apiKey.trim();
+    await auditKeyEvent('key_save', req, { targetId: tornRes.data.player_id });
     res.json({ success: true, player: tornRes.data });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1201,12 +1313,56 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
     }
     await FactionConfig.findOneAndUpdate(
       { key: 'config' },
-      { tornFactionApiKey: apiKey.trim(), setBy: req.session.userId, updatedAt: new Date() },
+      { tornFactionApiKey: encrypt(apiKey.trim()), setBy: req.session.userId, updatedAt: new Date() },
       { upsert: true }
     );
+    await auditKeyEvent('faction_key_save', req, {});
     res.json({ success: true, faction: tornRes.data });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── API: Self-service reveal of the member's own saved Torn key ─────────────
+// Lets a member recover their key without leadership ever seeing it. Only the
+// key owner can call this (the route reads req.session.userId) — there is no
+// admin path to reveal another member's key. Every reveal is audit-logged.
+app.get('/api/my-key', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId }, 'tornApiKey tornKeyUpdatedAt');
+    if (!dbUser?.tornApiKey) {
+      return res.status(404).json({ error: 'No Torn API key saved.' });
+    }
+
+    const apiKey = decryptOrRaw(dbUser.tornApiKey);
+
+    // Best-effort freshness check against Torn's key/info endpoint so members
+    // see whether their saved key still meets the Full-access requirement.
+    let keyStatus = null;
+    try {
+      const check = await checkKeySufficient(apiKey);
+      keyStatus = {
+        sufficient: check.sufficient,
+        accessLevel: check.info?.accessLevel || null,
+        message: check.sufficient ? null : check.reason
+      };
+    } catch (e) { /* non-fatal */ }
+
+    await auditKeyEvent('key_reveal', req, {
+      targetId: req.session.userId,
+      detail: keyStatus?.sufficient === false ? 'Revealed key is below Full access' : null
+    });
+
+    res.json({
+      apiKey,
+      accessLevel: keyStatus?.accessLevel || null,
+      keySufficient: keyStatus ? keyStatus.sufficient : null,
+      statusMessage: keyStatus?.message || null,
+      updatedAt: dbUser.tornKeyUpdatedAt || null
+    });
+  } catch (err) {
+    console.error('[/api/my-key] reveal failed:', err.message);
+    res.status(500).json({ error: 'Could not reveal key. If this persists, re-save your key from Torn instead.' });
   }
 });
 
@@ -1223,10 +1379,11 @@ app.post('/api/user/ffscouter-key', isAuthenticated, async (req, res) => {
 
   try {
     // Save the key directly - validation happens when fetching targets
+    // (encrypted at rest; decrypted on use)
     await User.findOneAndUpdate(
       { tornPlayerId: req.session.userId },
       {
-        ffScouterKey: trimmedKey,
+        ffScouterKey: encrypt(trimmedKey),
         updatedAt: new Date()
       },
       { returnDocument: 'after' }
@@ -1250,7 +1407,7 @@ app.get('/api/ffscouter/targets', isAuthenticated, async (req, res) => {
     const { inactiveonly, minlevel, maxlevel, minff, maxff, factionless, limit, preset } = req.query;
 
     // Build params for FFScouter API
-    const params = { key: dbUser.ffScouterKey };
+    const params = { key: decryptOrRaw(dbUser.ffScouterKey) };
 
     // FFScouter spec: when preset is specified, only 'key' and 'limit' are allowed
     if (preset && preset !== '') {
@@ -1351,7 +1508,7 @@ app.post('/api/user/tornstats-key', isAuthenticated, async (req, res) => {
     await User.updateOne(
       { tornPlayerId: req.session.userId },
       {
-        tornStatsKey: trimmedKey,
+        tornStatsKey: encrypt(trimmedKey),
         updatedAt: new Date()
       }
     );
@@ -1404,12 +1561,13 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
+    const tornApiKey = decryptOrRaw(dbUser.tornApiKey);
     const [tornRes, battlestatsRes] = await Promise.all([
       axios.get(
-        `https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${encodeURIComponent(dbUser.tornApiKey)}`
+        `https://api.torn.com/user/?selections=basic,profile,bars,personalstats&key=${encodeURIComponent(tornApiKey)}`
       ),
       axios.get(
-        `https://api.torn.com/user/?selections=battlestats&key=${encodeURIComponent(dbUser.tornApiKey)}`
+        `https://api.torn.com/user/?selections=battlestats&key=${encodeURIComponent(tornApiKey)}`
       )
     ]);
 
@@ -1476,7 +1634,7 @@ app.post('/api/user/stats/snapshot', isAuthenticated, async (req, res) => {
     }
 
     const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=personalstats&key=${encodeURIComponent(dbUser.tornApiKey)}`
+      `https://api.torn.com/user/?selections=personalstats&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
     );
     if (tornRes.data.error) {
       return res.status(400).json({ error: tornRes.data.error.error });
@@ -1568,7 +1726,7 @@ app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
     if (!dbUser?.tornApiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
-    const encodedKey = encodeURIComponent(dbUser.tornApiKey);
+    const encodedKey = encodeURIComponent(decryptOrRaw(dbUser.tornApiKey));
     const [userRes, tornRes] = await Promise.all([
       axios.get(`https://api.torn.com/user/?selections=honors,merits&key=${encodedKey}`),
       axios.get(`https://api.torn.com/torn/?selections=honors&key=${encodedKey}`)
@@ -1595,7 +1753,7 @@ app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=criminalrecord&key=${encodeURIComponent(dbUser.tornApiKey)}`
+      `https://api.torn.com/user/?selections=criminalrecord&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
     );
     if (tornRes.data.error) {
       return res.status(400).json({ error: tornRes.data.error.error });
@@ -1614,7 +1772,7 @@ app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/v2/user/skills?key=${encodeURIComponent(dbUser.tornApiKey)}`
+      `https://api.torn.com/v2/user/skills?key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
     );
     if (tornRes.data.error) {
       return res.status(400).json({ error: tornRes.data.error.error });
@@ -1692,7 +1850,7 @@ app.get('/api/torn/faction-travel', isAuthenticated, isFactionMember, async (req
         if (!factionMember) return null;
         try {
           const tornRes = await axios.get(
-            `https://api.torn.com/user/?selections=travel&key=${encodeURIComponent(u.tornApiKey)}`
+            `https://api.torn.com/user/?selections=travel&key=${encodeURIComponent(decryptOrRaw(u.tornApiKey))}`
           );
           if (tornRes.data.error) return null;
           return {
@@ -1764,7 +1922,7 @@ app.get('/api/faction/member-skills', isAuthenticated, isFactionMember, async (r
 
         try {
           const skillsRes = await axios.get(
-            `https://api.torn.com/v2/user/skills?key=${encodeURIComponent(dbUser.tornApiKey)}`,
+            `https://api.torn.com/v2/user/skills?key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`,
             { timeout: 10000 }
           );
 
@@ -1840,7 +1998,7 @@ app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/user/?selections=travel&key=${encodeURIComponent(dbUser.tornApiKey)}`
+      `https://api.torn.com/user/?selections=travel&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
     );
     if (tornRes.data.error) {
       return res.status(400).json({ error: tornRes.data.error.error });
@@ -1859,7 +2017,7 @@ app.get('/api/torn/items', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
     const tornRes = await axios.get(
-      `https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(dbUser.tornApiKey)}`
+      `https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
     );
     if (tornRes.data.error) {
       return res.status(400).json({ error: tornRes.data.error.error });
@@ -1923,7 +2081,7 @@ app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
 app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
-    const apiKey = dbUser?.tornApiKey?.trim();
+    const apiKey = decryptOrRaw(dbUser?.tornApiKey);
     if (!apiKey) {
       return res.status(400).json({ error: 'No Torn API key saved.' });
     }
@@ -2343,7 +2501,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       const targetIds = chunk.join(',');
 
       const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
-        params: { key: dbUser.ffScouterKey, targets: targetIds },
+        params: { key: decryptOrRaw(dbUser.ffScouterKey), targets: targetIds },
         timeout: 15000
       });
 
@@ -2367,7 +2525,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
     let tornStatsKey = null;
     try {
       const tsUser = await User.findOne({ tornStatsKey: { $ne: null } }, 'tornStatsKey');
-      tornStatsKey = tsUser?.tornStatsKey || null;
+      tornStatsKey = decryptOrRaw(tsUser?.tornStatsKey);
     } catch (e) { /* non-fatal */ }
 
     const fallbackIds = targetIdsList.filter(id => !(statsMap[id]?.distribution?.stats_percentage));
@@ -2416,7 +2574,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
         'tornApiKey tornPlayerId'
       ).lean();
       const keyedById = {};
-      keyedUsers.forEach(u => { keyedById[Number(u.tornPlayerId)] = u.tornApiKey; });
+      keyedUsers.forEach(u => { keyedById[Number(u.tornPlayerId)] = decryptOrRaw(u.tornApiKey); });
       const exactIds = Object.keys(keyedById);
       await Promise.all(exactIds.map(async pid => {
         const key = keyedById[pid];
@@ -2562,8 +2720,8 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
 
       try {
         const [basicRes, battleRes] = await Promise.all([
-          axios.get(`https://api.torn.com/user/?selections=basic,personalstats&key=${dbUser.tornApiKey}`),
-          axios.get(`https://api.torn.com/user/?selections=battlestats&key=${dbUser.tornApiKey}`)
+          axios.get(`https://api.torn.com/user/?selections=basic,personalstats&key=${decryptOrRaw(dbUser.tornApiKey)}`),
+          axios.get(`https://api.torn.com/user/?selections=battlestats&key=${decryptOrRaw(dbUser.tornApiKey)}`)
         ]);
 
         if (basicRes.data.error || battleRes.data.error) continue;
@@ -2670,7 +2828,7 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       const targetIds = chunk.join(',');
 
       const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
-        params: { key: dbUserWithKey.ffScouterKey, targets: targetIds },
+        params: { key: decryptOrRaw(dbUserWithKey.ffScouterKey), targets: targetIds },
         timeout: 15000
       });
 
@@ -2769,7 +2927,7 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
       dbUsers.map(async (u) => {
         try {
           const tornRes = await axios.get(
-            `https://api.torn.com/user/?selections=basic,personalstats&key=${u.tornApiKey}`
+            `https://api.torn.com/user/?selections=basic,personalstats&key=${decryptOrRaw(u.tornApiKey)}`
           );
           if (tornRes.data.error) return null;
           return {
@@ -2835,9 +2993,10 @@ app.get('/api/war/member-overview', isAuthenticated, isFactionMember, async (req
         if (!dbUser?.tornApiKey) return base;
 
         try {
+          const memberKey = decryptOrRaw(dbUser.tornApiKey);
           const [v1Res, v2Res] = await Promise.all([
-            axios.get(`https://api.torn.com/user/?selections=basic,profile,bars&key=${dbUser.tornApiKey}`),
-            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${dbUser.tornApiKey}`)
+            axios.get(`https://api.torn.com/user/?selections=basic,profile,bars&key=${memberKey}`),
+            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${memberKey}`)
           ]);
           if (!v1Res.data.error) {
             base.property = v1Res.data.property || null;
@@ -2906,10 +3065,11 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
         if (!dbUser?.tornApiKey) return base;
 
         try {
+          const memberKey = decryptOrRaw(dbUser.tornApiKey);
           const [v1Res, v2Res, statsRes] = await Promise.all([
-            axios.get(`https://api.torn.com/user/?selections=basic,profile,bars&key=${dbUser.tornApiKey}`),
-            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${dbUser.tornApiKey}`),
-            axios.get(`https://api.torn.com/user/?selections=personalstats&key=${dbUser.tornApiKey}`)
+            axios.get(`https://api.torn.com/user/?selections=basic,profile,bars&key=${memberKey}`),
+            axios.get(`https://api.torn.com/v2/user/?selections=cooldowns&key=${memberKey}`),
+            axios.get(`https://api.torn.com/user/?selections=personalstats&key=${memberKey}`)
           ]);
           if (!v1Res.data.error) {
             base.property = v1Res.data.property || null;
@@ -3666,7 +3826,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
     }
 
     const hofRes = await axios.get(
-      `https://api.torn.com/v2/user/hof?key=${encodeURIComponent(dbUser.tornApiKey)}`
+      `https://api.torn.com/v2/user/hof?key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
     );
     if (hofRes.data.error) {
       return res.status(400).json({ error: hofRes.data.error.error });
@@ -3701,7 +3861,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
 
         for (let attempt = 0; attempt < 100; attempt++) {
           const hofPage = await axios.get(
-            `https://api.torn.com/v2/torn/hof?limit=100&offset=${searchOffset}&cat=level&key=${encodeURIComponent(dbUser.tornApiKey)}`
+            `https://api.torn.com/v2/torn/hof?limit=100&offset=${searchOffset}&cat=level&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
           );
 
           if (hofPage.data?.error?.code === 5) {
@@ -3861,7 +4021,7 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
 
     while (allRaces.length < limit) {
       const tornRes = await axios.get(
-        `https://api.torn.com/v2/user/races?limit=${pageSize}&offset=${offset}&key=${encodeURIComponent(dbUser.tornApiKey)}`
+        `https://api.torn.com/v2/user/races?limit=${pageSize}&offset=${offset}&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`
       );
       if (tornRes.data.error) {
         return res.status(400).json({ error: tornRes.data.error.error });
@@ -3892,7 +4052,7 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
     }
 
     const isTestUser = !!req.session?.user?.isTestUser;
-    const encodedKey = encodeURIComponent(dbUser.tornApiKey);
+    const encodedKey = encodeURIComponent(decryptOrRaw(dbUser.tornApiKey));
 
     // Fetch bank rates
     const bankRes = await axios.get('https://api.torn.com/torn/?selections=bank&key=' + encodedKey);
@@ -4053,7 +4213,7 @@ app.get('/api/torn/stocks', isAuthenticated, async (req, res) => {
       return res.status(400).json({ error: 'No Torn API key saved. Please add your key first.' });
     }
 
-    const encodedKey = encodeURIComponent(dbUser.tornApiKey);
+    const encodedKey = encodeURIComponent(decryptOrRaw(dbUser.tornApiKey));
     const response = await axios.get('https://api.torn.com/torn/?selections=stocks&key=' + encodedKey);
 
     if (response.data.error) {
@@ -4151,9 +4311,10 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
                           // 1. Fetch user bars (nerve, energy) if they have an API key
     let playerItems = [];
     if (dbUser?.tornApiKey) {
+      const myDayKey = decryptOrRaw(dbUser.tornApiKey);
       try {
           const tornRes = await axios.get(
-            `https://api.torn.com/user/?selections=bars&key=${encodeURIComponent(dbUser.tornApiKey)}`,
+            `https://api.torn.com/user/?selections=bars&key=${encodeURIComponent(myDayKey)}`,
             { timeout: 10000 }
           );
           if (!tornRes.data.error) {
@@ -4166,7 +4327,7 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
         // 1b. Separately fetch player inventory items (non-fatal if this fails)
         try {
           const itemsRes = await axios.get(
-            `https://api.torn.com/user/?selections=items&key=${encodeURIComponent(dbUser.tornApiKey)}`,
+            `https://api.torn.com/user/?selections=items&key=${encodeURIComponent(myDayKey)}`,
             { timeout: 10000 }
           );
           if (!itemsRes.data.error && itemsRes.data.items) {
