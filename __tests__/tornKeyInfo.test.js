@@ -121,6 +121,43 @@ describe('tornKeyInfo.checkKeySufficient', () => {
     expect(res.reason).toBeNull();
   });
 
+  // Real v2 shape captured from Torn: payload sits under `info`, with numeric
+  // `info.access.level` + `type` string, selections keyed by category, owner in
+  // top-level `user.id`.
+  test('real v2 full-access response (info.access.level 4 / type "Full Access") is accepted', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        info: {
+          selections: {
+            user: ['basic', 'profile', 'bars', 'personalstats', 'timestamp', 'lookup']
+          },
+          access: { level: 4, type: 'Full Access', faction: true, company: false }
+        },
+        user: { id: 3808908, faction_id: 53272, company_id: 124594 }
+      }
+    });
+    const res = await checkKeySufficient('FULLKEY-V2');
+    expect(res.sufficient).toBe(true);
+    expect(res.info.accessLevel).toBe('Full');
+    expect(res.info.accessTier).toBe(3);
+    expect(res.info.ownerId).toBe(3808908);
+    expect(res.info.selections).toContain('basic');
+    expect(res.reason).toBeNull();
+  });
+
+  test('real v2 limited response (info.access.level 2) is rejected, not mislabeled Unknown', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        info: { selections: {}, access: { level: 2, type: 'Limited' } },
+        user: { id: 999 }
+      }
+    });
+    const res = await checkKeySufficient('LIMITEDKEY-V2');
+    expect(res.sufficient).toBe(false);
+    expect(res.info.accessLevel).toBe('Limited');
+    expect(res.info.accessTier).toBe(2);
+  });
+
   test('custom key missing required selections is rejected with the missing list', async () => {
     axios.get.mockResolvedValueOnce(
       v2Response('Limited', ['basic', 'profile']) // missing bars, personalstats

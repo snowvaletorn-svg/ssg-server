@@ -53,7 +53,7 @@ async function fetchAllMemberStats() {
     dbUsers.map(async (u) => {
       try {
         const tornRes = await axios.get(
-          `https://api.torn.com/user/?selections=basic,personalstats&key=${u.tornApiKey}`
+          `https://api.torn.com/user/?selections=basic,personalstats&key=${decryptOrRaw(u.tornApiKey)}`
         );
         if (tornRes.data.error) return null;
         return {

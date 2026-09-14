@@ -366,7 +366,7 @@ async function addCompany(companyId, directorPlayerId, addedBy) {
   // 3. Test API access to the company
   let companyData;
   try {
-    companyData = await fetchCompanyDataFromApi(companyId, directorUser.tornApiKey);
+    companyData = await fetchCompanyDataFromApi(companyId, decryptOrRaw(directorUser.tornApiKey));
   } catch (err) {
     return { success: false, error: `Cannot access company data: ${err.message}. Ensure the director's API key has full access.` };
   }
@@ -476,12 +476,12 @@ async function getCompanyData(companyId, requestingPlayerId) {
 
   const storedDirector = await User.findOne({ tornPlayerId: company.directorPlayerId });
   if (storedDirector?.tornApiKey) {
-    keyCandidates.push({ key: storedDirector.tornApiKey, source: `stored director ${company.directorPlayerId}` });
+    keyCandidates.push({ key: decryptOrRaw(storedDirector.tornApiKey), source: `stored director ${company.directorPlayerId}` });
   }
   if (requestingPlayerId) {
     const requester = await User.findOne({ tornPlayerId: parseInt(requestingPlayerId) });
     if (requester?.tornApiKey) {
-      keyCandidates.push({ key: requester.tornApiKey, source: `requesting user ${requestingPlayerId}` });
+      keyCandidates.push({ key: decryptOrRaw(requester.tornApiKey), source: `requesting user ${requestingPlayerId}` });
     }
   }
   const anyKeyed = await User.findOne(
@@ -489,7 +489,7 @@ async function getCompanyData(companyId, requestingPlayerId) {
     'tornPlayerId tornApiKey'
   );
   if (anyKeyed?.tornApiKey) {
-    keyCandidates.push({ key: anyKeyed.tornApiKey, source: `faction member ${anyKeyed.tornPlayerId}` });
+    keyCandidates.push({ key: decryptOrRaw(anyKeyed.tornApiKey), source: `faction member ${anyKeyed.tornPlayerId}` });
   }
 
   if (!keyCandidates.length) {
@@ -545,7 +545,7 @@ async function getCompanyData(companyId, requestingPlayerId) {
     let workStats = null;
 
     if (dbUser && dbUser.tornApiKey) {
-      workStats = await fetchEmployeeWorkStats(dbUser.tornApiKey);
+      workStats = await fetchEmployeeWorkStats(decryptOrRaw(dbUser.tornApiKey));
     }
 
     employees.push({

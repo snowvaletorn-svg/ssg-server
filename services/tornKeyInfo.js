@@ -66,22 +66,59 @@ async function fetchKeyInfo(apiKey) {
 
     const info = res.data;
 
-    // v2 returns selections as an object keyed by category
-    // (e.g. { user: ['basic','bars'], ... }); flatten to a list of leaf names
+    // ── Access level: handle both Torn API shapes ─────────────────────────
+    // v1 (key/?selections=info): { access_level: 'Full', ... } at top level.
+    // v2 (v2/key/info): the whole payload is under `info`, e.g.
+    //   { info: { selections: {...}, access: { level: 4, type: 'Full Access',
+    //             faction: true, company: false, log: {...} } }, user: {...} }
+    // Note: in v2 the payload object is the LIVE response itself (no nesting),
+    // but the access block sits at `info.access`. Guard both layouts.
+    const live = res.data;
+    const accessRoot = live.info?.access || live.access || {};
+    const a = accessRoot;
+
+    let accessLevel = null;
+
+    if (typeof a.level === 'number') {
+      // v2 numeric level: 0=Public 1=Minimal 2=Limited 3=Full 4=Full(same tier)
+      const num = a.level;
+      accessLevel = ['Public', 'Minimal', 'Limited', 'Full', 'Full'][num] || 'Unknown';
+    } else if (typeof a.type === 'string') {
+      accessLevel = a.type.toLowerCase().includes('full') ? 'Full' : a.type;
+    } else if (typeof a.access_level === 'string') {
+      accessLevel = a.access_level;
+    } else {
+      accessLevel = a.level || 'Unknown';
+    }
+
+    const infoAccessLevel = live.access_level || a.access_level || accessLevel;
+    if (infoAccessLevel && typeof infoAccessLevel === 'string' && accessLevel === 'Unknown') {
+      accessLevel = infoAccessLevel;
+    }
+
+    // v2 returns selections as an object keyed by category at `info.selections`
+    // (e.g. { user: ['basic','bars'], ... }); flatten to a list of leaf names.
     let selections = [];
-    if (Array.isArray(info.access?.selections)) {
-      selections = info.access.selections;
-    } else if (info.access?.selections && typeof info.access.selections === 'object') {
-      for (const arr of Object.values(info.access.selections)) {
+    const selectionRoot = live.info?.selections || a.selections || null;
+    if (Array.isArray(selectionRoot)) {
+      selections = selectionRoot;
+    } else if (selectionRoot && typeof selectionRoot === 'object') {
+      for (const arr of Object.values(selectionRoot)) {
         if (Array.isArray(arr)) selections.push(...arr);
       }
     }
+    // Some v1 responses expose selections directly at top level
+    if (!selections.length && Array.isArray(live.selections)) {
+      selections = live.selections;
+    }
 
-    const accessLevel = info.access?.level || 'Unknown';
+    const ownerId = live.user?.id != null ? Number(live.user.id)
+      : (a.player_id != null ? Number(a.player_id) : null);
+
     const data = {
       accessLevel,
       accessTier: ACCESS_TIER[accessLevel] != null ? ACCESS_TIER[accessLevel] : -1,
-      ownerId: info.access?.player_id != null ? Number(info.access.player_id) : null,
+      ownerId,
       selections
     };
 

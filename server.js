@@ -8,7 +8,7 @@ const path = require('path');
 const mongoose = require('mongoose');
 const rateLimit = require('express-rate-limit');
 const compression = require('compression');
-const nodemailer = require('nodemailer');
+const helmet = require('helmet');
 const dns = require('dns');
 dns.setDefaultResultOrder('ipv4first');
 dns.setServers(['8.8.8.8', '1.1.1.1']);
@@ -34,6 +34,8 @@ const { encrypt, decrypt, isEncrypted } = require('./services/keyCipher');
 const { checkKeySufficient } = require('./services/tornKeyInfo');
 const { logAudit } = require('./models/AuditLog');
 const { decryptOrRaw } = require('./services/keyCipher');
+// Registers global axios timeout + transient-failure retry (GET only)
+require('./services/httpRetry');
 const AppNotification = require('./models/AppNotification');
 const Announcement = require('./models/Announcement');
 const StockObservation = require('./models/StockObservation');
@@ -182,11 +184,14 @@ async function enforceFullKeyAccess(apiKey, opts = {}) {
   };
 }
 
-// Audit helper: record a key security event without ever logging key material
-async function auditKeyEvent(action, req, { targetId = null, outcome = 'success', detail = null } = {}) {
+// Audit helper: record a key security event without ever logging key material.
+// During login the session isn't created yet, so `actorId` should be supplied
+// explicitly (e.g. the validated Torn player ID); otherwise it falls back to
+// the session user, then to targetId when both are unavailable.
+async function auditKeyEvent(action, req, { actorId, targetId = null, outcome = 'success', detail = null } = {}) {
   await logAudit({
     action,
-    actorId: req.session?.userId ?? null,
+    actorId: actorId ?? req.session?.userId ?? targetId,
     targetId,
     outcome,
     detail,
@@ -481,29 +486,29 @@ const bankRatesLimiter = rateLimit({
 });
 
 // ─── APP SETTINGS & MIDDLEWARE ────────────────────────────────────────────────
+// Trust the first proxy hop (Render's router) so req.ip is the real client IP.
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
+// CORS allowlist — exact matches only (no substring/wildcard matching).
+// Torn origins are required for Tampermonkey userscript calls from torn.com
+// pages; TornPDA/native tools send no Origin header and are handled by the
+// "!origin" branch below.
+const corsAllowedOrigins = [
+  'http://localhost:3000',
+  'https://ssg-server.onrender.com',
+  'https://www.torn.com',
+  'https://torn.com',
+  process.env.ALLOWED_ORIGIN
+].filter(Boolean);
+
 app.use(cors({
   origin: function (origin, callback) {
-    // If no origin (like simple server-to-server or direct tools), allow it
+    // No Origin header (server-to-server, TornPDA native HTTP, curl) — allow
     if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'https://ssg-server.onrender.com',
-      'https://www.torn.com', // ALLOWS STANDARD PC BROWSER TAMPERMONKEY HANDSHAKES
-      'https://torn.com',
-      process.env.ALLOWED_ORIGIN
-    ].filter(Boolean);
 
-    // Allow matched origins, subdomains of onrender, OR requests coming from Torn itself
-    if (
-      allowedOrigins.indexOf(origin) !== -1 || 
-      origin.endsWith('.onrender.com') ||
-      origin.includes('torn.com')
-    ) {
+    if (corsAllowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
@@ -511,15 +516,22 @@ app.use(cors({
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
     'User-Agent',
     'Accept'
   ],
   credentials: true // Keeps session cookies functional for your dashboard login views
 }));
 app.use(compression({ level: 6 }));
+// Security headers. CSP is disabled for now — the EJS dashboard uses inline
+// scripts; enable a policy deliberately later. crossOriginEmbedderPolicy is
+// off so cross-origin Torn profile images keep loading.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -532,9 +544,17 @@ app.use('/api/torn/bank-rates', bankRatesLimiter);
 const SESSION_MAX_AGE = 72 * 60 * 60 * 1000; // 72 hours (default)
 const STAY_LOGGED_IN_MAX_AGE = 100 * 60 * 60 * 1000; // 100 hours (extended)
 
+// Fail fast: a predictable SESSION_SECRET would let anyone forge session
+// cookies. Refuse to boot rather than fall back silently.
+if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your-secret-key') {
+  console.error('FATAL: SESSION_SECRET is not set (or is the example placeholder).');
+  console.error('Set a strong random value, e.g.: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  process.exit(1);
+}
+
 app.use(session({
   store: sessionStore,
-  secret: process.env.SESSION_SECRET || 'your-secret-key',
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   proxy: isProduction,
@@ -977,6 +997,7 @@ app.post('/api/login/employee', async (req, res) => {
     console.log(`[KEY GRACE] Login with below-Full key for player ${validation.playerId} (grace active)`);
   }
   await auditKeyEvent('key_access_check', req, {
+    actorId: validation.playerId,
     targetId: validation.playerId,
     outcome: fullKeyCheck.grace ? 'grace' : 'success',
     detail: fullKeyCheck.grace ? 'Login permitted during grace period (key below Full)' : null
@@ -1070,6 +1091,7 @@ app.post('/api/login', async (req, res) => {
     console.log(`[KEY GRACE] Login with below-Full key for player ${validation.playerId} (grace active)`);
   }
   await auditKeyEvent('key_access_check', req, {
+    actorId: validation.playerId,
     targetId: validation.playerId,
     outcome: fullKeyCheck.grace ? 'grace' : 'success',
     detail: fullKeyCheck.grace ? 'Login permitted during grace period (key below Full)' : null
@@ -4128,69 +4150,112 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
 });
 
 // ─── START SERVER ─────────────────────────────────────────────────────────────
+// Tracks background work that should complete before exit (in-flight cron jobs)
+const backgroundWork = new Set();
+
+function trackBackgroundWork(promise) {
+  if (!promise) return promise;
+  backgroundWork.add(promise);
+  promise.finally(() => backgroundWork.delete(promise));
+  return promise;
+}
+
 async function startServer() {
   try {
-    const fixedPort = 3000;
+    // Honor the platform-assigned port (Render injects PORT); default 3000 locally
+    const port = parseInt(process.env.PORT) || 3000;
 
     const net = require('net');
-    const checkPort = (port) => {
+    const checkPort = (checkPort_) => {
       return new Promise((resolve) => {
-        const server = net.createServer();
-        server.listen(port, () => {
-          server.once('close', () => {
-            resolve(true);
-          });
-          server.close();
+        const probe = net.createServer();
+        probe.listen(checkPort_, () => {
+          probe.once('close', () => resolve(true));
+          probe.close();
         });
-        server.on('error', (err) => {
-          if (err.code === 'EADDRINUSE') {
-            resolve(false);
-          } else {
-            resolve(true);
-          }
+        probe.on('error', (err) => {
+          resolve(err.code !== 'EADDRINUSE');
         });
       });
     };
 
-    const isPortAvailable = await checkPort(fixedPort);
+    const isPortAvailable = await checkPort(port);
     if (!isPortAvailable) {
-      console.log(`Port ${fixedPort} is already in use.`);
-      console.log('Use: netstat -ano | findstr :${fixedPort}');
+      console.log(`Port ${port} is already in use.`);
+      console.log('Use: netstat -ano | findstr :' + port);
       console.log('Then: taskkill /PID <PID> /F');
       process.exit(1);
     }
 
-    const server = app.listen(fixedPort, () => {
-      console.log(`SSG Server listening on http://localhost:${fixedPort}`);
+    const server = app.listen(port, () => {
+      console.log(`SSG Server listening on http://localhost:${port}`);
       // Start the weekly snapshot scheduler
       startScheduler();
     });
 
-    process.on('SIGINT', () => {
-      console.log('\nShutting down gracefully...');
-      server.close(() => {
-        console.log('Server closed.');
-        process.exit(0);
-      });
-    });
+    let shuttingDown = false;
+    async function gracefulShutdown(exitCode) {
+      if (shuttingDown) return;
+      shuttingDown = true;
 
-    process.on('SIGTERM', () => {
-      console.log('\nShutting down gracefully...');
-      server.close(() => {
-        console.log('Server closed.');
-        process.exit(0);
+      console.log('Shutting down gracefully...');
+
+      // Hard-stop so a hung close can never block a platform redeploy
+      const forceExit = setTimeout(() => {
+        console.warn('Graceful shutdown timeout — forcing exit.');
+        process.exit(exitCode);
+      }, 10000);
+      forceExit.unref();
+
+      // 1. Stop accepting new connections (in-flight requests finish first)
+      await new Promise((resolve) => {
+        server.close(() => resolve());
+        // No keep-alive connections lingering? close() fires immediately.
       });
+
+      // 2. Let in-flight cron/snapshot work finish (bounded)
+      if (backgroundWork.size > 0) {
+        console.log(`Waiting for ${backgroundWork.size} background task(s)...`);
+        await Promise.race([
+          Promise.allSettled(Array.from(backgroundWork)),
+          new Promise(r => setTimeout(r, 8000))
+        ]);
+      }
+
+      // 3. Flush session store (connect-mongo), then close DB connection
+      try {
+        await Promise.race([
+          new Promise((resolve) => {
+            try { sessionStore.close(() => resolve()); } catch (e) { resolve(); }
+          }),
+          new Promise(r => setTimeout(r, 2000))
+        ]);
+        if (mongoose.connection.readyState !== 0) {
+          await Promise.race([
+            mongoose.disconnect(),
+            new Promise(r => setTimeout(r, 3000))
+          ]);
+        }
+      } catch (err) {
+        console.error('Cleanup error during shutdown:', err.message);
+      }
+
+      console.log('Server closed.');
+      process.exit(exitCode);
+    }
+
+    // One stray rejected promise must not take the whole server down.
+    process.on('unhandledRejection', (reason) => {
+      console.error('Unhandled Rejection:', reason);
     });
 
     process.on('uncaughtException', (err) => {
       console.error('Uncaught Exception:', err);
-      server.close(() => process.exit(1));
+      gracefulShutdown(1);
     });
 
-    process.on('unhandledRejection', (reason, promise) => {
-      console.error('Unhandled Rejection:', reason);
-      server.close(() => process.exit(1));
-    });
+    process.on('SIGINT', () => gracefulShutdown(0));
+    process.on('SIGTERM', () => gracefulShutdown(0));
 
   } catch (error) {
     console.error('Failed to start server:', error);
