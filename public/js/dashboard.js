@@ -239,6 +239,20 @@ async function fetchMyDay() {
 function renderMyDay(d) {
   const cards = [];
 
+  // ── My Day persistent key-grace banner ───────────────────────────────────────────
+  if (d.keyAlert && d.keyAlert.needsUpdate) {
+    cards.unshift(`<div class="myday-card myday-warning">
+      <div class="myday-card-icon">⚠️</div>
+      <div class="myday-card-body">
+        <div class="myday-card-title">API Key Needs Update</div>
+        <div class="myday-card-value">${escapeHtml(d.keyAlert.message || '')}</div>
+        ${d.keyAlert.graceDeadline
+          ? `<div class="myday-card-hint">Update by ${new Date(d.keyAlert.graceDeadline).toLocaleDateString()} — settings at <a href="https://www.torn.com/api" target="_blank" rel="noopener" style="color:#4a90e2;text-decoration:underline;">torn.com/api</a>.</div>`
+          : ''}
+      </div>
+    </div>`);
+  }
+
   // ── Energy Card ──
   if (d.energy) {
     const pct = Math.round((d.energy.current / d.energy.maximum) * 100);
@@ -2972,7 +2986,10 @@ function renderMemberOverview() {
     const keyUpdated = m.tornKeyUpdatedAt
       ? new Date(m.tornKeyUpdatedAt).toLocaleDateString()
       : m.lastSeen ? new Date(m.lastSeen).toLocaleDateString() : '—';
-    const apiCell = `${hasKey}<br><span style="font-size:0.68rem;color:#555;">${keyUpdated}</span>`;
+    let apiCell = `${hasKey}<br><span style="font-size:0.68rem;color:#555;">${keyUpdated}</span>`;
+    if (m.keyNeedsUpdate) {
+      apiCell += `<br><span style="font-size:0.9rem;line-height:1;" title="needs API key update">⚠️</span>`;
+    }
 
     const removeBtn = m.id
       ? `<button class="btn btn-small btn-danger" onclick="removeUser(${m.id}, '${escapeHtml(m.name)}')" style="padding:2px 6px;font-size:0.7rem;">✕</button>`
