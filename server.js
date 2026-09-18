@@ -58,7 +58,7 @@ const {
   fetchSpyUser
 } = require('./services/intelService');
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CAT SCRIPT BACKEND â€” COMMENTED OUT FOR FUTURE USE
+// CAT SCRIPT BACKEND â-” COMMENTED OUT FOR FUTURE USE
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 // const CatUser = require('./models/CatUser');
 // const CatCall = require('./models/CatCall');
@@ -105,7 +105,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// â”€â”€â”€ CONSTANTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- CONSTANTS ----------------------------------------------------------------
 const SSG_FACTION_ID = 53272;
 
 // Test users for employee login testing (non-faction company employees)
@@ -136,7 +136,7 @@ function formatTornApiError(code) {
   return messages[code] || `Torn API error (code ${code}).`;
 }
 
-// â”€â”€â”€ KEY ACCESS LEVEL ENFORCEMENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- KEY ACCESS LEVEL ENFORCEMENT --------------------------------------------
 // The dashboard requires Full Access Torn keys. New saves/logins are checked
 // via Torn's official key/info endpoint. Keys saved before enforcement get a
 // grace period before hard enforcement (see KEY_GRACE_DEADLINE below).
@@ -196,7 +196,7 @@ async function auditKeyEvent(action, req, { actorId, targetId = null, outcome = 
   });
 }
 
-// â”€â”€â”€ KEY-HEALTH STATUS FOR UI (banners / leadership icons) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- KEY-HEALTH STATUS FOR UI (banners / leadership icons) ----------------
 // Returns whether a member's saved key needs updating, WITHOUT exposing the
 // key itself. Uses the cached tornKeyInfo lookup (24h) so this is cheap.
 //   needsUpdate = true when the key is below Full (or invalid/stale) AND we're
@@ -225,7 +225,7 @@ async function keyHealthForUser(dbUser) {
   try {
     check = await checkKeySufficient(apiKey);
   } catch (err) {
-    // Can't reach Torn â€” don't nag users; treat as not-needs-update
+    // Can't reach Torn â-” don't nag users; treat as not-needs-update
     return none;
   }
 
@@ -262,7 +262,7 @@ const POSITIONS = {
 
 // Helper to format numbers (for display in API responses)
 function formatNumHelper(n) {
-  if (n == null) return 'â€”';
+  if (n == null) return 'â-”';
   if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(2) + 'B';
   if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
   if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K';
@@ -280,55 +280,55 @@ function getPositionGroup(position) {
 const TRAINING_CHANNELS = [
   {
     id: '1435130329479250021',
-    name: 'ðŸ“– Torn Stats Account Creation',
+    name: '📈 - Torn Stats Account Creation',
     description: 'Website dedicated to Tracking Stat progress for Torn as well as a plethora of other items.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414594410512494',
-    name: 'ðŸ“Š Stats Training',
+    name: '🏋🏻‍♂️- Stats Training',
     description: 'Advanced stat training guides and strategies.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
   },
   {
     id: '1435416169946415194',
-    name: 'ðŸ’° Money Making Training',
+    name: '💰 - Money Making Training',
     description: 'Guides on making money to fund your stats growth.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'warlord']
   },
   {
     id: '1435413325725958165',
-    name: 'â¬†ï¸ Level Training',
+    name: '#️⃣ - Level Training',
     description: 'Everything you need to know about leveling up fast.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435414982316654746',
-    name: 'ðŸ”— Chains',
+    name: '🔗 — Chains',
     description: 'Detailed walkthrough on what chains are.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416378709508138',
-    name: 'ðŸ«† Crimes Training',
+    name: '🫆 - Crimes Training',
     description: 'Guide for all members on Crimes in Torn.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435416812706857225',
-    name: 'ðŸ—ï¸ Organized Crimes Training',
+    name: '🦝 - Organized Crimes Training',
     description: 'Guide for all members on Organized Crimes in Torn.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
   {
     id: '1435130329479250021',
-    name: 'ðŸ“– Torn Stats Guides',
+    name: '📈 - Torn Stats Guides',
     description: 'The following are guides available in Torn Stats. These guides require access to Torn Stats. See Torn Stats Training for information on how to create your Torn Stats account.',
     positionGroups: ['ownership', 'leadership', 'strategy', 'strength', 'growth', 'warlord']
   },
 ];
 
-// â”€â”€â”€ HELPER: Get faction API key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// HELPER: Get faction API key
 async function getFactionApiKey() {
   try {
     const config = await FactionConfig.findOne({ key: 'config' });
@@ -339,7 +339,7 @@ async function getFactionApiKey() {
   return process.env.TORN_FACTION_API_KEY?.trim() || null;
 }
 
-// â”€â”€â”€ HELPER: Resolve the FFScouter key to use for premium lookups â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// HELPER: Resolve the FFScouter key to use for premium lookups
 // FFScouter Premium is a per-account subscription. We prefer the key belonging
 // to the faction's designated premium user (so premium-only endpoints such as
 // `player-flights` work), and fall back to any saved key otherwise.
@@ -362,7 +362,7 @@ async function getPremiumFFScouterKey() {
   }
 }
 
-// â”€â”€â”€ HELPER: Exact landing from FFScouter Premium player-flights â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// HELPER: Exact landing from FFScouter Premium player-flights
 // Returns { destination, earliestArrival, latestArrival } from `current`, or
 // null when no active trip / no premium window is available. Rate limit is
 // 100 req/min shared across the premium account, so callers must scope this to
@@ -402,7 +402,7 @@ async function fetchFFScouterFlight(ffKey, targetId) {
   }
 }
 
-// â”€â”€â”€ HELPER: Validate Torn API key and get user data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- HELPER: Validate Torn API key and get user data --------------------------
 async function validateTornApiKey(apiKey) {
   try {
     const encodedKey = encodeURIComponent(apiKey.trim());
@@ -421,7 +421,7 @@ async function validateTornApiKey(apiKey) {
   }
 }
 
-// â”€â”€â”€ HELPER: Check if player is in a company's employee roster â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- HELPER: Check if player is in a company's employee roster ----------------
 // Uses the company director's saved API key to fetch the current rosters.
 async function isPlayerInCompany(playerId, companyId) {
   try {
@@ -432,7 +432,7 @@ async function isPlayerInCompany(playerId, companyId) {
 
     const directorUser = await User.findOne({ tornPlayerId: company.directorPlayerId });
     if (!directorUser || !directorUser.tornApiKey) {
-      // Fallback: the stored director may be stale or keyless â€” use any saved
+      // Fallback: the stored director may be stale or keyless â-” use any saved
       // key (the company profile is readable with any valid key).
       const anyKeyed = await User.findOne(
         { tornApiKey: { $exists: true, $nin: [null, ''] } },
@@ -450,7 +450,7 @@ async function isPlayerInCompany(playerId, companyId) {
   }
 }
 
-// Shared roster check for isPlayerInCompany â€” fetches the company profile with
+// Shared roster check for isPlayerInCompany â-” fetches the company profile with
 // the given API key and reports whether the player is on the current roster.
 async function checkCompanyRoster(playerId, companyId, apiKey) {
   try {
@@ -468,7 +468,7 @@ async function checkCompanyRoster(playerId, companyId, apiKey) {
   }
 }
 
-// â”€â”€â”€ HELPER: Check if player is in SSG faction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- HELPER: Check if player is in SSG faction --------------------------------
 async function isPlayerInFaction(playerId) {
   try {
     const factionKey = await getFactionApiKey();
@@ -489,7 +489,7 @@ async function isPlayerInFaction(playerId) {
   }
 }
 
-// â”€â”€â”€ MONGODB â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- MONGODB ------------------------------------------------------------------
 if (process.env.MONGO_URI) {
   mongoose.connect(process.env.MONGO_URI, {
     serverSelectionTimeoutMS: 5000,
@@ -500,7 +500,7 @@ if (process.env.MONGO_URI) {
     .catch(err => console.error('MongoDB connection error:', err));
 }
 
-// â”€â”€â”€ SESSION STORE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- SESSION STORE ------------------------------------------------------------
 let sessionStore;
 if (isProduction && process.env.MONGO_URI) {
   sessionStore = MongoStore.create
@@ -510,7 +510,7 @@ if (isProduction && process.env.MONGO_URI) {
   sessionStore = new session.MemoryStore();
 }
 
-// â”€â”€â”€ RATE LIMITING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- RATE LIMITING ------------------------------------------------------------
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -536,13 +536,13 @@ const bankRatesLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// â”€â”€â”€ APP SETTINGS & MIDDLEWARE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- APP SETTINGS & MIDDLEWARE ------------------------------------------------
 // Trust the first proxy hop (Render's router) so req.ip is the real client IP.
 app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// CORS allowlist â€” exact matches only (no substring/wildcard matching).
+// CORS allowlist â-” exact matches only (no substring/wildcard matching).
 // Torn origins are required for Tampermonkey userscript calls from torn.com
 // pages; TornPDA/native tools send no Origin header and are handled by the
 // "!origin" branch below.
@@ -556,7 +556,7 @@ const corsAllowedOrigins = [
 
 app.use(cors({
   origin: function (origin, callback) {
-    // No Origin header (server-to-server, TornPDA native HTTP, curl) â€” allow
+    // No Origin header (server-to-server, TornPDA native HTTP, curl) â-” allow
     if (!origin) return callback(null, true);
 
     if (corsAllowedOrigins.indexOf(origin) !== -1) {
@@ -576,7 +576,7 @@ app.use(cors({
   credentials: true // Keeps session cookies functional for your dashboard login views
 }));
 app.use(compression({ level: 6 }));
-// Security headers. CSP is disabled for now â€” the EJS dashboard uses inline
+// Security headers. CSP is disabled for now â-” the EJS dashboard uses inline
 // scripts; enable a policy deliberately later. crossOriginEmbedderPolicy is
 // off so cross-origin Torn profile images keep loading.
 app.use(helmet({
@@ -591,7 +591,7 @@ app.use('/api/', apiLimiter);
 app.use('/api/login', loginLimiter);
 app.use('/api/torn/bank-rates', bankRatesLimiter);
 
-// â”€â”€â”€ SESSION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- SESSION ------------------------------------------------------------------
 const SESSION_MAX_AGE = 72 * 60 * 60 * 1000; // 72 hours (default)
 const STAY_LOGGED_IN_MAX_AGE = 100 * 60 * 60 * 1000; // 100 hours (extended)
 
@@ -630,7 +630,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// â”€â”€â”€ AUTH MIDDLEWARE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- AUTH MIDDLEWARE ----------------------------------------------------------
 const isAuthenticated = (req, res, next) => {
   if (!req.session || !req.session.userId) return res.redirect('/login');
   next();
@@ -683,7 +683,7 @@ const isFactionMember = (req, res, next) => {
   next();
 };
 
-// â”€â”€â”€ UTILITY LOANING PERMISSION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- UTILITY LOANING PERMISSION ------------------------------------------------
 // The "Utility Loaning" permission is granted by a faction position whose armory
 // access includes the Utilities (Temporary) category. We detect it by querying
 // Torn's faction positions API and reading each position's armory loan capacity.
@@ -779,7 +779,7 @@ const isUtilityLoaning = async (req, res, next) => {
   next();
 };
 
-// â”€â”€â”€ COMPANY PAGE ACCESS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- COMPANY PAGE ACCESS ------------------------------------------------------
 // Every faction member can open the Companies page. Each member sees the
 // companies they direct (registered by Ownership) plus any company they
 // currently work at (detected live from their own saved Torn API key's `job`
@@ -864,7 +864,7 @@ async function getAccessibleCompaniesForUser(req) {
   return directed;
 }
 
-// â”€â”€â”€ ROUTES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- ROUTES --------------------------------------------------------------------
 
 // Home page
 app.get('/', async (req, res) => {
@@ -942,7 +942,7 @@ app.get('/', async (req, res) => {
 // Login page
 app.get('/login', async (req, res) => {
   if (req.session.user) return res.redirect('/dashboard');
-  // Pass configured companies for the employee login dropdown (Company Name â€” Company ID)
+  // Pass configured companies for the employee login dropdown (Company Name â-” Company ID)
   let companies = [];
   try {
     companies = await listCompanies();
@@ -952,7 +952,7 @@ app.get('/login', async (req, res) => {
   res.render('login', { companies });
 });
 
-// Employee login API â€” for non-faction company employees
+// Employee login API â-” for non-faction company employees
 app.post('/api/login/employee', async (req, res) => {
   const { tornName, tornId, apiKey: rawApiKey, companyId, stayLoggedIn } = req.body;
   const apiKey = rawApiKey?.trim();
@@ -1240,7 +1240,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     return res.render('dashboard', {
       user: req.session.user,
       accessibleTraining: [], // Employees get no training access
-      // Presence flag only â€” decrypted key material must never reach the HTML
+      // Presence flag only â-” decrypted key material must never reach the HTML
       hasSavedKey: !!user?.tornApiKey,
       tornApiKey: null,
       userEmail: null,
@@ -1278,7 +1278,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
 
   // Companies page access: every faction member can view (they see their own
-  // companies â€” directed and/or worked at); employees see their logged-in company.
+  // companies â-” directed and/or worked at); employees see their logged-in company.
   const accessibleCompanies = await getAccessibleCompaniesForUser(req);
   const isCompaniesAccess = accessibleCompanies.length > 0;
 
@@ -1291,7 +1291,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   res.render('dashboard', {
     user: req.session.user,
     accessibleTraining,
-    // Presence flag only â€” decrypted key material must never reach the HTML
+    // Presence flag only â-” decrypted key material must never reach the HTML
     hasSavedKey: !!user?.tornApiKey,
     tornApiKey: null,
     userEmail: user?.email || null,
@@ -1319,13 +1319,13 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// â”€â”€â”€ API: Keep-alive ping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Keep-alive ping ------------------------------------------------------
 app.get('/api/ping', (req, res) => {
   res.json({ ok: true });
 });
 
 
-// â”€â”€â”€ API: Save personal Torn API key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Save personal Torn API key ------------------------------------------
 app.post('/api/torn/key', isAuthenticated, async (req, res) => {
   const { apiKey } = req.body;
   if (!apiKey || apiKey.trim() === '') {
@@ -1339,7 +1339,7 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
     if (tornRes.data.error) {
       return res.status(400).json({ error: 'Invalid Torn API key: ' + tornRes.data.error.error });
     }
-    // Enforce Full Access requirement (no grace â€” explicitly saving a key
+    // Enforce Full Access requirement (no grace â-” explicitly saving a key
     // means the member can update it in Torn right now).
     const fullKeyCheck = await enforceFullKeyAccess(apiKey.trim());
     if (!fullKeyCheck.sufficient) {
@@ -1370,7 +1370,7 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Save faction API key (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Save faction API key (Ownership only) --------------------------------
 app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res) => {
   const { apiKey } = req.body;
   if (!apiKey || apiKey.trim() === '') {
@@ -1396,9 +1396,9 @@ app.post('/api/torn/faction-key', isAuthenticated, isOwnership, async (req, res)
   }
 });
 
-// â”€â”€â”€ API: Self-service reveal of the member's own saved Torn key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Self-service reveal of the member's own saved Torn key --------------
 // Lets a member recover their key without leadership ever seeing it. Only the
-// key owner can call this (the route reads req.session.userId) â€” there is no
+// key owner can call this (the route reads req.session.userId) â-” there is no
 // admin path to reveal another member's key. Every reveal is audit-logged.
 app.get('/api/my-key', isAuthenticated, async (req, res) => {
   try {
@@ -1439,7 +1439,7 @@ app.get('/api/my-key', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Save FFScouter API key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Save FFScouter API key ----------------------------------------------
 app.post('/api/user/ffscouter-key', isAuthenticated, async (req, res) => {
   const { ffScouterKey } = req.body;
 
@@ -1469,7 +1469,7 @@ app.post('/api/user/ffscouter-key', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Fetch FFScouter targets â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Fetch FFScouter targets ----------------------------------------------
 app.get('/api/ffscouter/targets', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -1540,7 +1540,7 @@ app.get('/api/ffscouter/targets', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Check FFScouter key status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Check FFScouter key status ------------------------------------------
 app.get('/api/user/check-ffscouter-key', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId }, 'ffScouterKey');
@@ -1550,7 +1550,7 @@ app.get('/api/user/check-ffscouter-key', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Save TornStats API key (free; enables enemy stat-split fallback) â”€â”€â”€â”€
+// ---- API: Save TornStats API key (free; enables enemy stat-split fallback) ----
 // TornStats is a free third-party service. The key must belong to an account
 // created at tornstats.com and linked to the owner's Torn API key.
 app.post('/api/user/tornstats-key', isAuthenticated, async (req, res) => {
@@ -1591,7 +1591,7 @@ app.post('/api/user/tornstats-key', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Check TornStats key status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Check TornStats key status ------------------------------------------
 app.get('/api/user/check-tornstats-key', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId }, 'tornStatsKey');
@@ -1601,7 +1601,7 @@ app.get('/api/user/check-tornstats-key', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Save user email address â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Save user email address ----------------------------------------------
 app.post('/api/user/email', isAuthenticated, async (req, res) => {
   const { email } = req.body;
 
@@ -1627,7 +1627,7 @@ app.post('/api/user/email', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Personal Torn stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Personal Torn stats --------------------------------------------------
 app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -1698,7 +1698,7 @@ app.get('/api/torn/user', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Save personal stat snapshot and return increase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Save personal stat snapshot and return increase ----------------------
 app.post('/api/user/stats/snapshot', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -1762,7 +1762,7 @@ app.post('/api/user/stats/snapshot', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Get last stat increase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get last stat increase ----------------------------------------------
 app.get('/api/user/stats/last-increase', isAuthenticated, async (req, res) => {
   try {
     const snapshots = await UserStatSnapshot.find({ tornPlayerId: req.session.userId })
@@ -1792,7 +1792,7 @@ app.get('/api/user/stats/last-increase', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Personal honors, merits, awards â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Personal honors, merits, awards ------------------------------------
 app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -1818,7 +1818,7 @@ app.get('/api/torn/honors', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Personal crime XP (merits) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Personal crime XP (merits) ------------------------------------------
 app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -1837,7 +1837,7 @@ app.get('/api/torn/crimeexp', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Personal crime skills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Personal crime skills ----------------------------------------------
 app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -1856,7 +1856,7 @@ app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Faction stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Faction stats --------------------------------------------------------
 app.get('/api/torn/faction', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -1902,7 +1902,7 @@ app.get('/api/torn/faction', isAuthenticated, isFactionMember, async (req, res) 
   }
 });
 
-// â”€â”€â”€ API: Faction travel status â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Faction travel status ------------------------------------------------
 app.get('/api/torn/faction-travel', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -1951,7 +1951,7 @@ app.get('/api/torn/faction-travel', isAuthenticated, isFactionMember, async (req
   }
 });
 
-// â”€â”€â”€ API: Faction member crime skills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Faction member crime skills ------------------------------------------
 app.get('/api/faction/member-skills', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -2063,7 +2063,7 @@ app.get('/api/faction/member-skills', isAuthenticated, isFactionMember, async (r
   }
 });
 
-// â”€â”€â”€ API: Travel status from Torn â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Travel status from Torn --------------------------------------------
 app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -2082,7 +2082,7 @@ app.get('/api/torn/travel', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Torn item catalog â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Torn item catalog --------------------------------------------------
 app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -2101,7 +2101,7 @@ app.get('/api/torn/items', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ Userscript install endpoint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- Userscript install endpoint --------------------------------------------
 app.get('/js/ssg-stock-observer.user.js', (req, res) => {
   const fs = require('fs');
   const path = require('path');
@@ -2117,7 +2117,7 @@ app.get('/js/ssg-stock-observer.user.js', (req, res) => {
   });
 });
 
-// â”€â”€â”€ API: YATA foreign stock data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: YATA foreign stock data --------------------------------------------
 app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   try {
     const yataRes = await axios.get('https://yata.yt/api/v1/travel/export/', {
@@ -2150,7 +2150,7 @@ app.get('/api/yata/travel', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Travel Profits Calculator â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Travel Profits Calculator --------------------------------------------
 app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -2289,7 +2289,7 @@ app.get('/api/travel-profits', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: War debug - raw data inspection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: War debug - raw data inspection ------------------------------------
 app.get('/api/torn/wars-debug', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -2356,7 +2356,7 @@ app.get('/api/torn/wars-debug', isAuthenticated, isFactionMember, async (req, re
   }
 });
 
-// â”€â”€â”€ API: War hits tracking â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: War hits tracking ----------------------------------------------------
 app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -2436,7 +2436,7 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
   }
 });
 
-// â”€â”€â”€ API: War enemy stats (FFScouter get-stats) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: War enemy stats (FFScouter get-stats) --------------------------------
 app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     // First check if there's an active war
@@ -2594,7 +2594,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
     // Stat splits: FFScouter premium `distribution` comes free with the batch
     // stats call above. For enemies without it, fall back to TornStats spy data
     // (free crowdsourced) using any saved TornStats key. All spy lookups run in
-    // parallel with caching; failures/misses resolve to null and show as "â€”".
+    // parallel with caching; failures/misses resolve to null and show as "â-”".
     let tornStatsKey = null;
     try {
       const tsUser = await User.findOne({ tornStatsKey: { $ne: null } }, 'tornStatsKey');
@@ -2608,7 +2608,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       fallbackIds.forEach((id, i) => { spyResults[id] = spies[i]; });
     }
 
-    // â”€â”€ EXACT LANDING WINDOWS FOR FLYING ENEMIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- EXACT LANDING WINDOWS FOR FLYING ENEMIES --------------------------------
     // Torn does not expose flight timers for other factions' members, so the
     // estimate below is a fallback. We improve accuracy from two exact sources:
     //   1. FFScouter Premium `player-flights` (primary; The_Rev_Skippy's key)
@@ -2756,7 +2756,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
   }
 });
 
-// â”€â”€â”€ API: War target comparison (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: War target comparison (Ownership only) ------------------------------
 app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -2959,14 +2959,14 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     // Format table for Discord
     const colWidth = 22;
     const headerRow = ['Member'.padEnd(colWidth), ...enemyMembers.map(e => {
-      const label = e.name.length > 12 ? e.name.substring(0, 11) + 'â€¦' : e.name;
+      const label = e.name.length > 12 ? e.name.substring(0, 11) + 'â-¦' : e.name;
       return label.padEnd(colWidth);
     })].join(' | ');
 
-    const separator = 'â”€'.repeat(headerRow.length);
+    const separator = '--'.repeat(headerRow.length);
 
     const dataRows = hitMatrix.map(row => {
-      const memberLabel = row.memberName.length > 20 ? row.memberName.substring(0, 19) + 'â€¦' : row.memberName;
+      const memberLabel = row.memberName.length > 20 ? row.memberName.substring(0, 19) + 'â-¦' : row.memberName;
       return [memberLabel.padEnd(colWidth), ...row.hits.map(h => h.padEnd(colWidth))].join(' | ');
     });
 
@@ -2990,7 +2990,7 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
   }
 });
 
-// â”€â”€â”€ API: Member total stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Member total stats --------------------------------------------------
 app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     // Exclude employee (non-faction) accounts from leadership views
@@ -3028,7 +3028,7 @@ app.get('/api/admin/member-stats', isAuthenticated, isLeadershipOrOwnership, asy
   }
 });
 
-// â”€â”€â”€ API: War member overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: War member overview --------------------------------------------------
 app.get('/api/war/member-overview', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3097,7 +3097,7 @@ app.get('/api/war/member-overview', isAuthenticated, isFactionMember, async (req
   }
 });
 
-// â”€â”€â”€ API: Admin member overview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Admin member overview ------------------------------------------------
 app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3184,7 +3184,7 @@ app.get('/api/admin/member-overview', isAuthenticated, isLeadershipOrOwnership, 
   }
 });
 
-// â”€â”€â”€ API: Weapon & Armor Inventory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Weapon & Armor Inventory ----------------------------------------------
 app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3260,7 +3260,7 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
   }
 });
 
-// â”€â”€â”€ API: Medical Inventory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Medical Inventory ------------------------------------------------------
 app.get('/api/admin/medical-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3289,7 +3289,7 @@ app.get('/api/admin/medical-inventory', isAuthenticated, isLeadershipOrOwnership
 });
 
 
-// â”€â”€â”€ API: Drug Inventory â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Drug Inventory --------------------------------------------------------
 app.get('/api/admin/drug-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3317,12 +3317,12 @@ app.get('/api/admin/drug-inventory', isAuthenticated, isLeadershipOrOwnership, a
   }
 });
 
-// â”€â”€â”€ OC 2.0 Item Roles (Utilities armory) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- OC 2.0 Item Roles (Utilities armory) --------------------------------------
 // Each organized crime has a set of Tools (loaned out from the Utilities armory and
-// returned after the crime) and Materials (consumed / used up during the crime â€” no
+// returned after the crime) and Materials (consumed / used up during the crime â-” no
 // return needed). An item can be a tool in one crime and a material in another
 // (e.g. Hand Drill), so classification is keyed by crime name, NOT only by item.
-// Quantities (e.g. "2 x Jemmy") are collapsed â€” we only need the canonical name.
+// Quantities (e.g. "2 x Jemmy") are collapsed â-” we only need the canonical name.
 const OC_ITEM_ROLES = {
   'First Aid and Abet':    { tools: ['Lockpicks'],                          materials: ['Shaving Foam'] },
   'Mob Mentality':         { tools: ['Jemmy'],                              materials: [] },
@@ -3379,7 +3379,7 @@ function isCrimeItemType(crimeName, itemName, column) {
   });
 }
 
-// Check whether an item is associated with a specific crime at all â€” i.e. it is
+// Check whether an item is associated with a specific crime at all â-” i.e. it is
 // either a Tool (loaned out and returned) or a Material (consumed) for that crime.
 // Items such as personal-crime tools (e.g. Bucket, Cemetery Key) are NOT part of any
 // OC, so although the holding member may have an active/complete crime, the loaned
@@ -3388,7 +3388,7 @@ function isCrimeItem(crimeName, itemName) {
   return isCrimeItemType(crimeName, itemName, 'tools') ||
          isCrimeItemType(crimeName, itemName, 'materials');
 }
-// â”€â”€â”€ API: Faction Loans (Armor & Weapons) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Faction Loans (Armor & Weapons) --------------------------------------
 app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3571,7 +3571,7 @@ app.get('/api/admin/faction-loans', isAuthenticated, isLeadershipOrOwnership, as
   }
 });
 
-// â”€â”€â”€ API: Utilities Inventory & Loans (Utilities armory + OC tie-in) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Utilities Inventory & Loans (Utilities armory + OC tie-in) ----------
 app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const factionKey = await getFactionApiKey();
@@ -3729,7 +3729,7 @@ app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnersh
 // and deletes the open request. The Utilities armory page reflects the actual loan
 // automatically through the existing Torn API integration.
 
-// â”€â”€â”€ Helper: Fetch the available Utilities armory items (name, id, available) â”€â”€
+// ---- Helper: Fetch the available Utilities armory items (name, id, available) --
 async function fetchUtilitiesArmoryItems() {
   const factionKey = await getFactionApiKey();
   if (!factionKey) return [];
@@ -3752,7 +3752,7 @@ async function fetchUtilitiesArmoryItems() {
   }));
 }
 
-// â”€â”€â”€ API: List available utilities armory items (for the request dropdown) â”€â”€â”€â”€
+// ---- API: List available utilities armory items (for the request dropdown) ----
 app.get('/api/utilities/available', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const items = await fetchUtilitiesArmoryItems();
@@ -3762,7 +3762,7 @@ app.get('/api/utilities/available', isAuthenticated, isFactionMember, async (req
   }
 });
 
-// â”€â”€â”€ API: Open a new utilities item request (ticket) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Open a new utilities item request (ticket) --------------------------
 app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { itemId, itemName } = req.body || {};
@@ -3800,7 +3800,7 @@ app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req
   }
 });
 
-// â”€â”€â”€ API: Get utilities requests (requester's own + all open for holders) â”€â”€â”€â”€â”€
+// ---- API: Get utilities requests (requester's own + all open for holders) ------
 app.get('/api/utilities/requests', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const userId = parseInt(req.session.userId);
@@ -3829,7 +3829,7 @@ app.get('/api/utilities/requests', isAuthenticated, isFactionMember, async (req,
   }
 });
 
-// â”€â”€â”€ API: Fulfil a utilities request (creates requester notification + deletes) â”€
+// ---- API: Fulfil a utilities request (creates requester notification + deletes) --
 app.post('/api/utilities/requests/:id/fulfill', isAuthenticated, isFactionMember, isUtilityLoaning, async (req, res) => {
   try {
     const request = await AppNotification.findOne({
@@ -3867,7 +3867,7 @@ app.post('/api/utilities/requests/:id/fulfill', isAuthenticated, isFactionMember
   }
 });
 
-// â”€â”€â”€ API: Cancel / delete an open utilities request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Cancel / delete an open utilities request --------------------------
 app.delete('/api/utilities/requests/:id', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const request = await AppNotification.findOne({
@@ -3890,7 +3890,7 @@ app.delete('/api/utilities/requests/:id', isAuthenticated, isFactionMember, asyn
   }
 });
 
-// â”€â”€â”€ API: Level progress via HOF â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Level progress via HOF ----------------------------------------------
 app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -4005,7 +4005,7 @@ app.get('/api/torn/levelprogress', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Faction application â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Faction application --------------------------------------------------
 app.post('/api/apply', async (req, res) => {
   const { answers, tornName, tornId, allYes } = req.body;
 
@@ -4042,13 +4042,13 @@ app.post('/api/apply', async (req, res) => {
   try {
     console.log(`âœ… Application received from ${tornName} (${tornId})`);
 
-    // â”€â”€ (Commented out) Discord Webhook â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- (Commented out) Discord Webhook ------------------------------------
     // Discord is currently disabled due to a temporary IP ban.
     // Uncomment this block when the ban is lifted.
     //
     // if (process.env.DISCORD_WEBHOOK_URL) { ... }
 
-    // â”€â”€ Send email notification via Resend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Send email notification via Resend --------------------------------
     const notifyEmails = getNotifyEmails();
     if (notifyEmails.length > 0) {
       const emailResult = await sendEmail({
@@ -4058,10 +4058,10 @@ app.post('/api/apply', async (req, res) => {
       });
       console.log(`[Application] Email notification result:`, JSON.stringify(emailResult));
     } else {
-      console.log(`[Application] No NOTIFY_EMAILS configured â€” skipping email send`);
+      console.log(`[Application] No NOTIFY_EMAILS configured â-” skipping email send`);
     }
 
-    // â”€â”€ Save in-app notification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Save in-app notification ------------------------------------------
     try {
       const notification = new AppNotification({
         type: 'application',
@@ -4085,7 +4085,7 @@ app.post('/api/apply', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Racing stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Racing stats --------------------------------------------------------
 app.get('/api/torn/races', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -4122,7 +4122,7 @@ app.get('/api/torn/races', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Bank Rates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Bank Rates ----------------------------------------------------------
 app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -4146,7 +4146,7 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
     let bankInvestmentMerit = 0;
     let meritBonus = 0;
 
-    // Test users use placeholder API keys â€” always force merits to 0.
+    // Test users use placeholder API keys â-” always force merits to 0.
     // Also make the merits fetch non-fatal for real users, so a missing
     // "Personal User Data" permission doesn't break the entire bank rates page.
     if (!isTestUser) {
@@ -4206,7 +4206,7 @@ app.get('/api/torn/bank-rates', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ START SERVER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- START SERVER --------------------------------------------------------------
 // Tracks background work that should complete before exit (in-flight cron jobs)
 const backgroundWork = new Set();
 
@@ -4259,7 +4259,7 @@ async function startServer() {
 
       // Hard-stop so a hung close can never block a platform redeploy
       const forceExit = setTimeout(() => {
-        console.warn('Graceful shutdown timeout â€” forcing exit.');
+        console.warn('Graceful shutdown timeout â-” forcing exit.');
         process.exit(exitCode);
       }, 10000);
       forceExit.unref();
@@ -4326,8 +4326,8 @@ if (require.main === module) { startServer(); }
 // MY DAY DASHBOARD API
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// â”€â”€â”€ API: Get personalized "My Day" dashboard data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-// â”€â”€â”€ API: TCSE Stock Exchange â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get personalized "My Day" dashboard data --------------------------
+// ---- API: TCSE Stock Exchange --------------------------------------------------
 app.get('/api/torn/stocks', isAuthenticated, async (req, res) => {
   try {
     const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
@@ -4504,11 +4504,11 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
 
             // Determine if the player currently has this item for their OC.
             // Priority of signals (most authoritative first):
-            //   1. toolAvailable â€” the crime slot tells us the item is checked in/available
+            //   1. toolAvailable â-” the crime slot tells us the item is checked in/available
             //      for this member right now (item_requirement.is_available). This works even
             //      if the inventory call below is empty/fails.
-            //   2. toolId in inventory â€” we know the exact required item ID (item_requirement.id).
-            //   3. Legacy name-based catalog lookup â€” only for records saved before toolId existed.
+            //   2. toolId in inventory â-” we know the exact required item ID (item_requirement.id).
+            //   3. Legacy name-based catalog lookup â-” only for records saved before toolId existed.
             result.ocItemHave = participant.toolAvailable === true;
 
             if (!result.ocItemHave && playerItems.length > 0) {
@@ -4518,7 +4518,7 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
               );
 
               if (participant.toolId) {
-                // Authoritative path: exact item ID from the v2 crime API â€” no name catalog lookup.
+                // Authoritative path: exact item ID from the v2 crime API â-” no name catalog lookup.
                 result.ocItemHave = playerItemIds.has(String(participant.toolId));
               } else {
                 // Legacy fallback: records created before toolId existed only have a display name
@@ -4658,7 +4658,7 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
     }
 
     
-      // Key health alert â€” only populated (non-null) when THIS member's saved
+      // Key health alert â-” only populated (non-null) when THIS member's saved
       // key needs updating: below Full during grace, or stale/invalid.
       const myKeyAlert = await keyHealthForUser(dbUser);
       result.keyAlert = myKeyAlert.needsUpdate ? myKeyAlert : null;
@@ -4682,7 +4682,7 @@ const {
   getParticipantHistory
 } = require('./services/tornCrimesService');
 
-// â”€â”€â”€ API: Refresh OC crimes from Torn â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Refresh OC crimes from Torn ------------------------------------------
 app.post('/api/oc/refresh', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { daysBack } = req.body;
@@ -4700,7 +4700,7 @@ app.post('/api/oc/refresh', isAuthenticated, isFactionMember, async (req, res) =
   }
 });
 
-// â”€â”€â”€ API: Get all OC crimes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get all OC crimes ----------------------------------------------------
 app.get('/api/oc/crimes', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { status, dateFrom, dateTo, sort, order, limit } = req.query;
@@ -4737,7 +4737,7 @@ app.get('/api/oc/crimes', isAuthenticated, isFactionMember, async (req, res) => 
   }
 });
 
-// â”€â”€â”€ API: Get crime details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get crime details ----------------------------------------------------
 app.get('/api/oc/crimes/:crimeId', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const crime = await getCrimeDetails(parseInt(req.params.crimeId));
@@ -4747,7 +4747,7 @@ app.get('/api/oc/crimes/:crimeId', isAuthenticated, isFactionMember, async (req,
   }
 });
 
-// â”€â”€â”€ API: Update checkpoint pass rates â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Update checkpoint pass rates ----------------------------------------
 app.put('/api/oc/crimes/:crimeId/checkpoints', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { participantRates } = req.body;
@@ -4758,7 +4758,7 @@ app.put('/api/oc/crimes/:crimeId/checkpoints', isAuthenticated, isFactionMember,
   }
 });
 
-// â”€â”€â”€ API: Get participant history â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get participant history ----------------------------------------------
 app.get('/api/oc/participants/:playerId', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const history = await getParticipantHistory(parseInt(req.params.playerId), SSG_FACTION_ID);
@@ -4768,7 +4768,7 @@ app.get('/api/oc/participants/:playerId', isAuthenticated, isFactionMember, asyn
   }
 });
 
-// â”€â”€â”€ API: Bulk update member profiles (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Bulk update member profiles (Ownership only) --------------------------
 app.put('/api/admin/members/profiles', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const { updates } = req.body;
@@ -4857,13 +4857,13 @@ app.get('/api/admin/snapshot/latest/csv', isAuthenticated, isLeadershipOrOwnersh
   }
 });
 
-// â”€â”€â”€ API: Test snapshot run (unique ID, won't collide with real snapshots) â”€â”€â”€â”€
+// ---- API: Test snapshot run (unique ID, won't collide with real snapshots) ----
 app.post('/api/admin/snapshot/test-run', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   const result = await takeTestSnapshot(req.session.userId);
   res.json(result);
 });
 
-// â”€â”€â”€ API: Force send existing snapshot CSV via email â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Force send existing snapshot CSV via email ------------------------------
 app.post('/api/admin/snapshot/send-email', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const { startDate, endDate, emailTo } = req.body;
@@ -4896,7 +4896,7 @@ app.post('/api/admin/snapshot/send-email', isAuthenticated, isLeadershipOrOwners
 // NOTIFICATIONS API (Ownership only)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// â”€â”€â”€ API: Get recent notifications (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get recent notifications (Ownership only) --------------------------
 app.get('/api/notifications', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
@@ -4923,7 +4923,7 @@ app.get('/api/notifications', isAuthenticated, isOwnership, async (req, res) => 
   }
 });
 
-// â”€â”€â”€ API: Mark notification as read (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Mark notification as read (Ownership only) --------------------------
 app.post('/api/notifications/:id/read', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const userId = parseInt(req.session.userId);
@@ -4945,7 +4945,7 @@ app.post('/api/notifications/:id/read', isAuthenticated, isOwnership, async (req
   }
 });
 
-// â”€â”€â”€ API: Get unread notification count (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get unread notification count (Ownership only) ----------------------
 app.get('/api/notifications/unread-count', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const userId = parseInt(req.session.userId);
@@ -4956,7 +4956,7 @@ app.get('/api/notifications/unread-count', isAuthenticated, isOwnership, async (
   }
 });
 
-// â”€â”€â”€ API: Delete a notification (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Delete a notification (Ownership only) ------------------------------
 app.delete('/api/notifications/:id', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const result = await AppNotification.findByIdAndDelete(req.params.id);
@@ -4973,7 +4973,7 @@ app.delete('/api/notifications/:id', isAuthenticated, isOwnership, async (req, r
 // ANNOUNCEMENTS API
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// â”€â”€â”€ API: Get latest announcement (all authenticated members) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get latest announcement (all authenticated members) ----------------
 app.get('/api/announcements/latest', isAuthenticated, async (req, res) => {
   try {
     const announcement = await Announcement.findOne()
@@ -4986,7 +4986,7 @@ app.get('/api/announcements/latest', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Get all announcements (all authenticated members) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get all announcements (all authenticated members) ------------------
 app.get('/api/announcements', isAuthenticated, async (req, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit) || 10, 50);
@@ -5001,7 +5001,7 @@ app.get('/api/announcements', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Create announcement (Leadership/Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Create announcement (Leadership/Ownership only) --------------------
 app.post('/api/announcements', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const { message } = req.body;
@@ -5024,7 +5024,7 @@ app.post('/api/announcements', isAuthenticated, isLeadershipOrOwnership, async (
   }
 });
 
-// â”€â”€â”€ API: Update announcement (Leadership/Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Update announcement (Leadership/Ownership only) --------------------
 app.put('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const { message } = req.body;
@@ -5048,7 +5048,7 @@ app.put('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, asyn
   }
 });
 
-// â”€â”€â”€ API: Delete announcement (Leadership/Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Delete announcement (Leadership/Ownership only) --------------------
 app.delete('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
     const result = await Announcement.findByIdAndDelete(req.params.id);
@@ -5065,7 +5065,7 @@ app.delete('/api/announcements/:id', isAuthenticated, isLeadershipOrOwnership, a
 // COMPANY TRACKING API
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// â”€â”€â”€ API: List all companies (all faction members; filtered to what they can see) â”€â”€
+// ---- API: List all companies (all faction members; filtered to what they can see) --
 app.get('/api/companies', isAuthenticated, async (req, res) => {
   try {
     const accessible = await getAccessibleCompaniesForUser(req);
@@ -5075,7 +5075,7 @@ app.get('/api/companies', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Get full company data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get full company data ----------------------------------------------
 app.get('/api/company/:companyId', isAuthenticated, async (req, res) => {
   try {
     const companyId = parseInt(req.params.companyId);
@@ -5095,7 +5095,7 @@ app.get('/api/company/:companyId', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Add company (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Add company (Ownership only) ----------------------------------------
 app.post('/api/admin/companies', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const { companyId, directorPlayerId } = req.body;
@@ -5116,7 +5116,7 @@ app.post('/api/admin/companies', isAuthenticated, isOwnership, async (req, res) 
   }
 });
 
-// â”€â”€â”€ API: Remove company (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Remove company (Ownership only) ------------------------------------
 app.delete('/api/admin/companies/:companyId', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const removed = await removeCompany(parseInt(req.params.companyId));
@@ -5130,7 +5130,7 @@ app.delete('/api/admin/companies/:companyId', isAuthenticated, isOwnership, asyn
   }
 });
 
-// â”€â”€â”€ API: Set company director (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Set company director (Ownership only) ------------------------------
 // Corrects a stale/wrong director record. Verifies the new director is in the
 // faction, resolves their name, and updates the company record immediately.
 app.put('/api/admin/companies/:companyId/director', isAuthenticated, isOwnership, async (req, res) => {
@@ -5167,7 +5167,7 @@ app.put('/api/admin/companies/:companyId/director', isAuthenticated, isOwnership
   }
 });
 
-// â”€â”€â”€ API: Delete employee data (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Delete employee data (Ownership only) --------------------------------
 app.delete('/api/admin/employees/:playerId', isAuthenticated, isOwnership, async (req, res) => {
   try {
     const playerId = parseInt(req.params.playerId);
@@ -5201,7 +5201,7 @@ app.delete('/api/admin/employees/:playerId', isAuthenticated, isOwnership, async
   }
 });
 
-// â”€â”€â”€ API: Role Impersonation (Ownership only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Role Impersonation (Ownership only) ----------------------------------
 app.post('/api/user/impersonate', isAuthenticated, isOwnership, async (req, res) => {
   const { role } = req.body;
 
@@ -5223,7 +5223,7 @@ app.post('/api/user/impersonate', isAuthenticated, isOwnership, async (req, res)
 // STOCK OBSERVATION API (for Tampermonkey userscript)
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-// â”€â”€â”€ API: Submit stock observations from torn.com/travel.php â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Submit stock observations from torn.com/travel.php ------------------
 app.post('/api/stock-observe', express.json(), async (req, res) => {
   try {
     const { playerId, playerName, country, observedAt, stocks } = req.body;
@@ -5284,7 +5284,7 @@ app.post('/api/stock-observe', express.json(), async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Get stockout estimates for a given country â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get stockout estimates for a given country --------------------------
 app.get('/api/stockout-estimates', async (req, res) => {
   try {
     const country = req.query.country?.toLowerCase();
@@ -5388,10 +5388,10 @@ app.get('/api/stockout-estimates', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Stock analysis for restock times and predictions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Stock analysis for restock times and predictions --------------------
 // (stockAnalysisService and stockDataSourceService already required at top of file)
 
-// â”€â”€â”€ API: Get detailed stock analysis for a country (hybrid: YATA + userscript) â”€
+// ---- API: Get detailed stock analysis for a country (hybrid: YATA + userscript) --
 app.get('/api/restock-analysis', async (req, res) => {
   try {
     const country = req.query.country?.toLowerCase();
@@ -5416,7 +5416,7 @@ app.get('/api/restock-analysis', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Get travel recommendations based on stock analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Get travel recommendations based on stock analysis ----------------
 app.get('/api/travel-recommendations', async (req, res) => {
   try {
     const maxItems = parseInt(req.query.max) || 20;
@@ -5432,7 +5432,7 @@ app.get('/api/travel-recommendations', async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Stock Advisory - hybrid YATA + userscript data â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Stock Advisory - hybrid YATA + userscript data ----------------------
 // Returns per-country stock data with deterministic restock countdown,
 // burn rates from userscript observations, and departure recommendations.
 app.get('/api/stock/advisory', isAuthenticated, async (req, res) => {
@@ -5477,14 +5477,14 @@ app.get('/api/stock/advisory', isAuthenticated, async (req, res) => {
   }
 });
 
-// â”€â”€â”€ API: Restock countdown (deterministic, no auth needed for polling) â”€â”€â”€â”€â”€â”€â”€
+// ---- API: Restock countdown (deterministic, no auth needed for polling) --------
 app.get('/api/stock/restock-countdown', isAuthenticated, (req, res) => {
   const countdown = stockDataSourceService.getRestockCountdown();
   res.json(countdown);
 });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// CAT SCRIPT BACKEND API â€” COMMENTED OUT FOR FUTURE USE
+// CAT SCRIPT BACKEND API â-” COMMENTED OUT FOR FUTURE USE
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //
 // const crypto = require('crypto');
