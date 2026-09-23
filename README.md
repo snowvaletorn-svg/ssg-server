@@ -32,3 +32,10 @@ The stock observation system now uses a stable ID generation mechanism:
 - Example: 
   - "Plushie: Alien" → "plushie_alien"
   - "Flower: Rose" → "flower_rose"
+
+
+
+### Loading to GIT.
+### git add . 
+### git commit -m "<Enter reason for change>."
+### git push origin main

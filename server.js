@@ -2952,8 +2952,12 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
 
     enemyMembers.sort((a, b) => (b.totalStats || 0) - (a.totalStats || 0));
 
-    // Calculate hit matrix (member can hit if their stats >= 98% of enemy stats)
-    // Add threshold check: if enemy has 0 stats, they can't be hit (no one to hit)
+    // Calculate hit matrices.
+    //  - hitMatrix:    member can hit RIGHT NOW with their current effective stats
+    //  - vicodinMatrix: member can hit while on Vicodin (+25% battle stats)
+    // Both use a 2% safety buffer, i.e. the member must have >= 98% of the
+    // enemy's estimated total stats.
+    // Threshold check: if an enemy has 0 stats, nobody can determine a hit.
     const hitMatrix = ssgMembers.map(member => {
       const hits = enemyMembers.map(enemy => {
         // If enemy has 0 or undefined stats, cannot determine hit capability
@@ -2971,37 +2975,89 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       };
     });
 
+    // Member stats already include battlestats modifiers. Vicodin grants a 25%
+    // battle-stat bonus, so a member can reach 1.25× their current total.
+    const VICODIN_STAT_BONUS = 1.25;
+    const vicodinMatrix = ssgMembers.map(member => {
+      const boostedTotal = Math.round(member.totalStats * VICODIN_STAT_BONUS);
+      const hits = enemyMembers.map(enemy => {
+        if (!enemy.totalStats || enemy.totalStats <= 0) {
+          return '⚠'; // Warning symbol for undetermined
+        }
+        const canHit = boostedTotal >= (enemy.totalStats * 0.98);
+        return canHit ? '✅' : '❌';
+      });
+      return {
+        memberName: member.name,
+        memberId: member.id,
+        totalStats: member.totalStats,
+        vicodinTotal: boostedTotal,
+        hits
+      };
+    });
+
     // Debug logging for hit matrix
     console.log('[WarComparison] SSG Members with stats:', ssgMembers.map(m => `${m.name}: ${m.totalStats}`).join(', '));
     console.log('[WarComparison] Enemy Members with stats:', enemyMembers.map(e => `${e.name}: ${e.totalStats}`).join(', '));
     console.log('[WarComparison] Hit matrix generated:', hitMatrix.length, 'members vs', enemyMembers.length, 'enemies');
+    console.log('[WarComparison] Vicodin (×' + VICODIN_STAT_BONUS + ') matrix generated:', vicodinMatrix.length, 'members vs', enemyMembers.length, 'enemies');
 
-    // Format table for Discord
-    const colWidth = 22;
-    const headerRow = ['Member'.padEnd(colWidth), ...enemyMembers.map(e => {
-      const label = e.name.length > 12 ? e.name.substring(0, 11) + '…' : e.name;
-      return label.padEnd(colWidth);
-    })].join(' | ');
+    // Format the monospace table (used in the plain-text email and the dashboard's
+    // text fallback). Padding MUST be measured in terminal display columns, not
+    // string length: ✅/❌/⚠ each occupy two columns, so `padEnd` would make every
+    // emoji column one character short and the pipes would drift out of alignment.
+    const SYMBOL_WIDTH = 2;
+    const charWidth = (ch) => /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}\u{2B00}-\u{2BFF}]/u.test(ch) ? SYMBOL_WIDTH : 1;
+    const displayWidth = (str) => [...String(str)].reduce((w, ch) => w + charWidth(ch), 0);
+    const padDisplay = (str, width) => {
+      const s = String(str);
+      const w = displayWidth(s);
+      return w >= width ? s : s + ' '.repeat(width - w);
+    };
+    // Hard-truncate a label to fit `width` display columns, appending an ellipsis.
+    const truncDisplay = (str, width) => {
+      const s = String(str);
+      if (displayWidth(s) <= width) return s;
+      let out = '';
+      let w = 0;
+      for (const ch of s) {
+        const cw = charWidth(ch);
+        if (w + cw > width - 1) break; // leave room for the ellipsis
+        out += ch;
+        w += cw;
+      }
+      return out + '…';
+    };
 
-    const separator = '--'.repeat(headerRow.length);
+    const memberColWidth = 18;
+    const enemyColWidth = 12;
 
-    const dataRows = hitMatrix.map(row => {
-      const memberLabel = row.memberName.length > 20 ? row.memberName.substring(0, 19) + '…' : row.memberName;
-      // Include member stats in parentheses for debugging
-      const memberDisplay = row.totalStats > 0 
-        ? `${memberLabel} (${row.totalStats})` 
-        : memberLabel;
-      const paddedMember = memberDisplay.length > colWidth 
-        ? memberDisplay.substring(0, colWidth - 3) + '...' 
-        : memberDisplay.padEnd(colWidth);
-      return [paddedMember, ...row.hits.map(h => h.padEnd(colWidth))].join(' | ');
-    });
+    const headerRow = [
+      padDisplay('Member', memberColWidth),
+      ...enemyMembers.map(e => padDisplay(truncDisplay(e.name || '???', enemyColWidth), enemyColWidth))
+    ].join(' | ');
+
+    // Separator built to the same geometry as `.join(' | ')`: each column spans
+    // its full width, with a single '|' in the 3-char gap between columns. This
+    // places the junctions at the exact columns of the data-row pipes (verified).
+    const separator = [memberColWidth, ...enemyMembers.map(() => enemyColWidth)]
+      .map(w => '-'.repeat(w))
+      .join('-|-');
+
+    const dataRows = hitMatrix.map(row => [
+      padDisplay(truncDisplay(row.memberName, memberColWidth), memberColWidth),
+      ...row.hits.map(h => padDisplay(h, enemyColWidth))
+    ].join(' | '));
 
     const tableText = [headerRow, separator, ...dataRows].join('\n');
 
     // Send email
     const { sendWarTargetComparison } = require('./services/snapshotService');
-    const emailResult = await sendWarTargetComparison(tableText, enemyFactionName);
+    const emailResult = await sendWarTargetComparison(tableText, enemyFactionName, {
+      hitMatrix,
+      vicodinMatrix,
+      enemyMembers
+    });
     
     // Log email result for visibility
     if (emailResult?.email?.success) {
@@ -3018,6 +3074,15 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       enemyFactionName,
       memberCount: ssgMembers.length,
       enemyCount: enemyMembers.length,
+      // Which row belongs to the person viewing the page, so the UI can point
+      // them at their own targets instead of making them hunt for their name.
+      viewerMemberId: parseInt(req.session.userId) || null,
+      viewerMemberName: ssgMembers.find(m => m.id === parseInt(req.session.userId))?.name || null,
+      // Per-member breakdown: current stats plus the stats they would have,
+      // and the enemies they can hit, while on a Vicodin (+25%).
+      members: vicodinMatrix,
+      enemies: enemyMembers.map(e => ({ id: e.id, name: e.name, totalStats: e.totalStats })),
+      vicodinStatBonus: VICODIN_STAT_BONUS,
       emailResult
     });
   } catch (err) {

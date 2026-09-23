@@ -1,4 +1,4 @@
-// Snapshot Service - handles weekly stats snapshot functionality
+﻿// Snapshot Service - handles weekly stats snapshot functionality
 const WeeklySnapshot = require('../models/WeeklySnapshot');
 const User = require('../models/User');
 const axios = require('axios');
@@ -16,6 +16,16 @@ function escapeHtml(str) {
     .replace(/>/g, a + 'gt;')
     .replace(/"/g, a + 'quot;')
     .replace(/'/g, a + '#039;');
+}
+
+// ─── Helper: Compact stat formatting for emails (1.2M, 345.6K) ────────────────
+function formatStatNumber(n) {
+  const num = Number(n);
+  if (!Number.isFinite(num) || num <= 0) return '—';
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(1) + 'K';
+  return String(Math.round(num));
 }
 
 // ─── Helper: Get notification email recipients ────────────────────────────────
@@ -378,40 +388,52 @@ function generateCSVContent(differences) {
 }
 
 // ─── Send war target comparison via email ─────────────────────────────────────
-async function sendWarTargetComparison(tableText, enemyFactionName) {
+// tableText is the monospace grid (back-compat). The optional `data` object lets
+// callers pass the raw matrices so we can also email a per-member "who you can
+// hit while on a Vicodin" section:
+//   { hitMatrix, vicodinMatrix, enemyMembers }
+async function sendWarTargetComparison(tableText, enemyFactionName, data = {}) {
   const results = { email: null };
+  const { hitMatrix = [], vicodinMatrix = [], enemyMembers = [] } = data || {};
   const dateStr = new Date().toISOString().split('T')[0];
   const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const subject = `🎯 War Target Comparison - vs ${enemyFactionName}`;
 
-  // Parse the monospace table into an HTML table
-  const lines = tableText.split('\n');
-  // First line is header, second is separator, rest are data rows
-  const headerLine = lines[0] || '';
-  const dataLines = lines.slice(2).filter(l => l.trim()); // skip separator and empty lines
+  // Build the "current effective stats" grid.
+  // When the caller passes the raw matrices we build the grid from them directly:
+  // the monospace tableText encodes state in symbols and can drift out of sync
+  // with the matrices, and its header cells carry padded/truncated names.
+  // Without matrices we fall back to parsing tableText (legacy behaviour).
+  let gridEnemyNames;
+  let gridRows;
 
-  // Parse header: split by ' | ' to get column names
-  const headerParts = headerLine.split(' | ').map(s => s.trim());
-  const enemyNames = headerParts.slice(1); // first column is "Member", rest are enemies
+  if (hitMatrix.length > 0 && enemyMembers.length > 0) {
+    gridEnemyNames = enemyMembers.map(e => e.name || '???');
+    gridRows = hitMatrix.map(row => ({
+      memberName: row.memberName,
+      hits: enemyMembers.map((enemy, i) => {
+        if (!enemy.totalStats || enemy.totalStats <= 0) return '⚠';
+        return (row.hits?.[i] || '').includes('✅') ? '✅' : '❌';
+      })
+    }));
+  } else {
+    const lines = String(tableText || '').split('\n');
+    const headerLine = lines[0] || '';
+    // First line is header, second is separator, rest are data rows
+    const dataLines = lines.slice(2).filter(l => l.trim());
+    const headerParts = headerLine.split(' | ').map(s => s.trim());
+    gridEnemyNames = headerParts.slice(1); // first column is "Member", rest are enemies
+    gridRows = dataLines.map(line => {
+      const parts = line.split(' | ').map(s => s.trim());
+      return { memberName: parts[0] || '', hits: parts.slice(1) };
+    });
+  }
 
-  // Parse data rows
-  const memberRows = dataLines.map(line => {
-    const parts = line.split(' | ').map(s => s.trim());
-    const memberName = parts[0] || '';
-    const hits = parts.slice(1);
-    return { memberName, hits };
-  });
-
-  // Build HTML table rows
-  const htmlHeaderCells = headerParts.map(name => 
-    `<th style="padding:6px 8px;text-align:left;font-size:12px;border-bottom:2px solid #333;white-space:nowrap;">${escapeHtml(name)}</th>`
-  ).join('');
-
-  const htmlBodyRows = memberRows.map(row => {
+  const htmlBodyRows = gridRows.map(row => {
     const cells = row.hits.map((hit, i) => {
+      const isWarning = hit.includes('⚠');
       const isCheck = hit.includes('✅');
       const isCross = hit.includes('❌');
-      const isWarning = hit.includes('⚠');
       let bgColor = 'transparent';
       let symbol = hit; // Use the actual symbol from the table
       if (isWarning) {
@@ -424,7 +446,9 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
         bgColor = '#3a1a1a';
         symbol = '❌';
       }
-      return `<td style="padding:4px 6px;text-align:center;font-size:13px;background:${bgColor};">${symbol}</td>`;
+      const enemyName = gridEnemyNames[i] || '';
+      const tooltip = enemyName ? `${row.memberName} vs ${enemyName}` : row.memberName;
+      return `<td style="padding:4px 6px;text-align:center;font-size:13px;background:${bgColor};" title="${escapeHtml(tooltip)}">${symbol}</td>`;
     }).join('');
     return `<tr>
       <td style="padding:6px 8px;font-weight:600;font-size:12px;white-space:nowrap;border-bottom:1px solid #2a2828;">${escapeHtml(row.memberName)}</td>
@@ -432,10 +456,77 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
     </tr>`;
   }).join('');
 
-  // Build the horizontal header row for enemy names at the top
-  const enemyHeaderHtml = enemyNames.map(name => 
-    `<th style="writing-mode:vertical-lr;text-orientation:mixed;padding:4px 2px;font-size:10px;border-bottom:2px solid #333;max-width:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(name)}</th>`
+  // Build the header row for enemy names at the top. `max-width:20px` used to
+  // squeeze every header regardless of the column count, which threw the header
+  // out of line with the cells underneath; the width is now flexible with a
+  // comfortable minimum so each label sits above its own column.
+  const enemyHeaderHtml = gridEnemyNames.map(name =>
+    `<th style="writing-mode:vertical-lr;text-orientation:mixed;padding:4px 2px;font-size:10px;font-weight:600;color:#888;border-bottom:2px solid #333;min-width:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;">${escapeHtml(name)}</th>`
   ).join('');
+
+  // ─── Per-member "who you can hit on a Vicodin" section ──────────────────────
+  const enemyListRows = vicodinMatrix.map(row => {
+    // source = the same member's row from the current-stats matrix, used to work
+    // out which targets are only reachable thanks to the Vicodin boost.
+    const source = hitMatrix.find(r => r.memberId === row.memberId);
+    const targets = (row.hits || []).reduce((acc, symbol, i) => {
+      const enemy = enemyMembers[i];
+      if (symbol.includes('✅') && enemy) acc.push(enemy);
+      return acc;
+    }, []);
+    const unknownCount = (row.hits || []).filter(h => h.includes('⚠')).length;
+    // Enemies hittable on Vicodin that are NOT hittable right now.
+    const boostedOnly = targets.filter(enemy => {
+      if (!source) return false;
+      const idx = enemyMembers.findIndex(e => e.id === enemy.id);
+      return idx >= 0 && !(source.hits?.[idx] || '').includes('✅');
+    });
+    return { row, source, targets, boostedOnly, unknownCount };
+  });
+
+  const newTargets = enemyListRows.filter(r => r.boostedOnly.length > 0).length;
+
+  const vicodinTargetsHtml = vicodinMatrix.length === 0 ? '' : `
+  <h3 style="color:#c0bcbc;margin:28px 0 4px 0;font-size:16px;">💊 Your Targets on a Vicodin</h3>
+  <p style="color:#888;font-size:12px;margin-top:0;">
+    Stats on a Vicodin are your current effective battle stats &times;1.25 (SSS-style +25% bonus).
+    Targets marked <span style="color:#00ADB5;">💊</span> are only in range because of the boost &mdash; you cannot hit them without it.
+  </p>
+  <table style="border-collapse:collapse;background:#141414;border:1px solid #2a2828;border-radius:8px;overflow:hidden;font-size:12px;width:100%;max-width:900px;">
+    <thead>
+      <tr>
+        <th style="padding:6px 8px;text-align:left;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Member</th>
+        <th style="padding:6px 8px;text-align:right;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Now</th>
+        <th style="padding:6px 8px;text-align:right;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">On Vicodin</th>
+        <th style="padding:6px 8px;text-align:center;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Targets (on Vicodin)</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${enemyListRows.map(({ row, targets, boostedOnly, unknownCount }) => {
+        const boostedIds = new Set(boostedOnly.map(e => e.id));
+        const targetList = targets.length
+          ? targets.map(e => boostedIds.has(e.id)
+              ? `<span style="color:#c0bcbc;font-weight:600;">${escapeHtml(e.name)}</span> <span style="color:#00ADB5;">(${formatStatNumber(e.totalStats)}) 💊</span>`
+              : `${escapeHtml(e.name)} <span style="color:#666;">(${formatStatNumber(e.totalStats)})</span>`
+            ).join(', ')
+          : '<span style="color:#666;">None in range</span>';
+        const unknownNote = unknownCount > 0
+          ? ` <span style="color:#cca800;">+${unknownCount} unknown</span>`
+          : '';
+        return `<tr>
+          <td style="padding:6px 8px;font-weight:600;font-size:12px;white-space:nowrap;border-bottom:1px solid #2a2828;">${escapeHtml(row.memberName)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:12px;color:#888;font-family:monospace;border-bottom:1px solid #2a2828;">${formatStatNumber(row.totalStats)}</td>
+          <td style="padding:6px 8px;text-align:right;font-size:12px;color:#00ADB5;font-family:monospace;border-bottom:1px solid #2a2828;">${formatStatNumber(row.vicodinTotal)}</td>
+          <td style="padding:6px 8px;font-size:12px;border-bottom:1px solid #2a2828;">${targetList}${unknownNote}</td>
+        </tr>`;
+      }).join('')}
+    </tbody>
+  </table>
+  <p style="color:#888;font-size:12px;margin-top:8px;">
+    ${newTargets > 0
+      ? `💊 <strong style="color:#c0bcbc;">${newTargets}</strong> member${newTargets === 1 ? '' : 's'} gain at least one new target while on a Vicodin.`
+      : 'No members gain new targets from the Vicodin boost this war &mdash; the grid already covers everyone.'}
+  </p>`;
 
   const html = `<!DOCTYPE html>
 <html>
@@ -444,6 +535,7 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
   <h2 style="color:#c0bcbc;margin-bottom:4px;">🎯 War Target Comparison</h2>
   <p style="color:#888;font-size:13px;margin-top:0;">vs <strong style="color:#c0bcbc;">${escapeHtml(enemyFactionName)}</strong> &mdash; ${dateStr} at ${timeStr}</p>
 
+  <h3 style="color:#c0bcbc;margin:20px 0 4px 0;font-size:16px;">Current effective stats</h3>
   <table style="border-collapse:collapse;background:#141414;border:1px solid #2a2828;border-radius:8px;overflow:hidden;font-size:12px;">
     <thead>
       <tr>
@@ -457,14 +549,17 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
   </table>
 
   <div style="margin-top:16px;padding:12px;background:#141414;border:1px solid #2a2828;border-radius:8px;font-size:12px;color:#888;line-height:1.6;">
-    <div><span style="color:#4caf50;">✅</span> <strong style="color:#c0bcbc;">Can hit</strong> — member effective stats ≥ 98% of enemy total stats</div>
-    <div><span style="color:#ff4444;">❌</span> <strong style="color:#c0bcbc;">Can't hit</strong> — member effective stats < 98% of enemy total stats</div>
+    <div><span style="color:#4caf50;">✅</span> <strong style="color:#c0bcbc;">Can hit now</strong> &mdash; member's current effective stats ≥ 98% of enemy total stats</div>
+    <div><span style="color:#ff4444;">❌</span> <strong style="color:#c0bcbc;">Can't hit now</strong> &mdash; member's current effective stats < 98% of enemy total stats</div>
      <div><span style="color:#cca800;">⚠</span> <strong style="color:#c0bcbc;">Unknown</strong> — enemy stats not available or zero</div>
      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2828;">
+      <span>Member names show <strong style="color:#c0bcbc;">current stats → stats on a Vicodin (+25%)</strong>.</span><br>
       <span>Data sources: Torn API (SSG members with modifiers) + FFScouter (enemy members)</span><br>
-      <span>Member stats include a +2% buffer for safe engagement.</span>
+      <span>Stats include a +2% buffer for safe engagement. Use &ldquo;Your targets on a Vicodin&rdquo; below to check before you pop one.</span>
     </div>
   </div>
+
+  ${vicodinTargetsHtml}
 </body>
 </html>`;
 
@@ -473,10 +568,40 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
   console.log(`[WarComparison] Email recipients: ${recipients.length > 0 ? recipients.join(', ') : 'none'}`);
 
   if (recipients.length > 0) {
+    // Plain-text copy of the per-member Vicodin list, so text-only clients still
+    // get the "who can I hit on a Vicodin" answer.
+    const vicodinTextLines = [];
+    if (vicodinMatrix.length > 0) {
+      vicodinTextLines.push(
+        '',
+        'YOUR TARGETS ON A VICODIN (+25% battle stats)',
+        '-'.repeat(48)
+      );
+      enemyListRows.forEach(({ row, targets, boostedOnly, unknownCount }) => {
+        const boostedIds = new Set(boostedOnly.map(e => e.id));
+        const list = targets.length
+          ? targets.map(e => boostedIds.has(e.id)
+              ? `${e.name} (${formatStatNumber(e.totalStats)}) [VICODIN ONLY]`
+              : `${e.name} (${formatStatNumber(e.totalStats)})`
+            ).join(', ')
+          : 'none in range';
+        const unknownNote = unknownCount > 0 ? ` [+${unknownCount} unknown]` : '';
+        vicodinTextLines.push(`${row.memberName}: ${formatStatNumber(row.totalStats)} -> ${formatStatNumber(row.vicodinTotal)} | ${list}${unknownNote}`);
+      });
+      vicodinTextLines.push(
+        '',
+        'Targets tagged [VICODIN ONLY] are only in range because of the boost.',
+        newTargets > 0
+          ? `${newTargets} member(s) gain at least one new target while on a Vicodin.`
+          : 'No members gain new targets from the Vicodin boost this war.'
+      );
+    }
+    const vicodinText = vicodinTextLines.join('\n');
+
     const emailResult = await sendEmail({
       to: recipients,
       subject,
-      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit (member stats ≥ 98% of enemy stats)\n❌ = Can't hit\n⚠ = Enemy stats unknown/zero (cannot determine)\n\nData sources: Torn API + FFScouter`,
+      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit now (current effective stats >= 98% of enemy stats)\n❌ = Can't hit now\n⚠ = Enemy stats unknown/zero (cannot determine)\n\nMember column: current stats -> stats on a Vicodin (+25%).\n\nData sources: Torn API + FFScouter${vicodinText}`,
       html
     });
     results.email = emailResult;

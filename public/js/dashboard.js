@@ -2518,12 +2518,138 @@ async function outputWarTargetComparison() {
           ${data.emailResult?.success
             ? '<p style="color:#2ecc71;font-size:0.85rem;margin-top:0.5rem;">📧 Email sent to leadership team.</p>'
             : '<p style="color:#e67e22;font-size:0.85rem;margin-top:0.5rem;">⚠️ Email not sent: ' + (data.emailResult?.error || 'Unknown error') + '</p>'}
-          <pre style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem;font-size:0.75rem;color:#c0bcbc;overflow-x:auto;margin-top:0.75rem;white-space:pre;">${escapeHtml(data.tableText)}</pre>
+          ${renderVicodinTargets(data)}
+          ${renderCurrentStatsGrid(data)}
         </div>
       </div>`;
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
   }
+}
+
+// Renders the "can hit right now" grid as a real HTML table. The API also returns
+// a monospace `tableText` copy, but that only aligns in a true monospace font and
+// emoji symbols occupy two columns — so an HTML table is used instead.
+function renderCurrentStatsGrid(data) {
+  const members = data.members || [];
+  const enemies = data.enemies || [];
+  if (!members.length || !enemies.length) return '';
+
+  const viewerId = data.viewerMemberId;
+
+  // Derive the current-stats result from the Vicodin matrix: an enemy already
+  // hittable on Vicodin is "✅ now" only if it also fits the unboosted stats.
+  const canHitNow = (member, enemy) => {
+    const stats = member.totalStats || 0;
+    return stats > 0 && enemy.totalStats > 0 && stats >= enemy.totalStats * 0.98;
+  };
+
+  const headerCells = enemies.map(e =>
+    `<th style="padding:6px 6px;text-align:center;font-size:0.72rem;color:#888;font-weight:600;border-bottom:2px solid #2a2828;vertical-align:bottom;">
+       <a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" rel="noopener" style="color:#888;text-decoration:none;">${escapeHtml(e.name)}</a>
+       <div style="color:#555;font-size:0.68rem;font-weight:400;">${formatNum(e.totalStats)}</div>
+     </th>`
+  ).join('');
+
+  const bodyRows = members.map(m => {
+    const isViewer = viewerId != null && m.memberId === viewerId;
+    const cells = enemies.map(e => {
+      let symbol = '❌';
+      let bg = '#3a1a1a';
+      let label = 'cannot hit now';
+      if (!e.totalStats || e.totalStats <= 0) {
+        symbol = '⚠'; bg = '#3a3a1a'; label = 'enemy stats unknown';
+      } else if (canHitNow(m, e)) {
+        symbol = '✅'; bg = '#1a3a1a'; label = 'can hit now';
+      }
+      return `<td style="padding:5px 4px;text-align:center;font-size:0.9rem;background:${bg};" title="${escapeHtml(m.memberName)} ${label} ${escapeHtml(e.name)}">${symbol}</td>`;
+    }).join('');
+    return `<tr${isViewer ? ' style="background:#16262a;"' : ''}>
+      <td style="padding:5px 8px;font-weight:${isViewer ? '700' : '500'};font-size:0.82rem;white-space:nowrap;border-bottom:1px solid #2a2828;">
+        ${escapeHtml(m.memberName)}${isViewer ? ' <span style="color:#00ADB5;font-size:0.7rem;">(you)</span>' : ''}
+      </td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  return `
+    <div style="margin-top:1.25rem;">
+      <h4 style="margin:0 0 0.35rem 0;font-size:0.95rem;color:#c0bcbc;">⚔️ Can Hit Right Now</h4>
+      <p style="color:#888;font-size:0.8rem;margin-bottom:0.5rem;">
+        ✅ can hit with current stats &nbsp;·&nbsp; ❌ cannot &nbsp;·&nbsp; ⚠ enemy stats unknown
+      </p>
+      <div style="overflow-x:auto;">
+        <table style="border-collapse:collapse;font-size:0.82rem;color:#c0bcbc;">
+          <thead>
+            <tr>
+              <th style="padding:6px 8px;text-align:left;font-size:0.72rem;color:#888;font-weight:600;border-bottom:2px solid #2a2828;vertical-align:bottom;">Member</th>
+              ${headerCells}
+            </tr>
+          </thead>
+          <tbody>${bodyRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
+// Renders the "who can I hit on a Vicodin" breakdown returned by
+// /api/war/target-comparison. Highlights the viewer's own row when known.
+function renderVicodinTargets(data) {
+  const members = data.members || [];
+  const enemies = data.enemies || [];
+  if (!members.length) return '';
+
+  const viewerId = data.viewerMemberId;
+  const viewerRow = members.find(m => m.memberId === viewerId);
+  const bonusPct = Math.round(((data.vicodinStatBonus || 1.25) - 1) * 100);
+
+  const rows = members.map(m => {
+    const targets = [];
+    let unknown = 0;
+    (m.hits || []).forEach((symbol, i) => {
+      const enemy = enemies[i];
+      if (!enemy) return;
+      if (symbol.includes('✅')) targets.push(enemy);
+      else if (symbol.includes('⚠')) unknown++;
+    });
+    const isViewer = viewerId != null && m.memberId === viewerId;
+    const targetHtml = targets.length
+      ? targets.map(e => `<a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" rel="noopener" style="color:#00ADB5;text-decoration:none;">${escapeHtml(e.name)}</a> <span style="color:#666;">(${formatNum(e.totalStats)})</span>`).join(', ')
+      : '<span style="color:#666;">None in range</span>';
+    const unknownHtml = unknown > 0 ? ` <span style="color:#cca800;">+${unknown} unknown</span>` : '';
+    return `<tr${isViewer ? ' style="background:#16262a;"' : ''}>
+      <td style="padding:6px 8px;font-weight:${isViewer ? '700' : '500'};white-space:nowrap;">${escapeHtml(m.memberName)}${isViewer ? ' <span style="color:#00ADB5;font-size:0.7rem;">(you)</span>' : ''}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:'Share Tech Mono',monospace;color:#888;">${formatNum(m.totalStats)}</td>
+      <td style="padding:6px 8px;text-align:right;font-family:'Share Tech Mono',monospace;color:#00ADB5;">${formatNum(m.vicodinTotal)}</td>
+      <td style="padding:6px 8px;">${targetHtml}${unknownHtml}</td>
+    </tr>`;
+  }).join('');
+
+  const viewerNote = viewerRow
+    ? `<p style="color:#00ADB5;font-size:0.85rem;margin-bottom:0.5rem;">💊 Your row is highlighted below &mdash; these are the enemies you can hit on a Vicodin (+${bonusPct}%).</p>`
+    : `<p style="color:#888;font-size:0.85rem;margin-bottom:0.5rem;">💊 Targets below are computed with a Vicodin (+${bonusPct}% battle stats) applied.</p>`;
+
+  return `
+    <div style="margin-top:1.25rem;">
+      <h4 style="margin:0 0 0.35rem 0;font-size:0.95rem;color:#c0bcbc;">💊 Targets on a Vicodin</h4>
+      <p style="color:#888;font-size:0.8rem;margin-bottom:0.25rem;">
+        Stats on a Vicodin = current effective battle stats &times;${data.vicodinStatBonus || 1.25}.
+      </p>
+      ${viewerNote}
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem;color:#c0bcbc;">
+          <thead>
+            <tr style="border-bottom:2px solid #2a2828;color:#888;font-size:0.78rem;text-align:left;">
+              <th style="padding:6px 8px;">Member</th>
+              <th style="padding:6px 8px;text-align:right;">Now</th>
+              <th style="padding:6px 8px;text-align:right;">On Vicodin</th>
+              <th style="padding:6px 8px;">Targets</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 // ── War Enemy Stats (FFScouter) ───────────────────────────────────────────

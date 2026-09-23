@@ -56,6 +56,14 @@ async function sendEmail({ to, subject, text, html, attachments }) {
     });
 
     console.log(`[Email] ✅ Sent successfully to ${Array.isArray(to) ? to.join(', ') : to} — ID: ${res.data.id}`);
+    
+    // Check if this is a dev/sandbox email
+    if (FROM_EMAIL.includes('resend.dev') || RESEND_API_KEY.startsWith('re_')) {
+      console.log('[Email] ⚠️  WARNING: Using development/sandbox configuration!');
+      console.log('[Email] ⚠️  Emails from resend.dev may not be delivered to real inboxes.');
+      console.log('[Email] ⚠️  Check your Resend dashboard for sent emails: https://resend.com/emails');
+    }
+    
     return { success: true, id: res.data.id };
   } catch (err) {
     const errorMsg = err.response?.data?.message || err.response?.data || err.message;
