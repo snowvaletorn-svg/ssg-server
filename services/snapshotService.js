@@ -411,8 +411,19 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
     const cells = row.hits.map((hit, i) => {
       const isCheck = hit.includes('✅');
       const isCross = hit.includes('❌');
-      const bgColor = isCheck ? '#1a3a1a' : isCross ? '#3a1a1a' : 'transparent';
-      const symbol = isCheck ? '✅' : '❌';
+      const isWarning = hit.includes('⚠');
+      let bgColor = 'transparent';
+      let symbol = hit; // Use the actual symbol from the table
+      if (isWarning) {
+        bgColor = '#3a3a1a'; // Yellow-ish background for warnings
+        symbol = '⚠'; // Show warning symbol
+      } else if (isCheck) {
+        bgColor = '#1a3a1a';
+        symbol = '✅';
+      } else if (isCross) {
+        bgColor = '#3a1a1a';
+        symbol = '❌';
+      }
       return `<td style="padding:4px 6px;text-align:center;font-size:13px;background:${bgColor};">${symbol}</td>`;
     }).join('');
     return `<tr>
@@ -448,7 +459,8 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
   <div style="margin-top:16px;padding:12px;background:#141414;border:1px solid #2a2828;border-radius:8px;font-size:12px;color:#888;line-height:1.6;">
     <div><span style="color:#4caf50;">✅</span> <strong style="color:#c0bcbc;">Can hit</strong> — member effective stats ≥ 98% of enemy total stats</div>
     <div><span style="color:#ff4444;">❌</span> <strong style="color:#c0bcbc;">Can't hit</strong> — member effective stats < 98% of enemy total stats</div>
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2828;">
+     <div><span style="color:#cca800;">⚠</span> <strong style="color:#c0bcbc;">Unknown</strong> — enemy stats not available or zero</div>
+     <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2828;">
       <span>Data sources: Torn API (SSG members with modifiers) + FFScouter (enemy members)</span><br>
       <span>Member stats include a +2% buffer for safe engagement.</span>
     </div>
@@ -457,12 +469,14 @@ async function sendWarTargetComparison(tableText, enemyFactionName) {
 </html>`;
 
   const recipients = getNotifyEmails();
+  
+  console.log(`[WarComparison] Email recipients: ${recipients.length > 0 ? recipients.join(', ') : 'none'}`);
 
   if (recipients.length > 0) {
     const emailResult = await sendEmail({
       to: recipients,
       subject,
-      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit (member stats ≥ 98% of enemy stats)\n❌ = Can't hit\n\nData sources: Torn API + FFScouter`,
+      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit (member stats ≥ 98% of enemy stats)\n❌ = Can't hit\n⚠ = Enemy stats unknown/zero (cannot determine)\n\nData sources: Torn API + FFScouter`,
       html
     });
     results.email = emailResult;

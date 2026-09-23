@@ -2921,7 +2921,16 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     const enemyMembers = Array.from(enemyMemberMap.entries()).map(([id, attackName]) => {
       const stats = statsMap[id] || {};
       const name = stats.name || attackName || `Player ${id}`;
-      const totalStats = stats.bs_estimate || 0;
+      // FFScouter may return bs_estimate, bss_estimate, total_stats, or similar fields
+      // Try multiple possible field names for the battle stats estimate
+      const totalStats = 
+        stats.bs_estimate ?? 
+        stats.bss_estimate ?? 
+        stats.total_stats ?? 
+        stats.bs ?? 
+        stats.totalBs ?? 
+        stats.estimated_stats ?? 
+        0;
       return {
         id: parseInt(id),
         name,
@@ -2944,30 +2953,48 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     enemyMembers.sort((a, b) => (b.totalStats || 0) - (a.totalStats || 0));
 
     // Calculate hit matrix (member can hit if their stats >= 98% of enemy stats)
+    // Add threshold check: if enemy has 0 stats, they can't be hit (no one to hit)
     const hitMatrix = ssgMembers.map(member => {
       const hits = enemyMembers.map(enemy => {
+        // If enemy has 0 or undefined stats, cannot determine hit capability
+        if (!enemy.totalStats || enemy.totalStats <= 0) {
+          return '⚠'; // Warning symbol for undetermined
+        }
         const canHit = member.totalStats >= (enemy.totalStats * 0.98);
-        return canHit ? 'âœ…' : 'âŒ';
+        return canHit ? '✅' : '❌';
       });
       return {
         memberName: member.name,
         memberId: member.id,
+        totalStats: member.totalStats,
         hits
       };
     });
 
+    // Debug logging for hit matrix
+    console.log('[WarComparison] SSG Members with stats:', ssgMembers.map(m => `${m.name}: ${m.totalStats}`).join(', '));
+    console.log('[WarComparison] Enemy Members with stats:', enemyMembers.map(e => `${e.name}: ${e.totalStats}`).join(', '));
+    console.log('[WarComparison] Hit matrix generated:', hitMatrix.length, 'members vs', enemyMembers.length, 'enemies');
+
     // Format table for Discord
     const colWidth = 22;
     const headerRow = ['Member'.padEnd(colWidth), ...enemyMembers.map(e => {
-      const label = e.name.length > 12 ? e.name.substring(0, 11) + 'â-¦' : e.name;
+      const label = e.name.length > 12 ? e.name.substring(0, 11) + '…' : e.name;
       return label.padEnd(colWidth);
     })].join(' | ');
 
     const separator = '--'.repeat(headerRow.length);
 
     const dataRows = hitMatrix.map(row => {
-      const memberLabel = row.memberName.length > 20 ? row.memberName.substring(0, 19) + 'â-¦' : row.memberName;
-      return [memberLabel.padEnd(colWidth), ...row.hits.map(h => h.padEnd(colWidth))].join(' | ');
+      const memberLabel = row.memberName.length > 20 ? row.memberName.substring(0, 19) + '…' : row.memberName;
+      // Include member stats in parentheses for debugging
+      const memberDisplay = row.totalStats > 0 
+        ? `${memberLabel} (${row.totalStats})` 
+        : memberLabel;
+      const paddedMember = memberDisplay.length > colWidth 
+        ? memberDisplay.substring(0, colWidth - 3) + '...' 
+        : memberDisplay.padEnd(colWidth);
+      return [paddedMember, ...row.hits.map(h => h.padEnd(colWidth))].join(' | ');
     });
 
     const tableText = [headerRow, separator, ...dataRows].join('\n');
@@ -2975,6 +3002,15 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     // Send email
     const { sendWarTargetComparison } = require('./services/snapshotService');
     const emailResult = await sendWarTargetComparison(tableText, enemyFactionName);
+    
+    // Log email result for visibility
+    if (emailResult?.email?.success) {
+      console.log(`[WarComparison] ✅ Email sent successfully to ${emailResult.email.id ? 'ID: ' + emailResult.email.id : 'leadership team'}`);
+    } else if (emailResult?.email?.error) {
+      console.log(`[WarComparison] ⚠️ Email failed: ${emailResult.email.error}`);
+    } else {
+      console.log('[WarComparison] ℹ️ No email sent (check configuration)');
+    }
 
     res.json({
       success: true,
