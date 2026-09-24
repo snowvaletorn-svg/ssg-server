@@ -489,34 +489,28 @@ async function sendWarTargetComparison(tableText, enemyFactionName, data = {}) {
   const vicodinTargetsHtml = vicodinMatrix.length === 0 ? '' : `
   <h3 style="color:#c0bcbc;margin:28px 0 4px 0;font-size:16px;">💊 Your Targets on a Vicodin</h3>
   <p style="color:#888;font-size:12px;margin-top:0;">
-    Stats on a Vicodin are your current effective battle stats &times;1.25 (SSS-style +25% bonus).
-    Targets marked <span style="color:#00ADB5;">💊</span> are only in range because of the boost &mdash; you cannot hit them without it.
+    Targets are computed with a Vicodin applied (<strong style="color:#c0bcbc;">base stats +${
+      Math.round((((vicodinMatrix[0]?.vicodinStatBonus) || 1.25) - 1) * 100)
+    }% to each battle stat</strong>, with all of the member's normal buffs and debuffs removed).
+    Only target names are shown &mdash; no member stats are displayed.
   </p>
   <table style="border-collapse:collapse;background:#141414;border:1px solid #2a2828;border-radius:8px;overflow:hidden;font-size:12px;width:100%;max-width:900px;">
     <thead>
       <tr>
         <th style="padding:6px 8px;text-align:left;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Member</th>
-        <th style="padding:6px 8px;text-align:right;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Now</th>
-        <th style="padding:6px 8px;text-align:right;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">On Vicodin</th>
-        <th style="padding:6px 8px;text-align:center;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Targets (on Vicodin)</th>
+        <th style="padding:6px 8px;text-align:left;font-size:12px;border-bottom:2px solid #333;color:#888;font-weight:600;">Targets (on Vicodin)</th>
       </tr>
     </thead>
     <tbody>
       ${enemyListRows.map(({ row, targets, boostedOnly, unknownCount }) => {
-        const boostedIds = new Set(boostedOnly.map(e => e.id));
         const targetList = targets.length
-          ? targets.map(e => boostedIds.has(e.id)
-              ? `<span style="color:#c0bcbc;font-weight:600;">${escapeHtml(e.name)}</span> <span style="color:#00ADB5;">(${formatStatNumber(e.totalStats)}) 💊</span>`
-              : `${escapeHtml(e.name)} <span style="color:#666;">(${formatStatNumber(e.totalStats)})</span>`
-            ).join(', ')
+          ? targets.map(e => `<a href="https://www.torn.com/profiles.php?XID=${e.id}" style="color:#00ADB5;text-decoration:none;">${escapeHtml(e.name)}</a>`).join(', ')
           : '<span style="color:#666;">None in range</span>';
         const unknownNote = unknownCount > 0
           ? ` <span style="color:#cca800;">+${unknownCount} unknown</span>`
           : '';
         return `<tr>
           <td style="padding:6px 8px;font-weight:600;font-size:12px;white-space:nowrap;border-bottom:1px solid #2a2828;">${escapeHtml(row.memberName)}</td>
-          <td style="padding:6px 8px;text-align:right;font-size:12px;color:#888;font-family:monospace;border-bottom:1px solid #2a2828;">${formatStatNumber(row.totalStats)}</td>
-          <td style="padding:6px 8px;text-align:right;font-size:12px;color:#00ADB5;font-family:monospace;border-bottom:1px solid #2a2828;">${formatStatNumber(row.vicodinTotal)}</td>
           <td style="padding:6px 8px;font-size:12px;border-bottom:1px solid #2a2828;">${targetList}${unknownNote}</td>
         </tr>`;
       }).join('')}
@@ -553,9 +547,9 @@ async function sendWarTargetComparison(tableText, enemyFactionName, data = {}) {
     <div><span style="color:#ff4444;">❌</span> <strong style="color:#c0bcbc;">Can't hit now</strong> &mdash; member's current effective stats < 98% of enemy total stats</div>
      <div><span style="color:#cca800;">⚠</span> <strong style="color:#c0bcbc;">Unknown</strong> — enemy stats not available or zero</div>
      <div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2828;">
-      <span>Member names show <strong style="color:#c0bcbc;">current stats → stats on a Vicodin (+25%)</strong>.</span><br>
-      <span>Data sources: Torn API (SSG members with modifiers) + FFScouter (enemy members)</span><br>
-      <span>Stats include a +2% buffer for safe engagement. Use &ldquo;Your targets on a Vicodin&rdquo; below to check before you pop one.</span>
+      <span>Data sources: Torn API + FFScouter (enemy members)</span><br>
+      <span>Stats include a +2% buffer for safe engagement. Use &ldquo;Your targets on a Vicodin&rdquo; below to check before you pop one.</span><br>
+      <span>Member and enemy stat figures are intentionally not shown &mdash; target names only.</span>
     </div>
   </div>
 
@@ -569,28 +563,25 @@ async function sendWarTargetComparison(tableText, enemyFactionName, data = {}) {
 
   if (recipients.length > 0) {
     // Plain-text copy of the per-member Vicodin list, so text-only clients still
-    // get the "who can I hit on a Vicodin" answer.
+    // get the "who can I hit on a Vicodin" answer. No member stats are printed.
     const vicodinTextLines = [];
     if (vicodinMatrix.length > 0) {
       vicodinTextLines.push(
         '',
-        'YOUR TARGETS ON A VICODIN (+25% battle stats)',
+        'TARGETS ON A VICODIN (base stats +25% to each battle stat)',
+        'Base stats have all buffs/debuffs removed; each of the four battle stats',
+        'is multiplied by 1.25, then summed. Target names only - no member stats.',
         '-'.repeat(48)
       );
-      enemyListRows.forEach(({ row, targets, boostedOnly, unknownCount }) => {
-        const boostedIds = new Set(boostedOnly.map(e => e.id));
+      enemyListRows.forEach(({ row, targets, unknownCount }) => {
         const list = targets.length
-          ? targets.map(e => boostedIds.has(e.id)
-              ? `${e.name} (${formatStatNumber(e.totalStats)}) [VICODIN ONLY]`
-              : `${e.name} (${formatStatNumber(e.totalStats)})`
-            ).join(', ')
+          ? targets.map(e => e.name).join(', ')
           : 'none in range';
         const unknownNote = unknownCount > 0 ? ` [+${unknownCount} unknown]` : '';
-        vicodinTextLines.push(`${row.memberName}: ${formatStatNumber(row.totalStats)} -> ${formatStatNumber(row.vicodinTotal)} | ${list}${unknownNote}`);
+        vicodinTextLines.push(`${row.memberName}: ${list}${unknownNote}`);
       });
       vicodinTextLines.push(
         '',
-        'Targets tagged [VICODIN ONLY] are only in range because of the boost.',
         newTargets > 0
           ? `${newTargets} member(s) gain at least one new target while on a Vicodin.`
           : 'No members gain new targets from the Vicodin boost this war.'
@@ -601,7 +592,7 @@ async function sendWarTargetComparison(tableText, enemyFactionName, data = {}) {
     const emailResult = await sendEmail({
       to: recipients,
       subject,
-      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit now (current effective stats >= 98% of enemy stats)\n❌ = Can't hit now\n⚠ = Enemy stats unknown/zero (cannot determine)\n\nMember column: current stats -> stats on a Vicodin (+25%).\n\nData sources: Torn API + FFScouter${vicodinText}`,
+      text: `War Target Comparison for ${enemyFactionName}\nGenerated: ${dateStr} at ${timeStr}\n\n${tableText}\n\n✅ = Can hit now (current effective stats >= 98% of enemy stats)\n❌ = Can't hit now\n⚠ = Enemy stats unknown/zero (cannot determine)\n\nData sources: Torn API + FFScouter${vicodinText}`,
       html
     });
     results.email = emailResult;

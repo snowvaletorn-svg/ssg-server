@@ -2787,6 +2787,13 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     dbUsers.forEach(u => { if (u.tornPlayerId) dbByTornId[u.tornPlayerId] = u; });
 
     const ssgMembers = [];
+
+    // Vicodin provides a +25% bonus to each battle stat. It is applied to BASE
+    // stats (no merits/perks/weapon buffs), so it is computed per member below
+    // from the base stats recovered via the battlestats modifiers. Note that
+    // scaling each base stat by 1.25 and summing equals scaling the base total.
+    const VICODIN_STAT_BONUS = 1.25;
+
     for (const m of factionMembersArr) {
       const dbUser = dbByTornId[m.id];
       if (!dbUser?.tornApiKey) continue;
@@ -2801,23 +2808,69 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
 
         const ps = basicRes.data.personalstats || {};
         const bs = battleRes.data;
-        
-        // Calculate effective stats with modifiers
+
+        // `personalstats` returns IMPROVED stats (they already include merits,
+        // faction perks, weapon bonuses and education), while the `_modifier`
+        // fields report those bonuses as a percentage (e.g. 20 = +20%).
+        // Applying the modifier on top of personalstats would therefore count the
+        // buffs twice, so divide them back out to recover the true base stats.
         const strengthMod = parseFloat(bs.strength_modifier) || 0;
         const defenseMod = parseFloat(bs.defense_modifier) || 0;
         const speedMod = parseFloat(bs.speed_modifier) || 0;
         const dexterityMod = parseFloat(bs.dexterity_modifier) || 0;
 
-        const effectiveStrength = Math.round((ps.strength || 0) * (1 + strengthMod / 100));
-        const effectiveDefense = Math.round((ps.defense || 0) * (1 + defenseMod / 100));
-        const effectiveSpeed = Math.round((ps.speed || 0) * (1 + speedMod / 100));
-        const effectiveDexterity = Math.round((ps.dexterity || 0) * (1 + dexterityMod / 100));
+        // Guard against a nonsensical modifier (e.g. -100%) producing a divide-by-zero.
+        const toBase = (value, modPct) => {
+          const divisor = 1 + (modPct / 100);
+          if (!Number.isFinite(divisor) || divisor <= 0) return value || 0;
+          return (value || 0) / divisor;
+        };
+
+        // Base stats: no buffs, no debuffs.
+        const baseStrength = toBase(ps.strength, strengthMod);
+        const baseDefense = toBase(ps.defense, defenseMod);
+        const baseSpeed = toBase(ps.speed, speedMod);
+        const baseDexterity = toBase(ps.dexterity, dexterityMod);
+
+        // Current effective stats (base + the member's own modifiers).
+        const effectiveStrength = Math.round(baseStrength * (1 + strengthMod / 100));
+        const effectiveDefense = Math.round(baseDefense * (1 + defenseMod / 100));
+        const effectiveSpeed = Math.round(baseSpeed * (1 + speedMod / 100));
+        const effectiveDexterity = Math.round(baseDexterity * (1 + dexterityMod / 100));
         const effectiveTotal = effectiveStrength + effectiveDefense + effectiveSpeed + effectiveDexterity;
+
+        // Vicodin: +25% applied to EACH base battle stat, with the member's normal
+        // buffs dropped. Rounded per stat so the breakdown matches Torn's display.
+        const vicodinStrength = Math.round(baseStrength * VICODIN_STAT_BONUS);
+        const vicodinDefense = Math.round(baseDefense * VICODIN_STAT_BONUS);
+        const vicodinSpeed = Math.round(baseSpeed * VICODIN_STAT_BONUS);
+        const vicodinDexterity = Math.round(baseDexterity * VICODIN_STAT_BONUS);
+        const vicodinTotal = vicodinStrength + vicodinDefense + vicodinSpeed + vicodinDexterity;
 
         ssgMembers.push({
           id: m.id,
           name: basicRes.data.name || m.name,
           totalStats: effectiveTotal,
+          baseTotal: Math.round(baseStrength + baseDefense + baseSpeed + baseDexterity),
+          vicodinTotal,
+          baseStats: {
+            strength: Math.round(baseStrength),
+            defense: Math.round(baseDefense),
+            speed: Math.round(baseSpeed),
+            dexterity: Math.round(baseDexterity)
+          },
+          vicodinStats: {
+            strength: vicodinStrength,
+            defense: vicodinDefense,
+            speed: vicodinSpeed,
+            dexterity: vicodinDexterity
+          },
+          modifiers: {
+            strength: strengthMod,
+            defense: defenseMod,
+            speed: speedMod,
+            dexterity: dexterityMod
+          },
           position: m.position
         });
       } catch (err) {
@@ -2975,11 +3028,12 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       };
     });
 
-    // Member stats already include battlestats modifiers. Vicodin grants a 25%
-    // battle-stat bonus, so a member can reach 1.25× their current total.
-    const VICODIN_STAT_BONUS = 1.25;
+    // Vicodin totals are computed per member from BASE stats (each of the four
+    // battle stats ×1.25, with the member's own buffs dropped), so read the
+    // precomputed `vicodinTotal` rather than scaling the buffed total.
     const vicodinMatrix = ssgMembers.map(member => {
-      const boostedTotal = Math.round(member.totalStats * VICODIN_STAT_BONUS);
+      const boostedTotal = member.vicodinTotal
+        ?? Math.round(member.baseTotal * VICODIN_STAT_BONUS);
       const hits = enemyMembers.map(enemy => {
         if (!enemy.totalStats || enemy.totalStats <= 0) {
           return '⚠'; // Warning symbol for undetermined
@@ -2991,7 +3045,11 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
         memberName: member.name,
         memberId: member.id,
         totalStats: member.totalStats,
+        baseTotal: member.baseTotal,
         vicodinTotal: boostedTotal,
+        baseStats: member.baseStats,
+        vicodinStats: member.vicodinStats,
+        modifiers: member.modifiers,
         hits
       };
     });
@@ -3078,11 +3136,24 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       // them at their own targets instead of making them hunt for their name.
       viewerMemberId: parseInt(req.session.userId) || null,
       viewerMemberName: ssgMembers.find(m => m.id === parseInt(req.session.userId))?.name || null,
-      // Per-member breakdown: current stats plus the stats they would have,
-      // and the enemies they can hit, while on a Vicodin (+25%).
-      members: vicodinMatrix,
-      enemies: enemyMembers.map(e => ({ id: e.id, name: e.name, totalStats: e.totalStats })),
+      // Per-member breakdown. Only what the UI needs: names plus the hit symbols.
+      // Raw stat figures (totalStats/baseTotal/vicodinTotal/baseStats/vicodinStats)
+      // are deliberately NOT sent — the report shows target names only.
+      members: vicodinMatrix.map(m => ({
+        memberId: m.memberId,
+        memberName: m.memberName,
+        hits: m.hits
+      })),
+      // The unboosted ("can hit right now") symbol matrix, keyed by member id.
+      currentHits: hitMatrix.reduce((acc, row) => {
+        acc[row.memberId] = row.hits;
+        return acc;
+      }, {}),
+      enemies: enemyMembers.map(e => ({ id: e.id, name: e.name })),
       vicodinStatBonus: VICODIN_STAT_BONUS,
+      // Explains the maths behind the report: the Vicodin figures come from BASE
+      // stats (modifiers removed) with +25% applied per battle stat.
+      vicodinBasis: 'base',
       emailResult
     });
   } catch (err) {

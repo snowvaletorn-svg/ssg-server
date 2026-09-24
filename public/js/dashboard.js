@@ -2530,38 +2530,30 @@ async function outputWarTargetComparison() {
 // Renders the "can hit right now" grid as a real HTML table. The API also returns
 // a monospace `tableText` copy, but that only aligns in a true monospace font and
 // emoji symbols occupy two columns — so an HTML table is used instead.
+// `data.currentHits` is the unboosted symbol matrix (same shape as `members[].hits`);
+// when absent we fall back to deriving it from the Vicodin results, which give the
+// same answer only when the boost makes no difference — so prefer currentHits.
 function renderCurrentStatsGrid(data) {
   const members = data.members || [];
   const enemies = data.enemies || [];
   if (!members.length || !enemies.length) return '';
 
   const viewerId = data.viewerMemberId;
-
-  // Derive the current-stats result from the Vicodin matrix: an enemy already
-  // hittable on Vicodin is "✅ now" only if it also fits the unboosted stats.
-  const canHitNow = (member, enemy) => {
-    const stats = member.totalStats || 0;
-    return stats > 0 && enemy.totalStats > 0 && stats >= enemy.totalStats * 0.98;
-  };
+  const currentHits = data.currentHits || {};
 
   const headerCells = enemies.map(e =>
     `<th style="padding:6px 6px;text-align:center;font-size:0.72rem;color:#888;font-weight:600;border-bottom:2px solid #2a2828;vertical-align:bottom;">
        <a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" rel="noopener" style="color:#888;text-decoration:none;">${escapeHtml(e.name)}</a>
-       <div style="color:#555;font-size:0.68rem;font-weight:400;">${formatNum(e.totalStats)}</div>
      </th>`
   ).join('');
 
   const bodyRows = members.map(m => {
     const isViewer = viewerId != null && m.memberId === viewerId;
-    const cells = enemies.map(e => {
-      let symbol = '❌';
-      let bg = '#3a1a1a';
-      let label = 'cannot hit now';
-      if (!e.totalStats || e.totalStats <= 0) {
-        symbol = '⚠'; bg = '#3a3a1a'; label = 'enemy stats unknown';
-      } else if (canHitNow(m, e)) {
-        symbol = '✅'; bg = '#1a3a1a'; label = 'can hit now';
-      }
+    const rowHits = currentHits[m.memberId] || m.hits || [];
+    const cells = enemies.map((e, i) => {
+      const symbol = (rowHits[i] || '').replace(/[^✅❌⚠]/g, '') || '⚠';
+      const bg = symbol === '✅' ? '#1a3a1a' : symbol === '❌' ? '#3a1a1a' : '#3a3a1a';
+      const label = symbol === '✅' ? 'can hit now' : symbol === '❌' ? 'cannot hit now' : 'enemy stats unknown';
       return `<td style="padding:5px 4px;text-align:center;font-size:0.9rem;background:${bg};" title="${escapeHtml(m.memberName)} ${label} ${escapeHtml(e.name)}">${symbol}</td>`;
     }).join('');
     return `<tr${isViewer ? ' style="background:#16262a;"' : ''}>
@@ -2613,27 +2605,29 @@ function renderVicodinTargets(data) {
       else if (symbol.includes('⚠')) unknown++;
     });
     const isViewer = viewerId != null && m.memberId === viewerId;
+    // Enemy stats are intentionally NOT shown, so the report gives target names
+    // only rather than exposing anyone's numbers.
     const targetHtml = targets.length
-      ? targets.map(e => `<a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" rel="noopener" style="color:#00ADB5;text-decoration:none;">${escapeHtml(e.name)}</a> <span style="color:#666;">(${formatNum(e.totalStats)})</span>`).join(', ')
+      ? targets.map(e => `<a href="https://www.torn.com/profiles.php?XID=${e.id}" target="_blank" rel="noopener" style="color:#00ADB5;text-decoration:none;">${escapeHtml(e.name)}</a>`).join(', ')
       : '<span style="color:#666;">None in range</span>';
     const unknownHtml = unknown > 0 ? ` <span style="color:#cca800;">+${unknown} unknown</span>` : '';
+
     return `<tr${isViewer ? ' style="background:#16262a;"' : ''}>
       <td style="padding:6px 8px;font-weight:${isViewer ? '700' : '500'};white-space:nowrap;">${escapeHtml(m.memberName)}${isViewer ? ' <span style="color:#00ADB5;font-size:0.7rem;">(you)</span>' : ''}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:'Share Tech Mono',monospace;color:#888;">${formatNum(m.totalStats)}</td>
-      <td style="padding:6px 8px;text-align:right;font-family:'Share Tech Mono',monospace;color:#00ADB5;">${formatNum(m.vicodinTotal)}</td>
       <td style="padding:6px 8px;">${targetHtml}${unknownHtml}</td>
     </tr>`;
   }).join('');
 
   const viewerNote = viewerRow
-    ? `<p style="color:#00ADB5;font-size:0.85rem;margin-bottom:0.5rem;">💊 Your row is highlighted below &mdash; these are the enemies you can hit on a Vicodin (+${bonusPct}%).</p>`
-    : `<p style="color:#888;font-size:0.85rem;margin-bottom:0.5rem;">💊 Targets below are computed with a Vicodin (+${bonusPct}% battle stats) applied.</p>`;
+    ? `<p style="color:#00ADB5;font-size:0.85rem;margin-bottom:0.5rem;">💊 Your row is highlighted below &mdash; these are the enemies you can hit on a Vicodin (+${bonusPct}% per base stat).</p>`
+    : `<p style="color:#888;font-size:0.85rem;margin-bottom:0.5rem;">💊 Targets below are computed with a Vicodin (+${bonusPct}% to each base battle stat) applied.</p>`;
 
   return `
     <div style="margin-top:1.25rem;">
       <h4 style="margin:0 0 0.35rem 0;font-size:0.95rem;color:#c0bcbc;">💊 Targets on a Vicodin</h4>
-      <p style="color:#888;font-size:0.8rem;margin-bottom:0.25rem;">
-        Stats on a Vicodin = current effective battle stats &times;${data.vicodinStatBonus || 1.25}.
+      <p style="color:#888;font-size:0.8rem;margin-bottom:0.5rem;">
+        Targets are computed with a Vicodin applied (+${bonusPct}% to each base battle stat, with the
+        member's normal buffs/debuffs removed). Only target names are shown.
       </p>
       ${viewerNote}
       <div style="overflow-x:auto;">
@@ -2641,9 +2635,7 @@ function renderVicodinTargets(data) {
           <thead>
             <tr style="border-bottom:2px solid #2a2828;color:#888;font-size:0.78rem;text-align:left;">
               <th style="padding:6px 8px;">Member</th>
-              <th style="padding:6px 8px;text-align:right;">Now</th>
-              <th style="padding:6px 8px;text-align:right;">On Vicodin</th>
-              <th style="padding:6px 8px;">Targets</th>
+              <th style="padding:6px 8px;">Targets (on Vicodin)</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
