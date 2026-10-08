@@ -1,5 +1,6 @@
 ﻿// Snapshot Service - handles weekly stats snapshot functionality
 const WeeklySnapshot = require('../models/WeeklySnapshot');
+const DailySnapshot = require('../models/DailySnapshot');
 const User = require('../models/User');
 const axios = require('axios');
 const { sendEmail } = require('./emailService');
@@ -50,31 +51,56 @@ async function getFactionApiKey() {
   return process.env.TORN_FACTION_API_KEY || null;
 }
 
+// ─── Run an async mapper over items with a fixed concurrency cap ──────────────
+// Torn allows ~100 requests per minute per key. Firing every member request at
+// once (Promise.allSettled over the whole list) can burst past that once the
+// faction grows, so chunked execution keeps in-flight requests bounded.
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = new Array(Math.max(1, Math.min(limit, items.length)))
+    .fill(null)
+    .map(async () => {
+      while (nextIndex < items.length) {
+        const i = nextIndex++;
+        try {
+          results[i] = { status: 'fulfilled', value: await fn(items[i], i) };
+        } catch (err) {
+          results[i] = { status: 'rejected', reason: err };
+        }
+      }
+    });
+  await Promise.all(workers);
+  return results;
+}
+
+// Default number of simultaneous Torn API requests when pulling member stats.
+const MEMBER_FETCH_CONCURRENCY = 10;
+
 // ─── Fetch live stats for all faction members with API keys ────────────────────
-// Excludes employee accounts (accountType: 'employee') — weekly snapshots track
+// Excludes employee accounts (accountType: 'employee') — snapshots track
 // faction member stat progress only, not company employees.
-async function fetchAllMemberStats() {
+async function fetchAllMemberStats(concurrency = MEMBER_FETCH_CONCURRENCY) {
   const dbUsers = await User.find(
     { tornApiKey: { $ne: null }, accountType: { $ne: 'employee' } },
     'tornPlayerId tornName tornApiKey'
   );
 
-  const results = await Promise.allSettled(
-    dbUsers.map(async (u) => {
-      try {
-        const tornRes = await axios.get(
-          `https://api.torn.com/user/?selections=basic,personalstats&key=${decryptOrRaw(u.tornApiKey)}`
-        );
-        if (tornRes.data.error) return null;
-        return {
-          playerId: tornRes.data.player_id,
-          playerName: tornRes.data.name,
-          totalStats: tornRes.data.personalstats?.totalstats || 0,
-          timestamp: new Date()
-        };
-      } catch { return null; }
-    })
-  );
+  const results = await mapWithConcurrency(dbUsers, concurrency, async (u) => {
+    const tornRes = await axios.get(
+      `https://api.torn.com/user/?selections=basic,personalstats&key=${decryptOrRaw(u.tornApiKey)}`
+    );
+    if (tornRes.data.error) return null;
+    return {
+      playerId: tornRes.data.player_id,
+      playerName: tornRes.data.name,
+      totalStats: tornRes.data.personalstats?.totalstats || 0,
+      // Full personalstats object (~214 stats) — stored so downstream pages
+      // (competition leaderboard, admin drills) never need a second pull.
+      personalstats: tornRes.data.personalstats || {},
+      timestamp: new Date()
+    };
+  });
 
   return {
     validStats: results.filter(r => r.status === 'fulfilled' && r.value !== null).map(r => r.value),
@@ -663,9 +689,71 @@ async function importHistoricalData(csvData, createdBy = 'system') {
   }
 }
 
+// ─── Take a DAILY snapshot (full personalstats per member) ─────────────────────
+// Saved to the DailySnapshot collection (separate from WeeklySnapshot) and
+// upserted once per calendar day, so re-runs are idempotent. This is the read
+// model the competition page serves from — no email/notification is sent.
+async function takeDailySnapshot(createdBy = 'system') {
+  try {
+    const { validStats, totalUsers } = await fetchAllMemberStats();
+
+    if (validStats.length === 0) {
+      return { success: false, message: 'No valid user stats returned from Torn API' };
+    }
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const snapshotId = `daily_${todayStr}`;
+
+    await DailySnapshot.findOneAndUpdate(
+      { snapshotId },
+      {
+        snapshotId,
+        snapshotDate: new Date(`${todayStr}T00:00:00.000Z`),
+        memberStats: validStats,
+        createdBy,
+        updatedAt: new Date()
+      },
+      { upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return {
+      success: true,
+      snapshotId,
+      membersSnapshotted: validStats.length,
+      totalMembers: totalUsers
+    };
+  } catch (err) {
+    console.error('Error taking daily snapshot:', err.message);
+    return { success: false, message: err.message };
+  }
+}
+
+// ─── Latest DAILY snapshot (fallback to latest weekly if daily never ran) ──────
+async function getLatestCompetitionSnapshot() {
+  try {
+    const daily = await DailySnapshot.findOne().sort({ snapshotDate: -1 }).limit(1).lean();
+    if (daily) return { source: 'daily', snapshot: daily };
+
+    const weekly = await WeeklySnapshot.findOne({ snapshotId: { $not: /^test_/ } })
+      .sort({ snapshotDate: -1 })
+      .limit(1)
+      .lean();
+    if (weekly) return { source: 'weekly', snapshot: weekly };
+
+    return null;
+  } catch (err) {
+    console.error('Error getting latest competition snapshot:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   takeSnapshot,
   takeTestSnapshot,
+  takeDailySnapshot,
+  getLatestCompetitionSnapshot,
+  fetchAllMemberStats,
+  mapWithConcurrency,
   getSnapshotByDate,
   getSnapshotDifferences,
   getLatestSnapshot,

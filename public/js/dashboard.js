@@ -207,6 +207,7 @@ function showSection(sectionId, el) {
   if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); fetchEnemyStats(); }
   if (sectionId === 'targets') { checkFFScouterKeyStatus(); checkTornStatsKeyStatus(); fetchTargets(); }
   if (sectionId === 'stocks') { fetchStocks(); }
+  if (sectionId === 'competition') { loadCompetitionMeta(); }
 }
 
 // ── My Day Dashboard ──────────────────────────────────────────────────────────
@@ -6637,3 +6638,193 @@ function renderTargets(targets, meta) {
     fetchNotifications();
   }
 })();
+
+// ─── Competition page ─────────────────────────────────────────────────────────
+// Reads the daily snapshot via /api/competition/* — no live Torn API calls.
+let COMP_META = null;            // { stats, members, categories, isAdmin, ... }
+let COMP_SELECTED_STATS = new Set();
+let COMP_SELECTED_MEMBERS = new Set();
+
+async function loadCompetitionMeta() {
+  const picker = document.getElementById('competition-stat-picker');
+  if (picker) picker.innerHTML = '<div class="channel-loading">LOADING STATS...</div>';
+  try {
+    const res = await fetch('/api/competition/meta');
+    const data = await res.json();
+    if (!res.ok) {
+      if (picker) picker.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`;
+      return;
+    }
+    COMP_META = data;
+    const info = document.getElementById('competition-snapshot-info');
+    if (info) {
+      const d = new Date(data.snapshotDate);
+      info.textContent = `Snapshot: ${d.toLocaleDateString()} (${data.source})`;
+    }
+    // Default selection: a couple of popular non-battle stats if present
+    if (COMP_SELECTED_STATS.size === 0) {
+      ['attackswon', 'networth', 'useractivity'].forEach(k => {
+        if (data.stats[k]) COMP_SELECTED_STATS.add(k);
+      });
+      if (COMP_SELECTED_STATS.size === 0) {
+        Object.keys(data.stats).slice(0, 3).forEach(k => COMP_SELECTED_STATS.add(k));
+      }
+    }
+    renderCompetitionStatPicker();
+    renderCompetitionMemberPicker();
+  } catch (err) {
+    if (picker) picker.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderCompetitionStatPicker() {
+  const container = document.getElementById('competition-stat-picker');
+  if (!container || !COMP_META) return;
+  const q = (document.getElementById('competition-stat-search')?.value || '').toLowerCase();
+
+  // Group stats by category
+  const groups = {};
+  for (const [key, meta] of Object.entries(COMP_META.stats)) {
+    if (q && !meta.label.toLowerCase().includes(q) && !key.includes(q)) continue;
+    const cat = meta.category || 'misc';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push({ key, label: meta.label });
+  }
+
+  const order = ['battle', 'attack', 'crimes', 'travel', 'networth', 'racing', 'activity', 'misc'];
+  let html = '';
+  for (const cat of order) {
+    const list = groups[cat];
+    if (!list || !list.length) continue;
+    list.sort((a, b) => a.label.localeCompare(b.label));
+    html += `<div class="competition-group"><div class="competition-group-title">${COMP_META.categories[cat] || cat}</div>`;
+    for (const s of list) {
+      const checked = COMP_SELECTED_STATS.has(s.key) ? 'checked' : '';
+      html += `<label class="competition-option"><input type="checkbox" ${checked}
+        onchange="competitionToggleStat('${s.key}', this.checked)"> ${s.label}</label>`;
+    }
+    html += '</div>';
+  }
+  container.innerHTML = html || '<div class="muted">No stats match your search.</div>';
+
+  const count = document.getElementById('competition-stat-count');
+  if (count) count.textContent = `${COMP_SELECTED_STATS.size} selected`;
+}
+
+function competitionToggleStat(key, on) {
+  if (on) COMP_SELECTED_STATS.add(key); else COMP_SELECTED_STATS.delete(key);
+  const count = document.getElementById('competition-stat-count');
+  if (count) count.textContent = `${COMP_SELECTED_STATS.size} selected`;
+}
+
+function competitionSelectAllStats() {
+  if (!COMP_META) return;
+  Object.keys(COMP_META.stats).forEach(k => COMP_SELECTED_STATS.add(k));
+  renderCompetitionStatPicker();
+}
+
+function competitionClearSelection() {
+  COMP_SELECTED_STATS.clear();
+  COMP_SELECTED_MEMBERS.clear();
+  renderCompetitionStatPicker();
+  renderCompetitionMemberList();
+}
+
+function renderCompetitionMemberPicker() {
+  const mode = document.querySelector('input[name="competition-member-mode"]:checked')?.value || 'all';
+  const picker = document.getElementById('competition-member-picker');
+  if (!picker) return;
+  picker.style.display = mode === 'choose' ? 'block' : 'none';
+  if (mode === 'choose') renderCompetitionMemberList();
+}
+
+function renderCompetitionMemberList() {
+  const container = document.getElementById('competition-member-list');
+  if (!container || !COMP_META) return;
+  const q = (document.getElementById('competition-member-search')?.value || '').toLowerCase();
+  const list = COMP_META.members.filter(m => !q || m.playerName.toLowerCase().includes(q));
+  list.sort((a, b) => a.playerName.localeCompare(b.playerName));
+
+  let html = '';
+  for (const m of list) {
+    const checked = COMP_SELECTED_MEMBERS.has(m.playerId) ? 'checked' : '';
+    html += `<label class="competition-option"><input type="checkbox" ${checked}
+      onchange="competitionToggleMember(${m.playerId}, this.checked)"> ${m.playerName}</label>`;
+  }
+  container.innerHTML = html || '<div class="muted">No members match your search.</div>';
+}
+
+function competitionToggleMember(playerId, on) {
+  if (on) COMP_SELECTED_MEMBERS.add(playerId); else COMP_SELECTED_MEMBERS.delete(playerId);
+}
+
+async function runCompetitionCompare() {
+  const results = document.getElementById('competition-results');
+  if (!COMP_META) { results.innerHTML = '<div class="channel-error">⚠️ Load stats first.</div>'; return; }
+  if (COMP_SELECTED_STATS.size === 0) {
+    results.innerHTML = '<div class="channel-error">⚠️ Select at least one stat.</div>';
+    return;
+  }
+
+  const mode = document.querySelector('input[name="competition-member-mode"]:checked')?.value || 'all';
+  let membersParam = 'all';
+  if (mode === 'choose') {
+    if (COMP_SELECTED_MEMBERS.size === 0) {
+      results.innerHTML = '<div class="channel-error">⚠️ Select at least one member (or choose "All faction members").</div>';
+      return;
+    }
+    membersParam = Array.from(COMP_SELECTED_MEMBERS).join(',');
+  }
+
+  const statsParam = Array.from(COMP_SELECTED_STATS).join(',');
+  results.innerHTML = '<div class="channel-loading">LOADING COMPARISON...</div>';
+
+  try {
+    const url = `/api/competition/data?stats=${encodeURIComponent(statsParam)}&members=${encodeURIComponent(membersParam)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!res.ok) { results.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    renderCompetitionResults(data);
+  } catch (err) {
+    results.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderCompetitionResults(data) {
+  const results = document.getElementById('competition-results');
+  if (!data.series || !data.series.length) {
+    results.innerHTML = '<div class="empty-state"><p>No members matched your selection.</p></div>';
+    return;
+  }
+
+  let html = '';
+  for (const statKey of data.stats) {
+    const label = COMP_META.stats[statKey]?.label || statKey;
+    const rows = data.series
+      .map(m => ({ name: m.playerName, value: m.values[statKey] ?? 0 }))
+      .sort((a, b) => b.value - a.value);
+    const max = rows.length ? Math.max(...rows.map(r => r.value)) : 0;
+
+    html += `<div class="card competition-stat-card" style="background:#1a1919;border:1px solid #2a2828;margin-bottom:1rem;">
+      <div class="card-header"><span>${label}</span></div>
+      <div class="card-body">
+        <table class="members-table" style="width:100%;">
+          <thead><tr><th>#</th><th>Member</th><th style="text-align:right;">Value</th><th style="width:40%;">Bar</th></tr></thead>
+          <tbody>`;
+    rows.forEach((r, i) => {
+      const pct = max > 0 ? Math.max(2, (r.value / max) * 100) : 0;
+      html += `<tr>
+        <td>${i + 1}</td>
+        <td>${r.name}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${formatNumFull(r.value)}</td>
+        <td><div class="competition-bar"><div class="competition-bar-fill" style="width:${pct}%"></div></div></td>
+      </tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  if (data.rejected && data.rejected.length) {
+    html += `<p class="muted" style="font-size:0.8rem;">Some requested stats were not available: ${data.rejected.join(', ')}</p>`;
+  }
+  results.innerHTML = html;
+}

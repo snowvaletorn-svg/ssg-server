@@ -66,6 +66,9 @@
             <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
             <% } %>
             <a href="#stocks" class="nav-item" onclick="showSection('stocks', this)">📈 Stocks</a>
+            <% if (canAccessCompetition) { %>
+              <a href="#competition" class="nav-item" onclick="showSection('competition', this)">🏆 Competition</a>
+            <% } %>
             <% if (!isEmployee) { %>
             <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
             <% } %>
@@ -1106,6 +1109,71 @@
 
 
 
+
+          <!-- 🏆 COMPETITION (restricted to Snowvale during rollout) -->
+          <% if (canAccessCompetition) { %>
+          <section id="competition" class="section">
+            <div class="section-header">
+              <h3>🏆 Faction Competition</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;">
+                <button class="btn btn-primary btn-small" onclick="loadCompetitionMeta()">↻ Refresh</button>
+                <button class="btn btn-small btn-outline" onclick="openHelp('competition')">❓ Help</button>
+              </div>
+            </div>
+
+            <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+              Compare stats across faction members. Data comes from the daily snapshot (06:00 UTC) — no live API calls.
+              <span id="competition-snapshot-info"></span>
+            </p>
+
+            <div class="card" style="margin-bottom:1rem;background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-header"><span>📊 Select Stats</span>
+                <span class="muted" id="competition-stat-count" style="font-size:0.8rem;"></span>
+              </div>
+              <div class="card-body">
+                <input type="text" id="competition-stat-search" class="form-input"
+                  placeholder="Search stats..." oninput="renderCompetitionStatPicker()"
+                  style="margin-bottom:0.75rem;">
+                <div id="competition-stat-picker" class="competition-picker" style="max-height:260px;overflow-y:auto;"></div>
+              </div>
+            </div>
+
+            <div class="card" style="margin-bottom:1rem;background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-header"><span>👥 Select Members</span></div>
+              <div class="card-body">
+                <div style="display:flex;gap:1.5rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;">
+                  <label style="display:flex;gap:0.4rem;align-items:center;cursor:pointer;">
+                    <input type="radio" name="competition-member-mode" value="all" checked
+                      onchange="renderCompetitionMemberPicker()"> All faction members
+                  </label>
+                  <label style="display:flex;gap:0.4rem;align-items:center;cursor:pointer;">
+                    <input type="radio" name="competition-member-mode" value="choose"
+                      onchange="renderCompetitionMemberPicker()"> Choose members
+                  </label>
+                </div>
+                <div id="competition-member-picker" style="display:none;">
+                  <input type="text" id="competition-member-search" class="form-input"
+                    placeholder="Search members..." oninput="renderCompetitionMemberList()"
+                    style="margin-bottom:0.75rem;">
+                  <div id="competition-member-list" class="competition-picker" style="max-height:240px;overflow-y:auto;"></div>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:0.75rem;margin-bottom:1rem;flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="runCompetitionCompare()">⚔ Compare</button>
+              <button class="btn btn-outline" onclick="competitionSelectAllStats()">Select all stats</button>
+              <button class="btn btn-outline" onclick="competitionClearSelection()">Clear</button>
+            </div>
+
+            <div id="competition-results">
+              <div class="empty-state">
+                <span class="empty-icon">🏆</span>
+                <p>Select stats and members, then click Compare.</p>
+              </div>
+            </div>
+          </section>
+          <% } %>
 
           <!-- ── COMPANIES ── -->
           <section id="companies" class="section">

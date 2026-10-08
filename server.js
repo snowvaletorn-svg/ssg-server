@@ -42,6 +42,16 @@ const StockObservation = require('./models/StockObservation');
 const OrganizedCrime = require('./models/OrganizedCrime');
 const UserStatSnapshot = require('./models/UserStatSnapshot');
 const { startScheduler } = require('./services/schedulerService');
+const {
+  takeDailySnapshot,
+  getLatestCompetitionSnapshot
+} = require('./services/snapshotService');
+const {
+  buildStatCatalog,
+  filterRequestedStats,
+  memberValuesFor,
+  CATEGORY_LABELS
+} = require('./services/competitionService');
 const stockAnalysisService = require('./services/stockAnalysisService');
 const stockDataSourceService = require('./services/stockDataSourceService');
 const {
@@ -683,6 +693,21 @@ const isFactionMember = (req, res, next) => {
   next();
 };
 
+// ---- COMPETITION PAGE ACCESS ---------------------------------------------------
+// The competition page (tab + API) is restricted to a single account — Snowvale
+// (Torn ID 3808908) — while it is being rolled out. Access is keyed on the Torn
+// player ID (stable, not spoofable like a display name). Add further IDs here to
+// grant access later.
+const COMPETITION_ACCESS_IDS = [3808908]; // Snowvale
+
+const isCompetitionUser = (req, res, next) => {
+  const id = parseInt(req.session?.userId, 10);
+  if (!COMPETITION_ACCESS_IDS.includes(id)) {
+    return res.status(403).json({ error: 'You do not have access to the competition page yet.' });
+  }
+  next();
+};
+
 // ---- UTILITY LOANING PERMISSION ------------------------------------------------
 // The "Utility Loaning" permission is granted by a faction position whose armory
 // access includes the Utilities (Temporary) category. We detect it by querying
@@ -1255,6 +1280,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       availableRoles: [],
       isCompaniesAccess: true, // Employees see the Companies nav item (their own company)
       isEmployee: true,
+      canAccessCompetition: false,
       isTestUser: !!req.session.user?.isTestUser,
       isUtilityLoaning: false
     });
@@ -1276,6 +1302,9 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const realIsOwner = hasPositionGroup(req.session.user, 'ownership');
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
+
+  // Competition tab visibility: only Snowvale (Torn ID 3808908) during rollout.
+  const canAccessCompetition = COMPETITION_ACCESS_IDS.includes(parseInt(req.session.userId, 10));
 
   // Companies page access: every faction member can view (they see their own
   // companies â-” directed and/or worked at); employees see their logged-in company.
@@ -1306,6 +1335,7 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     availableRoles: Object.keys(POSITIONS),
     isCompaniesAccess,
     isEmployee: false,
+    canAccessCompetition,
     isTestUser: false,
     isUtilityLoaning: await isUtilityLoaningUser(req.session.user)
   });
@@ -5025,6 +5055,111 @@ app.get('/api/admin/snapshot/latest/csv', isAuthenticated, isLeadershipOrOwnersh
     res.send(csvContent);
   } catch (err) {
     console.error('Latest CSV export error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Competition meta (stat catalog + member roster) ---------------------
+// Read by the competition page. Battle stats are only present in the catalog
+// for admins (ownership/leadership), so non-admins never even see them offered.
+app.get('/api/competition/meta', isAuthenticated, isFactionMember, isCompetitionUser, async (req, res) => {
+  try {
+    const result = await getLatestCompetitionSnapshot();
+    if (!result || !result.snapshot) {
+      return res.status(404).json({ error: 'No snapshot data yet. The first daily snapshot runs at 06:00 UTC.' });
+    }
+
+    const snapshot = result.snapshot;
+    const members = Array.isArray(snapshot.memberStats) ? snapshot.memberStats : [];
+
+    // Only offer stats that are actually present in the snapshot.
+    const snapshotKeys = members.length > 0 && members[0].personalstats
+      ? Object.keys(members[0].personalstats)
+      : null;
+
+    const positionGroup = getEffectivePositionGroup(req);
+    const isAdmin = ['ownership', 'leadership'].includes(positionGroup);
+    const catalog = buildStatCatalog({ isAdmin, snapshotKeys });
+
+    res.json({
+      source: result.source,
+      snapshotDate: snapshot.snapshotDate,
+      isAdmin,
+      categories: CATEGORY_LABELS,
+      stats: catalog,
+      members: members.map(m => ({
+        playerId: m.playerId,
+        playerName: m.playerName
+      }))
+    });
+  } catch (err) {
+    console.error('Competition meta error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Competition data (stats for selected members) -----------------------
+// Reads the stored snapshot only — no Torn API calls on page load.
+// Query: stats=comma,separated,keys   members=all | comma,separated,ids
+app.get('/api/competition/data', isAuthenticated, isFactionMember, isCompetitionUser, async (req, res) => {
+  try {
+    const result = await getLatestCompetitionSnapshot();
+    if (!result || !result.snapshot) {
+      return res.status(404).json({ error: 'No snapshot data yet. The first daily snapshot runs at 06:00 UTC.' });
+    }
+
+    const snapshot = result.snapshot;
+    const members = Array.isArray(snapshot.memberStats) ? snapshot.memberStats : [];
+    const positionGroup = getEffectivePositionGroup(req);
+    const isAdmin = ['ownership', 'leadership'].includes(positionGroup);
+
+    const snapshotKeys = members.length > 0 && members[0].personalstats
+      ? Object.keys(members[0].personalstats)
+      : null;
+    const catalog = buildStatCatalog({ isAdmin, snapshotKeys });
+
+    // Parse requested stats (default to a small sensible set if none given)
+    const requestedStats = (req.query.stats || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+    const { allowed, rejected } = filterRequestedStats(
+      requestedStats.length ? requestedStats : Object.keys(catalog).slice(0, 1),
+      catalog
+    );
+
+    if (allowed.length === 0) {
+      return res.status(400).json({
+        error: 'No valid stats requested.',
+        rejected
+      });
+    }
+
+    // Parse requested members (all by default)
+    const membersParam = (req.query.members || 'all').trim();
+    let selected;
+    if (membersParam === 'all') {
+      selected = members;
+    } else {
+      const idSet = new Set(
+        membersParam.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n))
+      );
+      selected = members.filter(m => idSet.has(m.playerId));
+    }
+
+    res.json({
+      source: result.source,
+      snapshotDate: snapshot.snapshotDate,
+      stats: allowed,
+      rejected,
+      series: selected.map(m => ({
+        playerId: m.playerId,
+        playerName: m.playerName,
+        values: memberValuesFor(m, allowed)
+      }))
+    });
+  } catch (err) {
+    console.error('Competition data error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

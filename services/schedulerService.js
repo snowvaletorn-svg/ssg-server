@@ -2,7 +2,7 @@
 // and daily stock price snapshot at 00:00 TCT (Torn City Time = UTC-0, so 00:00 UTC)
 const cron = require('node-cron');
 const axios = require('axios');
-const { takeSnapshot, sendWeeklyReport } = require('./snapshotService');
+const { takeSnapshot, takeDailySnapshot, sendWeeklyReport } = require('./snapshotService');
 const StockPriceSnapshot = require('../models/StockPriceSnapshot');
 const { decryptOrRaw } = require('./keyCipher');
 
@@ -198,10 +198,29 @@ function startScheduler() {
     timezone: 'UTC'
   });
 
+  // Daily member stat snapshot: Every day at 06:00 UTC. Feeds the competition
+  // page (full personalstats per member). Silent — no report/email is sent.
+  const dailySnapshotTask = cron.schedule('0 6 * * *', async () => {
+    console.log('[Scheduler] Daily member stat snapshot triggered — 06:00 UTC');
+    try {
+      const result = await takeDailySnapshot('scheduler');
+      if (!result.success) {
+        console.error('[Scheduler] Daily snapshot failed:', result.message);
+        return;
+      }
+      console.log(`[Scheduler] Daily snapshot saved: ${result.snapshotId} (${result.membersSnapshotted} members)`);
+    } catch (err) {
+      console.error('[Scheduler] Uncaught error during daily snapshot:', err.message);
+    }
+  }, {
+    timezone: 'UTC'
+  });
+
   schedulerStarted = true;
   console.log('[Scheduler] ✅ Weekly snapshot scheduled — every Sunday at 12:00 UTC');
+  console.log('[Scheduler] ✅ Daily member stat snapshot scheduled — every day at 06:00 UTC');
   console.log('[StockScheduler] ✅ Daily stock snapshot scheduled — every day at 00:00 UTC');
-  return { weeklyTask, stockTask };
+  return { weeklyTask, stockTask, dailySnapshotTask };
 }
 
 module.exports = { startScheduler };

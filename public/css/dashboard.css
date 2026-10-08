@@ -1167,3 +1167,58 @@
     -webkit-overflow-scrolling: touch;
   }
 }
+
+/* ─── Competition page ─────────────────────────────────────────────────────── */
+.competition-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.competition-group {
+  margin-bottom: 0.6rem;
+}
+
+.competition-group-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #f0a500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0.5rem 0 0.3rem;
+  border-bottom: 1px solid #2a2828;
+  padding-bottom: 0.2rem;
+}
+
+.competition-option {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: #c0bcbc;
+  padding: 0.18rem 0.3rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.competition-option:hover {
+  background: #222020;
+}
+
+.competition-option input {
+  accent-color: #f0a500;
+}
+
+.competition-bar {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 4px;
+  height: 14px;
+  overflow: hidden;
+}
+
+.competition-bar-fill {
+  background: linear-gradient(90deg, #f0a500, #c07f00);
+  height: 100%;
+  transition: width 0.3s ease;
+}

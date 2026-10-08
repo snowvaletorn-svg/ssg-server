@@ -1,3 +1,37 @@
+# Snapshot Storage + Competition Page - Build Complete
+
+## What Was Built
+
+### Phase 1 - Data foundation
+- `models/WeeklySnapshot.js`: memberStats rows now carry full `personalstats` (Mixed, optional). Weekly report/computeDiff untouched.
+- `models/DailySnapshot.js` (NEW): separate collection, one doc per day (`daily_YYYY-MM-DD`).
+- `services/snapshotService.js`: `fetchAllMemberStats` returns full personalstats + `totalStats`; added `mapWithConcurrency` (cap 10), `takeDailySnapshot` (idempotent upsert), `getLatestCompetitionSnapshot` (daily, fallback weekly).
+- `services/schedulerService.js`: new cron `0 6 * * *` (daily 06:00 UTC) runs `takeDailySnapshot` silently.
+
+### Phase 2 - Server API (server.js)
+- `GET /api/competition/meta` (isAuthenticated + isFactionMember): stat catalog + member roster + isAdmin. Battle stats only in catalog for ownership/leadership.
+- `GET /api/competition/data?stats=&members=` (isAuthenticated + isFactionMember): reads stored snapshot (NO live Torn calls). Server-side rejects battle stats for non-admins.
+- `services/competitionService.js` (NEW): pure gating/catalog logic (BATTLE_STAT_KEYS, buildStatCatalog, filterRequestedStats, memberValuesFor).
+
+### Phase 3 - UI
+- `views/dashboard.ejs`: new "🏆 Competition" nav item + section (stat picker w/ search+groups, member picker all/choose, compare button, results).
+- `public/js/dashboard.js`: competition client functions (loadCompetitionMeta, render pickers, runCompetitionCompare, renderCompetitionResults).
+- `public/css/dashboard.css`: .competition-picker/.competition-group/.competition-bar styles.
+
+### Phase 4 - Tests (all passing: 102 tests, 7 suites)
+- `__tests__/competitionService.test.js`: battle-stat gating, catalog build, memberValuesFor (incl. legacy rows).
+- `__tests__/snapshotService.test.js`: concurrency cap, widened pull, daily upsert idempotency, snapshot selection fallback.
+
+### Battle-stat denylist (admin-only: ownership/leadership)
+strength, defense, speed, dexterity, totalstats, manuallabor, intelligence, endurance, baserating
+
+### Notes / assumptions
+- Daily snapshot at 06:00 UTC; competition board is up to ~24h fresh (per user preference: daily > live).
+- First snapshot must run before the page has data (404 until then).
+- "Admin area access" = existing isLeadershipOrOwnership gate.
+
+---
+
 # SSG CAT Script - Build Complete
 
 ## What Was Built
