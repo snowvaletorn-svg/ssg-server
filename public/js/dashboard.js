@@ -3627,8 +3627,34 @@ const HELP_CONTENT = {
       }
     ]
   },
+  competition: {
+    title: '🏆 Faction Competition',
+    sections: [
+      {
+        heading: 'Comparing Stats',
+        content: `
+          <p class="help-text">Compare stats across faction members. Data comes from the daily snapshot (06:00 UTC) — no live API calls.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to load the latest snapshot's stat catalog</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Tick the stats you want to compare, then pick a member scope (<strong style="color:#c0bcbc;">All faction members</strong> or <strong style="color:#c0bcbc;">Choose members</strong>)</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">⚔ Compare</strong> to see ranked bars per selected stat</div></div>
+          <div class="help-callout warning">⚠️ Battle stats (strength, defense, speed, dexterity, etc.) are only visible to ownership/leadership.</div>
+        `
+      },
+      {
+        heading: 'Rolling the Lottery',
+        content: `
+          <p class="help-text">Any faction member can run a lottery roll from the Roll card. Pick a scope and click <strong style="color:#c0bcbc;">🎲 Roll</strong> — a random member from that scope is drawn from the daily snapshot.</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text"><strong style="color:#c0bcbc;">All faction members</strong> — draws from every member in the snapshot</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text"><strong style="color:#c0bcbc;">growth</strong> — Team Growth and Recruit roles</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text"><strong style="color:#c0bcbc;">strength</strong> — Team Strength and Murder Child roles</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text"><strong style="color:#c0bcbc;">strategy</strong> — Team Strategy roles</div></div>
+          <div class="help-callout">💡 The draw happens on the server against the latest daily snapshot. If a scope has no members yet, the roll reports that instead of drawing.</div>
+        `
+      }
+    ]
+  },
   scripts: {
-    title: '📜 Scripts',
+    title: '📋 Scripts',
     sections: [
       {
         heading: 'Helpful Scripts',
@@ -6602,7 +6628,7 @@ function renderTargets(targets, meta) {
 (function initDashboard() {
   // Check URL hash for a specific section to navigate to
   const hash = window.location.hash.replace('#', '');
-  const validSections = ['my-day', 'profile', 'torn', 'targets', 'faction', 'travel', 'training', 'bank-rates', 'war', 'stocks', 'oc', 'scripts', 'companies', 'admin'];
+  const validSections = ['my-day', 'profile', 'torn', 'targets', 'faction', 'travel', 'training', 'bank-rates', 'war', 'stocks', 'oc', 'scripts', 'companies', 'competition', 'admin'];
   
   if (hash && validSections.includes(hash)) {
     // Navigate to the section specified in the URL hash
@@ -6719,8 +6745,30 @@ function competitionSelectAllStats() {
 function competitionClearSelection() {
   COMP_SELECTED_STATS.clear();
   COMP_SELECTED_MEMBERS.clear();
-  renderCompetitionStatPicker();
-  renderCompetitionMemberList();
+
+  // Reset the member-mode radio back to "All faction members" (hides the picker).
+  const modeAll = document.querySelector('input[name="competition-member-mode"][value="all"]');
+  if (modeAll) modeAll.checked = true;
+
+  // Clear both search boxes so filtered lists come back clean.
+  const statSearch = document.getElementById('competition-stat-search');
+  if (statSearch) statSearch.value = '';
+  const memberSearch = document.getElementById('competition-member-search');
+  if (memberSearch) memberSearch.value = '';
+
+  // Reset the Compare results back to the initial empty state.
+  const results = document.getElementById('competition-results');
+  if (results) {
+    results.innerHTML = `
+              <div class="empty-state">
+                <span class="empty-icon">🏆</span>
+                <p>Select stats and members, then click Compare.</p>
+              </div>`;
+  }
+
+  // Re-fetch the snapshot meta — re-renders the stat/member pickers with
+  // nothing selected and refreshes the snapshot info line.
+  loadCompetitionMeta();
 }
 
 function renderCompetitionMemberPicker() {
@@ -6823,4 +6871,59 @@ function renderCompetitionResults(data) {
     html += `<p class="muted" style="font-size:0.8rem;">Some requested stats were not available: ${data.rejected.join(', ')}</p>`;
   }
   results.innerHTML = html;
+}
+
+// ─── Competition lottery roll (any faction member) ───────────────────────────────────────────────
+// Rolls a uniformly random member from the selected role group scope.
+// Fetches from GET /api/competition/roll?scope=all|growth|strength|strategy.
+// Role -> scope mapping lives server-side in services/competitionService.js
+// (roleGroupForPosition), mirroring the POSITIONS groups on the server.
+let ROLL_SCOPE = 'all';
+
+function renderCompetitionRollPicker() {
+  ROLL_SCOPE = document.querySelector('input[name="competition-roll-scope"]:checked')?.value || 'all';
+}
+
+function clearCompetitionRollResult() {
+  const box = document.getElementById('competition-roll-result');
+  if (box) box.innerHTML = '<div class="empty-state" style="display:contents;"><span class="empty-icon">🎰</span><p id="competition-roll-message" style="margin:0;">Select a scope and roll.</p></div>';
+}
+
+async function competitionRoll() {
+  const results = document.getElementById('competition-roll-result');
+  if (!results) return;
+  const scope = ROLL_SCOPE || 'all';
+  const btn = document.querySelector('button[onclick="competitionRoll()"]');
+  if (btn) { btn.disabled = true; btn.textContent = 'Rolling...'; }
+  results.innerHTML = '<div class="channel-loading">LOADING ROLL...</div>';
+  try {
+    const res = await fetch(`/api/competition/roll?scope=${encodeURIComponent(scope)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      results.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error || 'Roll failed.')}</div>`;
+      return;
+    }
+    renderRollResult(data);
+  } catch (err) {
+    results.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🎰 Roll'; }
+  }
+}
+
+function renderRollResult(data) {
+  const box = document.getElementById('competition-roll-result');
+  if (!box) return;
+  const winner = data && data.winner;
+  if (!winner) {
+    box.innerHTML = '<p id="competition-roll-message" style="margin:0;">No winner returned.</p>';
+    return;
+  }
+  const position = winner.position
+    ? ` <span class="position-tag">(${escapeHtml(winner.position)})</span>`
+    : '';
+  const pool = data.totalCandidates
+    ? ` <span class="muted" style="font-size:0.78rem;">— ${data.totalCandidates} in pool</span>`
+    : '';
+  box.innerHTML = `<p id="competition-roll-message" style="margin:0;">🎰 Winner: <strong>${escapeHtml(winner.playerName)}</strong>${position}${pool}</p>`;
 }

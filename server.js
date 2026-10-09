@@ -50,7 +50,9 @@ const {
   buildStatCatalog,
   filterRequestedStats,
   memberValuesFor,
-  CATEGORY_LABELS
+  CATEGORY_LABELS,
+  ROLL_SCOPES,
+  selectRollCandidates
 } = require('./services/competitionService');
 const stockAnalysisService = require('./services/stockAnalysisService');
 const stockDataSourceService = require('./services/stockDataSourceService');
@@ -5070,7 +5072,8 @@ app.get('/api/competition/meta', isAuthenticated, isFactionMember, async (req, r
       stats: catalog,
       members: members.map(m => ({
         playerId: m.playerId,
-        playerName: m.playerName
+        playerName: m.playerName,
+        position: m.position || null
       }))
     });
   } catch (err) {
@@ -5144,6 +5147,94 @@ app.get('/api/competition/data', isAuthenticated, isFactionMember, async (req, r
     res.status(500).json({ error: err.message });
   }
 });
+
+// ---- API: Roll the competition lottery (any faction member) ----------
+// Query: ?scope=all | growth | strength | strategy
+// Picks a uniformly random member from the selected role group and returns
+// their identity (playerId, playerName, position).
+//
+// The draw pool is the LIVE faction roster (v2/faction/members) so that roles
+// are current at roll time — the daily snapshot does not store positions.
+// If the roster is unreachable (missing faction key / Torn error) we fall back
+// to the stored competition snapshot, which carries positions for rows
+// captured after position storage was added.
+app.get('/api/competition/roll', isAuthenticated, isFactionMember, async (req, res) => {
+  try {
+    const scope = (req.query.scope || 'all').trim().toLowerCase();
+    if (!ROLL_SCOPES.includes(scope)) {
+      return res.status(400).json({ error: `Invalid scope. Use one of: ${ROLL_SCOPES.join(', ')}` });
+    }
+
+    // 1. Primary source: live faction roster (current names + roles).
+    let members = null;
+    let source = 'roster';
+    try {
+      const factionKey = await getFactionApiKey();
+      if (factionKey) {
+        const encodedKey = encodeURIComponent(factionKey.trim());
+        const rosterRes = await axios.get(
+          `https://api.torn.com/v2/faction/members?key=${encodedKey}`
+        );
+        if (!rosterRes.data.error && rosterRes.data.members) {
+          const list = Array.isArray(rosterRes.data.members)
+            ? rosterRes.data.members
+            : Object.values(rosterRes.data.members);
+          members = list.map(m => ({
+            playerId: m.id,
+            playerName: m.name,
+            // v2 members position is a plain string, but tolerate { id, name }.
+            position: typeof m.position === 'string' ? m.position : (m.position?.name || null)
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Competition roll roster fetch failed:', err.message);
+      members = null;
+    }
+
+    // 2. Fallback: stored daily/weekly snapshot.
+    if (!members) {
+      source = 'snapshot';
+      const result = await getLatestCompetitionSnapshot();
+      if (!result || !result.snapshot) {
+        return res.status(404).json({ error: 'No roster or snapshot data available yet. The first daily snapshot runs at 06:00 UTC.' });
+      }
+      const rows = Array.isArray(result.snapshot.memberStats) ? result.snapshot.memberStats : [];
+      members = rows.map(m => ({
+        playerId: m.playerId,
+        playerName: m.playerName,
+        position: m.position || null
+      }));
+    }
+
+    const candidates = selectRollCandidates(members, scope);
+    if (candidates.length === 0) {
+      // Distinguish "role data missing" from "scope genuinely empty".
+      if (scope !== 'all' && members.every(m => !m.position)) {
+        return res.status(503).json({ error: 'Role data is unavailable right now — try again shortly.' });
+      }
+      return res.status(400).json({ error: `No ${scope} members found.` });
+    }
+
+    // Uniform random pick over the candidates.
+    const winner = candidates[Math.floor(Math.random() * candidates.length)];
+
+    res.json({
+      scope,
+      source,
+      totalCandidates: candidates.length,
+      winner: {
+        playerId: winner.playerId,
+        playerName: winner.playerName,
+        position: winner.position || null
+      }
+    });
+  } catch (err) {
+    console.error('Competition roll error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ---- API: Test snapshot run (unique ID, won't collide with real snapshots) ----
 app.post('/api/admin/snapshot/test-run', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {

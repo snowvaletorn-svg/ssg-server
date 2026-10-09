@@ -149,10 +149,43 @@ function memberValuesFor(member, statKeys) {
   return values;
 }
 
+// ─── Competition lottery roll ───────────────────────────────────────────────────
+// Scopes a member can roll from. 'all' draws from every member; the other
+// scopes draw only from the matching role group (see roleGroupForPosition).
+const ROLL_SCOPES = ['all', 'growth', 'strength', 'strategy'];
+
+// Map a Torn faction position string to a roll scope group (or null if the
+// position is not part of any role-based scope). Mirrors the POSITIONS groups
+// used for permissions on the server: growth = Team Growth + Recruit,
+// strength = Team Strength + Murder Child, strategy = Team Strategy
+// (both the underscore and space variants occur on the server).
+// Warlord, ownership/leadership/matriarch and unknown roles return null —
+// they still roll under the 'all' scope.
+function roleGroupForPosition(position) {
+  if (position == null) return null;
+  const normalized = String(position).replace(/_/g, ' ').trim();
+  if (normalized === 'Team Strategy') return 'strategy';
+  if (normalized === 'Team Strength' || normalized === 'Murder Child') return 'strength';
+  if (normalized === 'Team Growth' || normalized === 'Recruit') return 'growth';
+  return null;
+}
+
+// Filter the member pool down to the roll scope. `members` is an array of
+// { playerId, playerName, position } rows. Returns [] for unknown scopes.
+function selectRollCandidates(members, scope) {
+  if (!Array.isArray(members)) return [];
+  if (scope === 'all') return members;
+  if (!ROLL_SCOPES.includes(scope)) return [];
+  return members.filter(m => roleGroupForPosition(m.position) === scope);
+}
+
 module.exports = {
   BATTLE_STAT_KEYS,
   STAT_LABELS,
   CATEGORY_LABELS,
+  ROLL_SCOPES,
+  roleGroupForPosition,
+  selectRollCandidates,
   isBattleStat,
   humaniseKey,
   categoriseStatKey,

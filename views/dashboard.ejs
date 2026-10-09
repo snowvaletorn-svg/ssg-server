@@ -1139,11 +1139,11 @@
               <div class="card-header"><span>👥 Select Members</span></div>
               <div class="card-body">
                 <div style="display:flex;gap:1.5rem;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;">
-                  <label style="display:flex;gap:0.4rem;align-items:center;cursor:pointer;">
+                  <label style="display:flex;gap:0.4rem;align-items:center;cursor:pointer;color: #1d88f3;">
                     <input type="radio" name="competition-member-mode" value="all" checked
                       onchange="renderCompetitionMemberPicker()"> All faction members
                   </label>
-                  <label style="display:flex;gap:0.4rem;align-items:center;cursor:pointer;">
+                  <label style="display:flex;gap:0.4rem;align-items:center;cursor:pointer;color: #1d88f3;">
                     <input type="radio" name="competition-member-mode" value="choose"
                       onchange="renderCompetitionMemberPicker()"> Choose members
                   </label>
@@ -1162,11 +1162,56 @@
               <button class="btn btn-outline" onclick="competitionSelectAllStats()">Select all stats</button>
               <button class="btn btn-outline" onclick="competitionClearSelection()">Clear</button>
             </div>
-
             <div id="competition-results">
               <div class="empty-state">
                 <span class="empty-icon">🏆</span>
                 <p>Select stats and members, then click Compare.</p>
+              </div>
+            </div>
+            <!-- Lottery roll (any faction member) ----------------------------------
+            Scope options: All faction members, growth (Team Growth, Recruit),
+            strength (Team Strength, Murder Child), strategy (Team Strategy,
+            Team_Strategy). The roll picks a uniformly random member from the
+            selected role group. Roll is open to any faction member. -->
+            <div class="card" style="margin-bottom:1rem;background:#1a1919;border:1px solid #2a2828;">
+              <div class="card-header"><span style="font-size:large; color: #2ecc71;">🎲 Roll the lottery </span>
+                <span class="muted" style="font-size:0.75rem; color: #2ecc71;">Select a scope, then roll.</span>
+              </div>
+              <div class="card-body">
+                <div style="display:flex;flex-direction:column;gap:0.75rem;">
+                  <div style="display:flex;gap:0.75rem;flex-wrap:wrap;color: #1d88f3;">
+                    <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                      <input type="radio" name="competition-roll-scope" value="all" checked
+                        onchange="renderCompetitionRollPicker()">
+                      All faction members
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                      <input type="radio" name="competition-roll-scope" value="growth"
+                        onchange="renderCompetitionRollPicker()">
+                      Growth
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                      <input type="radio" name="competition-roll-scope" value="strength"
+                        onchange="renderCompetitionRollPicker()">
+                      Strength
+                    </label>
+                    <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;">
+                      <input type="radio" name="competition-roll-scope" value="strategy"
+                        onchange="renderCompetitionRollPicker()">
+                      Strategy
+                    </label>
+                  </div>
+                  <div style="display:flex;gap:0.5rem;align-items:center;">
+                    <button class="btn btn-primary" onclick="competitionRoll()">🎰 Roll</button>
+                    <button class="btn btn-outline btn-small" onclick="clearCompetitionRollResult()">Clear</button>
+                  </div>
+                  <div id="competition-roll-result" style="margin-top:0.5rem;color: #1d88f3;font-size: large;">
+                    <div class="empty-state" style="display:contents;">
+                      <span class="empty-icon">🎰</span>
+                      <p id="competition-roll-message" style="margin:0;">Select a scope and roll.</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

@@ -1222,3 +1222,27 @@
   height: 100%;
   transition: width 0.3s ease;
 }
+
+/* ─── Competition lottery roll ───────────────────────────────────────────────── */
+#competition-roll-result {
+  margin-top: 0.6rem;
+  min-height: 1.4rem;
+  font-size: 0.9rem;
+}
+
+#competition-roll-result .channel-loading,
+#competition-roll-result .channel-error {
+  font-size: 0.85rem;
+}
+
+/* Role tag shown next to the roll winner's name */
+#competition-roll-result .position-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #f0a500;
+  background: #2a2828;
+  border: 1px solid #3a3838;
+  border-radius: 3px;
+  padding: 0 0.3rem;
+  margin-left: 0.2rem;
+}

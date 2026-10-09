@@ -12,7 +12,10 @@ const memberStatSchema = new mongoose.Schema({
   playerName: { type: String, required: true },
   totalStats: { type: Number, required: true },
   timestamp: { type: Date, required: true },
-  personalstats: { type: mongoose.Schema.Types.Mixed, default: undefined }
+  personalstats: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  // Torn faction position at snapshot time (e.g. 'Team Growth', 'Murder Child').
+  // Optional so legacy rows without it still validate.
+  position: { type: String, default: null }
 }, { _id: false });
 
 const dailySnapshotSchema = new mongoose.Schema({

@@ -98,6 +98,9 @@ async function fetchAllMemberStats(concurrency = MEMBER_FETCH_CONCURRENCY) {
       // Full personalstats object (~214 stats) — stored so downstream pages
       // (competition leaderboard, admin drills) never need a second pull.
       personalstats: tornRes.data.personalstats || {},
+      // Faction position (from user basic) — used by the competition lottery
+      // roll as a fallback when the live roster is unreachable.
+      position: tornRes.data.faction?.position || null,
       timestamp: new Date()
     };
   });
