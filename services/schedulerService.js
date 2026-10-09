@@ -198,10 +198,10 @@ function startScheduler() {
     timezone: 'UTC'
   });
 
-  // Daily member stat snapshot: Every day at 06:00 UTC. Feeds the competition
+  // Daily member stat snapshot: Every day at 02:00 UTC. Feeds the competition
   // page (full personalstats per member). Silent — no report/email is sent.
-  const dailySnapshotTask = cron.schedule('0 6 * * *', async () => {
-    console.log('[Scheduler] Daily member stat snapshot triggered — 06:00 UTC');
+  const dailySnapshotTask = cron.schedule('0 2 * * *', async () => {
+    console.log('[Scheduler] Daily member stat snapshot triggered — 02:00 UTC');
     try {
       const result = await takeDailySnapshot('scheduler');
       if (!result.success) {
