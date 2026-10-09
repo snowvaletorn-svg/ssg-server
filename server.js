@@ -266,7 +266,7 @@ const POSITIONS = {
   leadership: ['Leadership'],
   warlord: ['Warlord'],
   strategy: ['Team Strategy', 'Team_Strategy'],
-  strength: ['Team Strength'],
+  strength: ['Team Strength', 'Murder Child'],
   growth: ['Team Growth', 'Recruit'],
 };
 
@@ -907,6 +907,7 @@ app.get('/', async (req, res) => {
             'Team Strategy': 'Strategy',
             'Team_Strategy': 'Strategy',
             'Team Strength': 'Strength',
+            'Murder Child' : 'Strength',
             'Team Growth': 'Growth',
             'Recruit': 'Growth'
           };
@@ -3003,9 +3004,9 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
 
     // Sort members by position, enemies by stats (descending)
     const positionOrder = {
-      'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-      'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Team Growth': 8, 'Recruit': 9
-    };
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+  };
 
     ssgMembers.sort((a, b) => {
       const aO = positionOrder[a.position] ?? 99;
