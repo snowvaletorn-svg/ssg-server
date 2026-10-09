@@ -6661,15 +6661,8 @@ async function loadCompetitionMeta() {
       const d = new Date(data.snapshotDate);
       info.textContent = `Snapshot: ${d.toLocaleDateString()} (${data.source})`;
     }
-    // Default selection: a couple of popular non-battle stats if present
-    if (COMP_SELECTED_STATS.size === 0) {
-      ['attackswon', 'networth', 'useractivity'].forEach(k => {
-        if (data.stats[k]) COMP_SELECTED_STATS.add(k);
-      });
-      if (COMP_SELECTED_STATS.size === 0) {
-        Object.keys(data.stats).slice(0, 3).forEach(k => COMP_SELECTED_STATS.add(k));
-      }
-    }
+    // No default stat selection — the user picks explicitly.
+    COMP_SELECTED_STATS.clear();
     renderCompetitionStatPicker();
     renderCompetitionMemberPicker();
   } catch (err) {
@@ -6766,7 +6759,7 @@ async function runCompetitionCompare() {
     return;
   }
 
-  const mode = document.querySelector('input[name="competition-member-mode"]:checked')?.value || 'all';
+  const mode = document.querySelector('input[name="competition-member-mode"]:checked')?.value;
   let membersParam = 'all';
   if (mode === 'choose') {
     if (COMP_SELECTED_MEMBERS.size === 0) {
@@ -6774,6 +6767,9 @@ async function runCompetitionCompare() {
       return;
     }
     membersParam = Array.from(COMP_SELECTED_MEMBERS).join(',');
+  } else if (!mode) {
+    results.innerHTML = '<div class="channel-error">⚠️ Choose a member scope (All faction members or Choose members).</div>';
+    return;
   }
 
   const statsParam = Array.from(COMP_SELECTED_STATS).join(',');
