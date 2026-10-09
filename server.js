@@ -693,21 +693,6 @@ const isFactionMember = (req, res, next) => {
   next();
 };
 
-// ---- COMPETITION PAGE ACCESS ---------------------------------------------------
-// The competition page (tab + API) is restricted to a single account — Snowvale
-// (Torn ID 3808908) — while it is being rolled out. Access is keyed on the Torn
-// player ID (stable, not spoofable like a display name). Add further IDs here to
-// grant access later.
-const COMPETITION_ACCESS_IDS = [3808908]; // Snowvale
-
-const isCompetitionUser = (req, res, next) => {
-  const id = parseInt(req.session?.userId, 10);
-  if (!COMPETITION_ACCESS_IDS.includes(id)) {
-    return res.status(403).json({ error: 'You do not have access to the competition page yet.' });
-  }
-  next();
-};
-
 // ---- UTILITY LOANING PERMISSION ------------------------------------------------
 // The "Utility Loaning" permission is granted by a faction position whose armory
 // access includes the Utilities (Temporary) category. We detect it by querying
@@ -1280,7 +1265,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
       availableRoles: [],
       isCompaniesAccess: true, // Employees see the Companies nav item (their own company)
       isEmployee: true,
-      canAccessCompetition: false,
       isTestUser: !!req.session.user?.isTestUser,
       isUtilityLoaning: false
     });
@@ -1302,9 +1286,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
   const realIsOwner = hasPositionGroup(req.session.user, 'ownership');
   const isLeadership = ['ownership', 'leadership'].includes(positionGroup);
   const isWarlordRole = ['ownership', 'leadership', 'warlord'].includes(positionGroup);
-
-  // Competition tab visibility: only Snowvale (Torn ID 3808908) during rollout.
-  const canAccessCompetition = COMPETITION_ACCESS_IDS.includes(parseInt(req.session.userId, 10));
 
   // Companies page access: every faction member can view (they see their own
   // companies â-” directed and/or worked at); employees see their logged-in company.
@@ -1335,7 +1316,6 @@ app.get('/dashboard', isAuthenticated, async (req, res) => {
     availableRoles: Object.keys(POSITIONS),
     isCompaniesAccess,
     isEmployee: false,
-    canAccessCompetition,
     isTestUser: false,
     isUtilityLoaning: await isUtilityLoaningUser(req.session.user)
   });
@@ -5062,7 +5042,7 @@ app.get('/api/admin/snapshot/latest/csv', isAuthenticated, isLeadershipOrOwnersh
 // ---- API: Competition meta (stat catalog + member roster) ---------------------
 // Read by the competition page. Battle stats are only present in the catalog
 // for admins (ownership/leadership), so non-admins never even see them offered.
-app.get('/api/competition/meta', isAuthenticated, isFactionMember, isCompetitionUser, async (req, res) => {
+app.get('/api/competition/meta', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const result = await getLatestCompetitionSnapshot();
     if (!result || !result.snapshot) {
@@ -5101,7 +5081,7 @@ app.get('/api/competition/meta', isAuthenticated, isFactionMember, isCompetition
 // ---- API: Competition data (stats for selected members) -----------------------
 // Reads the stored snapshot only — no Torn API calls on page load.
 // Query: stats=comma,separated,keys   members=all | comma,separated,ids
-app.get('/api/competition/data', isAuthenticated, isFactionMember, isCompetitionUser, async (req, res) => {
+app.get('/api/competition/data', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const result = await getLatestCompetitionSnapshot();
     if (!result || !result.snapshot) {

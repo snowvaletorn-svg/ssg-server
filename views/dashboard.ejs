@@ -66,9 +66,7 @@
             <a href="#war" class="nav-item" onclick="showSection('war', this)">🪖 War</a>
             <% } %>
             <a href="#stocks" class="nav-item" onclick="showSection('stocks', this)">📈 Stocks</a>
-            <% if (canAccessCompetition) { %>
-              <a href="#competition" class="nav-item" onclick="showSection('competition', this)">🏆 Competition</a>
-            <% } %>
+            <a href="#competition" class="nav-item" onclick="showSection('competition', this)">🏆 Competition</a>
             <% if (!isEmployee) { %>
             <a href="#oc" class="nav-item" onclick="showSection('oc', this)">🗝️ OC Tracking</a>
             <% } %>
@@ -1110,8 +1108,7 @@
 
 
 
-          <!-- 🏆 COMPETITION (restricted to Snowvale during rollout) -->
-          <!--<% if (canAccessCompetition) { %>-->
+          <!-- 🏆 COMPETITION -->
           <section id="competition" class="section">
             <div class="section-header">
               <h3>🏆 Faction Competition</h3>
@@ -1173,7 +1170,6 @@
               </div>
             </div>
           </section>
-          <!-- <% } %> -->
 
           <!-- ── COMPANIES ── -->
           <section id="companies" class="section">
