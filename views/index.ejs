@@ -88,28 +88,57 @@
           </div>
 
           <h2 style="text-align: center; margin-top: 40px;">Faction Perks</h2>
-          <div class="perks-grid">
-            <div class="perks-card" style="padding: 15px;">
-              <h4>Weapons</h4>
-              <p>Provided by faction</p>
+          <% if (typeof perks !== 'undefined' && perks && perks.cards && perks.cards.length) { %>
+            <p style="text-align: center; color: #888; font-size: 0.9rem; margin-top: 0.5rem;">
+              Automatically updated from Torn &mdash; showing the <%= perks.stateLabel.toLowerCase() %> upgrade tree.
+            </p>
+            <div class="perks-grid">
+              <% perks.cards.forEach(function (card) { %>
+                <div class="perks-card" style="padding: 15px;">
+                  <h4>
+                    <%= card.name %>
+                  </h4>
+                  <ul class="perks-list">
+                    <% card.upgrades.forEach(function (upgrade) { %>
+                      <li class="perks-item">
+                        <strong>
+                          <%= upgrade.name %>
+                        </strong>
+                        <% if (upgrade.ability) { %>
+                          <span class="perks-ability">
+                            <%= upgrade.ability %>
+                          </span>
+                          <% } %>
+                      </li>
+                      <% }) %>
+                  </ul>
+                </div>
+                <% }) %>
             </div>
-            <div class="perks-card" style="padding: 15px;">
-              <h4>Armor</h4>
-              <p>Provided by faction</p>
-            </div>
-            <div class="perks-card" style="padding: 15px;">
-              <h4>Medical</h4>
-              <p>Kits, morphine, and blood</p>
-            </div>
-            <div class="perks-card" style="padding: 15px;">
-              <h4>Drugs</h4>
-              <p>Xanax & Vicodin for war</p>
-            </div>
-            <div class="perks-card" style="padding: 15px;">
-              <h4>Travel</h4>
-              <p>+7 items, 15% cost reduction</p>
-            </div>
-          </div>
+            <% } else { %>
+              <div class="perks-grid">
+                <div class="perks-card" style="padding: 15px;">
+                  <h4>Weapons</h4>
+                  <p>Provided by faction</p>
+                </div>
+                <div class="perks-card" style="padding: 15px;">
+                  <h4>Armor</h4>
+                  <p>Provided by faction</p>
+                </div>
+                <div class="perks-card" style="padding: 15px;">
+                  <h4>Medical</h4>
+                  <p>Kits, morphine, and blood</p>
+                </div>
+                <div class="perks-card" style="padding: 15px;">
+                  <h4>Drugs</h4>
+                  <p>Xanax & Vicodin for war</p>
+                </div>
+                <div class="perks-card" style="padding: 15px;">
+                  <h4>Travel</h4>
+                  <p>+7 items, 15% cost reduction</p>
+                </div>
+              </div>
+              <% } %>
 
           <div class="stat-card" style="margin-top: 40px; text-align: left; border-top: 4px solid var(--growth-color);">
             <h2 style="margin-top: 0;">What we expect from you:</h2>

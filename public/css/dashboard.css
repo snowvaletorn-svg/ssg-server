@@ -1246,3 +1246,129 @@
   padding: 0 0.3rem;
   margin-left: 0.2rem;
 }
+
+/* ── Stat Goals ("road to X") ─────────────────────────────────────────────── */
+.goal-form {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.goal-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 150px;
+}
+
+.goal-form-field label {
+  font-size: 0.7rem;
+  color: #888;
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.goal-form .form-input {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 6px;
+  color: #c0bcbc;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.9rem;
+}
+
+.goal-form-msg {
+  min-height: 1.1rem;
+  font-size: 0.82rem;
+  color: #888;
+  margin-bottom: 0.35rem;
+}
+
+.goal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.goal-row {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+}
+
+.goal-row-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.goal-stat-name {
+  color: #c0bcbc;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
+.goal-nums {
+  color: #888;
+  font-size: 0.82rem;
+  margin-left: auto;
+}
+
+.goal-delete {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+}
+
+.goal-progress {
+  background: #0d0d0d;
+  border: 1px solid #2a2828;
+  border-radius: 4px;
+  height: 10px;
+  margin-top: 0.5rem;
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  background: linear-gradient(90deg, #f0a500, #c07f00);
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.goal-row-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin-top: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.goal-percent {
+  color: #f0a500;
+  font-weight: 600;
+}
+
+.goal-pace {
+  border-radius: 4px;
+  padding: 0.05rem 0.45rem;
+  font-size: 0.74rem;
+  border: 1px solid transparent;
+}
+
+.goal-pace-done   { color: #4caf50; border-color: #2e5c34; background: #142417; }
+.goal-pace-on     { color: #4caf50; border-color: #2e5c34; background: #142417; }
+.goal-pace-off    { color: #e67e22; border-color: #5c3e1c; background: #241a10; }
+.goal-pace-overdue { color: #ff4444; border-color: #5c1c1c; background: #241010; }
+.goal-pace-unknown { color: #888; border-color: #2a2828; background: #1a1919; }
+
+.goal-detail {
+  color: #666;
+  font-size: 0.74rem;
+  margin-left: auto;
+}

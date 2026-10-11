@@ -149,6 +149,30 @@ h4 {
   margin-top: 2rem;
 }
 
+.perks-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.perks-item {
+  margin-bottom: 0.6rem;
+  font-size: 0.9rem;
+}
+
+.perks-item strong {
+  display: block;
+  color: var(--black);
+}
+
+.perks-ability {
+  display: block;
+  color: #666;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  margin-top: 0.15rem;
+}
+
 .perks-card {
   height: 100%;
   /* Ensures the card fills the entire grid cell height */

@@ -200,7 +200,7 @@ function showSection(sectionId, el) {
   window.location.hash = sectionId;
 
   if (sectionId === 'my-day') { fetchMyDay(); }
-  if (sectionId === 'torn') { fetchTornUser(); }
+  if (sectionId === 'torn') { fetchTornUser(); fetchStatGoals(); }
   if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
@@ -218,9 +218,19 @@ async function fetchMyDay() {
   const container = document.getElementById('my-day-data');
   container.innerHTML = '<div class="channel-loading">LOADING YOUR DAY...</div>';
   try {
-    const res = await fetch('/api/my-day');
+    // Stat goals load in parallel — non-fatal if they fail.
+    const [res, goalsRes] = await Promise.all([
+      fetch('/api/my-day'),
+      fetch('/api/user/stat-goals').catch(() => null)
+    ]);
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    try {
+      const goalsData = goalsRes && goalsRes.ok ? await goalsRes.json() : null;
+      data.statGoals = goalsData?.goals || [];
+    } catch (e) {
+      data.statGoals = [];
+    }
     // Load the list of available Utilities armory items for the request dropdown (non-fatal)
     try {
       const itemsRes = await fetch('/api/utilities/available');
@@ -355,6 +365,20 @@ function renderMyDay(d) {
           <div class="myday-card-value">vs ${d.war.enemy}</div>
           <div class="myday-card-detail">Started: ${startDate}</div>
           <div class="myday-card-action"><a href="#war" onclick="showSection('war', document.querySelector('.nav-item[href=\\'#war\\']'))" class="btn btn-primary btn-small">View War Panel</a></div>
+        </div>
+      </div>
+    `);
+  }
+
+  // ── Stat Goals ("road to X") ──
+  if (d.statGoals && d.statGoals.length) {
+    cards.push(`
+      <div class="myday-card myday-info">
+        <div class="myday-card-icon">🎯</div>
+        <div class="myday-card-body" style="flex:1 1 100%;">
+          <div class="myday-card-title">Stat Goals</div>
+          <div class="goal-list">${d.statGoals.map(g => goalRowHtml(g, false)).join('')}</div>
+          <div class="myday-card-hint"><a href="#torn" onclick="showSection('torn', document.querySelector('.nav-item[href=\\'#torn\\']'))" style="color:#4a90e2;">Edit goals →</a></div>
         </div>
       </div>
     `);
@@ -761,6 +785,8 @@ async function refreshStatsSnapshot() {
     const data = await userRes.json();
     if (!userRes.ok) { return; }
     container.innerHTML = renderTornUser(data, cachedSnapshotData);
+    // New snapshot = new current values — refresh the goals panel too.
+    fetchStatGoals();
   } catch (err) {
     console.error('Stats refresh error:', err.message);
   }
@@ -954,6 +980,164 @@ function copyStatIncrease() {
     console.error('Failed to copy:', err);
   });
 }
+// ── Stat Goals ("road to X") ─────────────────────────────────────────────────
+let statGoalsCache = null;
+
+const GOAL_STAT_META = {
+  strength:   { label: 'Strength',   emoji: '💪' },
+  defense:    { label: 'Defense',    emoji: '🛡️' },
+  speed:      { label: 'Speed',      emoji: '⚡' },
+  dexterity:  { label: 'Dexterity',  emoji: '🌀' },
+  totalStats: { label: 'Total Stats', emoji: '📊' }
+};
+
+// Compact Torn-style number formatting: 100000000 -> "100m"
+function goalCompact(n) {
+  if (n == null) return '—';
+  const units = [[1e9, 'b'], [1e6, 'm'], [1e3, 'k']];
+  for (const [div, suffix] of units) {
+    if (n >= div) {
+      const v = n / div;
+      return (Number.isInteger(v) ? v : Math.round(v * 100) / 100) + suffix;
+    }
+  }
+  return Number(n).toLocaleString();
+}
+
+async function fetchStatGoals() {
+  const container = document.getElementById('stat-goals-data');
+  if (!container) return;
+  container.innerHTML = '<div class="channel-loading">LOADING GOALS...</div>';
+  try {
+    const res = await fetch('/api/user/stat-goals');
+    const data = await res.json();
+    if (!res.ok) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error || 'Failed to load goals.')}</div>`;
+      return;
+    }
+    statGoalsCache = data;
+    container.innerHTML = renderStatGoals(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function goalPaceBadge(g) {
+  if (g.complete) return '<span class="goal-pace goal-pace-done">✅ Target reached</span>';
+  if (g.pace === 'overdue') return '<span class="goal-pace goal-pace-overdue">🔴 Overdue</span>';
+  if (g.pace === 'unknown') return '<span class="goal-pace goal-pace-unknown">⏳ Need more snapshots</span>';
+  if (g.pace === 'on') {
+    const ahead = g.daysOff != null ? Math.abs(g.daysOff) : null;
+    return `<span class="goal-pace goal-pace-on">🟢 On pace${ahead != null ? ` (${ahead}d ahead)` : ''}</span>`;
+  }
+  if (g.pace === 'off') return `<span class="goal-pace goal-pace-off">🟠 Behind (${g.daysOff}d off)</span>`;
+  return '';
+}
+
+function goalRowHtml(g, showDelete) {
+  const meta = GOAL_STAT_META[g.stat] || { label: g.stat, emoji: '🎯' };
+  const details = [];
+  if (g.etaDate) details.push(`ETA ${new Date(g.etaDate).toLocaleDateString()}`);
+  if (g.targetDate) details.push(`Due ${new Date(g.targetDate).toLocaleDateString()}`);
+  if (g.ratePerDay > 0) details.push(`+${goalCompact(Math.round(g.ratePerDay))}/day`);
+  return `
+    <div class="goal-row">
+      <div class="goal-row-head">
+        <span class="goal-stat-name">${meta.emoji} ${meta.label}</span>
+        <span class="goal-nums">${goalCompact(g.current)} → ${goalCompact(g.target)}</span>
+        ${showDelete ? `<button class="btn btn-small btn-outline goal-delete" title="Delete goal" onclick="deleteStatGoal('${g._id}')">🗑</button>` : ''}
+      </div>
+      <div class="goal-progress"><div class="goal-progress-fill" style="width:${Math.min(g.percent, 100)}%"></div></div>
+      <div class="goal-row-foot">
+        <span class="goal-percent">${g.percent}%</span>
+        ${goalPaceBadge(g)}
+        ${details.length ? `<span class="goal-detail">${details.join(' · ')}</span>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderStatGoals(data) {
+  const catalog = data.catalog || GOAL_STAT_META;
+  const goals = data.goals || [];
+  const maxGoals = data.maxGoals || 10;
+  const atLimit = goals.length >= maxGoals;
+  const options = Object.entries(catalog)
+    .map(([k, v]) => `<option value="${k}">${v.emoji || ''} ${v.label}</option>`)
+    .join('');
+  const listHtml = goals.length
+    ? goals.map(g => goalRowHtml(g, true)).join('')
+    : '<p class="muted" style="margin:0.5rem 0 0;">No goals yet — set your first "road to X" target above.</p>';
+
+  return `
+    <div class="card" style="background:#1a1919;border:1px solid #2a2828;">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+        <span>🎯 My Goals</span>
+        <span style="font-size:0.8rem;color:#888;">${goals.length}/${maxGoals} saved${data.snapshotAt ? ` · snapshot ${new Date(data.snapshotAt).toLocaleDateString()}` : ''}</span>
+      </div>
+      <div class="card-body">
+        <div class="goal-form">
+          <div class="goal-form-field">
+            <label for="goal-stat">Stat</label>
+            <select id="goal-stat" class="channel-dropdown">${options}</select>
+          </div>
+          <div class="goal-form-field">
+            <label for="goal-target">Target (e.g. 100m)</label>
+            <input id="goal-target" type="text" class="form-input" placeholder="100m" autocomplete="off">
+          </div>
+          <div class="goal-form-field">
+            <label for="goal-date">Target date (optional)</label>
+            <input id="goal-date" type="date" class="form-input">
+          </div>
+          <button class="btn btn-primary" onclick="addStatGoal()" ${atLimit ? 'disabled' : ''}>＋ Add Goal</button>
+        </div>
+        <div id="goal-form-msg" class="goal-form-msg"></div>
+        <div class="goal-list">${listHtml}</div>
+      </div>
+    </div>`;
+}
+
+async function addStatGoal() {
+  const statEl = document.getElementById('goal-stat');
+  const targetEl = document.getElementById('goal-target');
+  const dateEl = document.getElementById('goal-date');
+  const msgEl = document.getElementById('goal-form-msg');
+  if (!msgEl) return;
+  const target = (targetEl?.value || '').trim();
+  if (!target) { msgEl.innerHTML = '⚠️ Enter a target value.'; return; }
+
+  msgEl.innerHTML = 'Saving…';
+  try {
+    const res = await fetch('/api/user/stat-goals', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stat: statEl.value, target, targetDate: dateEl?.value || null })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      msgEl.innerHTML = `⚠️ ${escapeHtml(data.error || 'Failed to save goal.')}`;
+      return;
+    }
+    if (targetEl) targetEl.value = '';
+    if (dateEl) dateEl.value = '';
+    msgEl.innerHTML = '✅ Goal saved!';
+    fetchStatGoals();
+  } catch (err) {
+    msgEl.innerHTML = `⚠️ ${escapeHtml(err.message)}`;
+  }
+}
+
+async function deleteStatGoal(goalId) {
+  if (!confirm('Delete this goal?')) return;
+  try {
+    const res = await fetch(`/api/user/stat-goals/${goalId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Failed to delete goal.'); return; }
+    fetchStatGoals();
+  } catch (err) {
+    alert('Failed to delete goal: ' + err.message);
+  }
+}
+
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
 async function fetchHonors() {
   const container = document.getElementById('honors-data');
@@ -3490,6 +3674,38 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Review your overall performance, track breakdown, car performance, and crash history</div></div>
           <div class="help-callout">💡 Data includes win rates, average positions, best lap times, and crash analysis.</div>
           <div class="help-callout">⚡ Lazy Loading: Racing stats load on-demand to reduce API calls and improve performance.</div>
+        `
+      }
+    ]
+  },
+  statGoals: {
+    title: '🎯 Stat Goals',
+    sections: [
+      {
+        heading: 'Setting a Goal',
+        content: `
+          <p class="help-text">Stat Goals let you pick a target for Strength, Defense, Speed, Dexterity, or Total Stats and track your progress toward it — your "road to X".</p>
+          <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text">Pick the stat from the dropdown</div></div>
+          <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text">Enter your target — plain numbers or Torn-style shortcuts like <strong style="color:#c0bcbc;">100m</strong>, <strong style="color:#c0bcbc;">1.5b</strong>, <strong style="color:#c0bcbc;">500k</strong> all work</div></div>
+          <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text">Optionally set a target date to see whether you're on pace</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text">Click <strong style="color:#c0bcbc;">Add Goal</strong> — your goals are saved for future plans</div></div>
+        `
+      },
+      {
+        heading: 'Reading Your Progress',
+        content: `
+          <p class="help-text">Each goal shows your current value, target, and a progress bar. A projected <strong style="color:#c0bcbc;">ETA</strong> is calculated from your stat growth between snapshots.</p>
+          <div class="help-callout success">🟢 On pace — you're projected to hit your target before the date.</div>
+          <div class="help-callout warning">🟠 Behind — you're projected to miss the date; the badge shows how many days off you are.</div>
+          <div class="help-callout warning">🔴 Overdue — the target date passed before the goal was reached.</div>
+          <div class="help-callout">💡 No date set? You'll get an ETA based purely on your growth rate.</div>
+        `
+      },
+      {
+        heading: 'How ETA is Calculated',
+        content: `
+          <p class="help-text">The server compares your snapshots (taken when you click Refresh Stats, or automatically once a day) to work out your average daily growth, then projects forward from there.</p>
+          <div class="help-callout">💡 Snapshot at least twice for ETAs to appear. The more often you snapshot, the more accurate the projection.</div>
         `
       }
     ]

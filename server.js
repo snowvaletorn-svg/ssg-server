@@ -32,6 +32,7 @@ const {
 const { sendEmail } = require('./services/emailService');
 const { encrypt, decrypt, isEncrypted } = require('./services/keyCipher');
 const { checkKeySufficient } = require('./services/tornKeyInfo');
+const { fetchFactionPerks } = require('./services/factionPerksService');
 const { logAudit } = require('./models/AuditLog');
 const { decryptOrRaw } = require('./services/keyCipher');
 // Registers global axios timeout + transient-failure retry (GET only)
@@ -41,6 +42,13 @@ const Announcement = require('./models/Announcement');
 const StockObservation = require('./models/StockObservation');
 const OrganizedCrime = require('./models/OrganizedCrime');
 const UserStatSnapshot = require('./models/UserStatSnapshot');
+const StatGoal = require('./models/StatGoal');
+const {
+  VALID_STATS: STAT_GOAL_STATS,
+  parseStatInput: parseGoalStatInput,
+  computeGrowthRates: computeGoalGrowthRates,
+  computeAllGoalStatuses: computeAllStatGoalStatuses
+} = require('./services/statGoalService');
 const { startScheduler } = require('./services/schedulerService');
 const {
   takeDailySnapshot,
@@ -945,10 +953,16 @@ app.get('/', async (req, res) => {
     // Fall back gracefully to static data when API fails
   }
 
+  // Faction perk tree for the "Faction Perks" section. Cached inside the
+  // service; returns null on failure so the view can fall back to the
+  // hand-written cards.
+  const perks = await fetchFactionPerks();
+
   res.render('index', {
     user: req.session.user || null,
     faction: { ...factionData.faction, memberCount: totalMembers },
-    groups: liveGroups.filter(g => g.name.toLowerCase() !== 'warlord')
+    groups: liveGroups.filter(g => g.name.toLowerCase() !== 'warlord'),
+    perks
   });
 });
 
@@ -1801,6 +1815,144 @@ app.get('/api/user/stats/last-increase', isAuthenticated, async (req, res) => {
     res.json({ current, previous, diff });
   } catch (err) {
     console.error('Last increase error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Stat Goals — list with live status ---------------------------------
+// Returns the member's saved goals with current values, growth-based ETA and
+// pace. Non-fatally refreshes the stat snapshot if it is >24h old so progress
+// stays accurate without the member clicking "Refresh Stats" first.
+app.get('/api/user/stat-goals', isAuthenticated, async (req, res) => {
+  try {
+    const playerId = req.session.userId;
+    const [goalDoc, dbUser] = await Promise.all([
+      StatGoal.findOne({ tornPlayerId: playerId }).lean(),
+      User.findOne({ tornPlayerId: playerId })
+    ]);
+
+    let latest = await UserStatSnapshot.findOne({ tornPlayerId: playerId })
+      .sort({ timestamp: -1 })
+      .lean();
+
+    // Snapshot freshness: take a new one if missing/stale and a key exists.
+    const snapshotAgeMs = latest ? Date.now() - new Date(latest.timestamp).getTime() : Infinity;
+    if (dbUser?.tornApiKey && snapshotAgeMs > 24 * 60 * 60 * 1000) {
+      try {
+        const tornRes = await axios.get(
+          `https://api.torn.com/user/?selections=personalstats&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`,
+          { timeout: 10000 }
+        );
+        if (!tornRes.data.error) {
+          const ps = tornRes.data.personalstats || {};
+          const fresh = await UserStatSnapshot.create({
+            tornPlayerId: playerId,
+            strength: ps.strength || 0,
+            defense: ps.defense || 0,
+            speed: ps.speed || 0,
+            dexterity: ps.dexterity || 0,
+            totalStats: ps.totalstats || 0
+          });
+          latest = fresh.toObject();
+        }
+      } catch (refreshErr) {
+        // Non-fatal: fall back to whatever snapshot we already have.
+        console.error('Stat goals: snapshot refresh failed (non-fatal):', refreshErr.message);
+      }
+    }
+
+    const currentStats = latest
+      ? { strength: latest.strength, defense: latest.defense, speed: latest.speed,
+          dexterity: latest.dexterity, totalStats: latest.totalStats }
+      : null;
+
+    // Growth rates from recent history (last 12 snapshots is plenty).
+    const history = await UserStatSnapshot.find({ tornPlayerId: playerId })
+      .sort({ timestamp: -1 })
+      .limit(12)
+      .lean();
+    const rates = computeGoalGrowthRates(history);
+
+    const goals = computeAllStatGoalStatuses(goalDoc?.goals || [], currentStats, rates);
+
+    res.json({
+      goals,
+      current: currentStats,
+      snapshotAt: latest?.timestamp || null,
+      catalog: STAT_GOAL_STATS,
+      maxGoals: 10
+    });
+  } catch (err) {
+    console.error('Stat goals list error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Stat Goals — create a goal -----------------------------------------
+app.post('/api/user/stat-goals', isAuthenticated, async (req, res) => {
+  try {
+    const playerId = req.session.userId;
+    const { stat, target, targetDate } = req.body || {};
+
+    if (!stat || !STAT_GOAL_STATS[stat]) {
+      return res.status(400).json({ error: 'Invalid stat. Choose strength, defense, speed, dexterity or totalStats.' });
+    }
+
+    const targetValue = typeof target === 'number' ? Math.round(target) : parseGoalStatInput(target);
+    if (!targetValue || targetValue < 1) {
+      return res.status(400).json({ error: 'Invalid target. Use a positive number (e.g. 100m).' });
+    }
+
+    let parsedDate = null;
+    if (targetDate) {
+      parsedDate = new Date(targetDate);
+      if (isNaN(parsedDate.getTime())) {
+        return res.status(400).json({ error: 'Invalid target date.' });
+      }
+      if (parsedDate.getTime() <= Date.now()) {
+        return res.status(400).json({ error: 'Target date must be in the future.' });
+      }
+    }
+
+    const existing = await StatGoal.findOne({ tornPlayerId: playerId });
+    if (existing && (existing.goals?.length || 0) >= 10) {
+      return res.status(400).json({ error: 'Goal limit reached (10). Delete an old goal first.' });
+    }
+
+    // Record the starting value from the latest snapshot (0 when none yet).
+    const latest = await UserStatSnapshot.findOne({ tornPlayerId: playerId })
+      .sort({ timestamp: -1 })
+      .lean();
+    const startValue = latest ? (Number(latest[stat]) || 0) : 0;
+
+    const newGoal = { stat, targetValue, targetDate: parsedDate, startValue, createdAt: new Date() };
+
+    const doc = await StatGoal.findOneAndUpdate(
+      { tornPlayerId: playerId },
+      { $push: { goals: newGoal }, $set: { updatedAt: new Date() } },
+      { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true }
+    ).lean();
+
+    const created = doc.goals[doc.goals.length - 1];
+    res.json({ success: true, goalId: created._id, total: doc.goals.length });
+  } catch (err) {
+    console.error('Stat goal create error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Stat Goals — delete one goal ---------------------------------------
+app.delete('/api/user/stat-goals/:goalId', isAuthenticated, async (req, res) => {
+  try {
+    const result = await StatGoal.findOneAndUpdate(
+      { tornPlayerId: req.session.userId },
+      { $pull: { goals: { _id: req.params.goalId } }, $set: { updatedAt: new Date() } },
+      { returnDocument: 'after' }
+    );
+    if (!result) return res.status(404).json({ error: 'No goals found.' });
+    res.json({ success: true, total: result.goals.length });
+  } catch (err) {
+    console.error('Stat goal delete error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
