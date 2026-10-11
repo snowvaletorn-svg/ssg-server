@@ -5216,6 +5216,18 @@ function renderCrimes() {
   container.innerHTML = crimes.map(crime => renderCrimeCard(crime)).join('');
 }
 
+// ─── Format canonical OC definition payout as a compact string ─────────────────
+function formatDefinitionPayout(def) {
+  if (!def) return '';
+  const cash = def.maxCash != null
+    ? `$${(def.minCash || 0).toLocaleString()}–$${(def.maxCash || 0).toLocaleString()}`
+    : '';
+  const respect = def.maxRespect != null
+    ? `${def.minRespect || 0}–${def.maxRespect} respect`
+    : '';
+  return [cash, respect].filter(Boolean).join(' · ') || '';
+}
+
 // ─── Render Single Crime Card ──────────────────────────────────────────────────
 function renderCrimeCard(crime) {
   const statusIcon = {
@@ -5279,6 +5291,9 @@ function renderCrimeCard(crime) {
           ${timeLeft ? infoBadge('Time Left', timeLeft) : ''}
           ${crime.moneyGain ? infoBadge('Money', '$' + crime.moneyGain.toLocaleString()) : ''}
           ${crime.respectGain ? infoBadge('Respect', '+' + crime.respectGain.toLocaleString()) : ''}
+          ${crime.definition && formatDefinitionPayout(crime.definition) ? infoBadge('Payout', formatDefinitionPayout(crime.definition)) : ''}
+          ${crime.definition && crime.definition.timeHours ? infoBadge('Prep', crime.definition.timeHours + 'h') : ''}
+          ${crime.definition && crime.definition.members ? infoBadge('Slots', crime.definition.members) : ''}
         </div>
         
         <div style="margin-top:1rem;">
@@ -5366,6 +5381,9 @@ async function showCrimeDetails(crimeId) {
           ${infoBadge('Completed', crime.timeCompleted ? new Date(crime.timeCompleted).toLocaleString() : 'Pending')}
           ${crime.moneyGain ? infoBadge('Money', '$' + crime.moneyGain.toLocaleString()) : ''}
           ${crime.respectGain ? infoBadge('Respect', '+' + crime.respectGain.toLocaleString()) : ''}
+          ${crime.definition && formatDefinitionPayout(crime.definition) ? infoBadge('Payout', formatDefinitionPayout(crime.definition)) : ''}
+          ${crime.definition && crime.definition.timeHours ? infoBadge('Prep', crime.definition.timeHours + 'h') : ''}
+          ${crime.definition && crime.definition.members ? infoBadge('Slots', crime.definition.members) : ''}
           ${infoBadge('Participants', crime.participants.length)}
           ${crime.averagePassRate !== undefined ? infoBadge('Avg Pass Rate', crime.averagePassRate + '%') : ''}
         </div>

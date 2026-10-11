@@ -78,6 +78,7 @@ function transformCrimeData(apiCrime, factionId = 53272) {
           }
         }
         
+        const passRate = typeof slot.checkpoint_pass_rate === 'number' ? slot.checkpoint_pass_rate : null;
         participants.push({
           playerId: slot.user.id,
           playerName: '', // Will be enriched later from faction members
@@ -92,8 +93,8 @@ function transformCrimeData(apiCrime, factionId = 53272) {
             state: 'Okay',
             until: null
           },
-          checkpointPassRate: slot.checkpoint_pass_rate || null, // From API (auto-populated)
-          checkpointStatus: slot.checkpoint_pass_rate >= 50 ? 'passed' : (slot.checkpoint_pass_rate ? 'failed' : 'pending')
+          checkpointPassRate: passRate, // From API (auto-populated); 0 is a real rate, not "missing"
+          checkpointStatus: passRate === null ? 'pending' : (passRate >= 50 ? 'passed' : 'failed')
         });
       }
     });
@@ -254,6 +255,144 @@ async function fetchFactionCrimes(startDate = null) {
   }
 }
 
+// ---- Canonical OC definitions + item catalog (read-time enrichment) ------------
+// The v2 faction crimes payload doesn't say how long a crime takes to prepare,
+// how many slots it needs, or what it can pay. The public torn/organisedcrimes
+// selection has that canonical data, so we attach it at read time (definitions
+// change rarely; cached in memory for 24h).
+const DEFINITIONS_CACHE_MS = 24 * 60 * 60 * 1000;
+const ITEM_MAP_CACHE_MS = 24 * 60 * 60 * 1000;
+let _definitionsCache = { data: null, fetchedAt: 0 };
+let _itemNameCache = { data: null, fetchedAt: 0 };
+
+async function fetchCrimeDefinitions() {
+  const now = Date.now();
+  if (_definitionsCache.data && now - _definitionsCache.fetchedAt < DEFINITIONS_CACHE_MS) {
+    return _definitionsCache.data;
+  }
+  const key = await getFactionApiKey();
+  if (!key) return _definitionsCache.data || null;
+  try {
+    const res = await axios.get(
+      `https://api.torn.com/torn/?selections=organisedcrimes&key=${encodeURIComponent(key)}`
+    );
+    if (res.data.error) throw new Error(res.data.error.error);
+    const defs = res.data.organisedcrimes || {};
+    _definitionsCache = { data: defs, fetchedAt: now };
+    return defs;
+  } catch (err) {
+    console.error('Error fetching organised crime definitions:', err.message);
+    return _definitionsCache.data || null; // stale-if-error
+  }
+}
+
+// Pure: index definitions by lowercased crime name for lookup.
+function indexDefinitionsByName(defs) {
+  const byName = {};
+  Object.values(defs || {}).forEach(def => {
+    if (def && def.name) byName[def.name.toLowerCase()] = def;
+  });
+  return byName;
+}
+
+// Pure: attach canonical definition info to a plain crime object (matched by name).
+function applyDefinition(crime, defsByName) {
+  const def = defsByName[(crime.crimeName || '').toLowerCase()];
+  if (!def) return crime;
+  crime.definition = {
+    timeHours: def.time ?? null,
+    members: def.members ?? null,
+    minCash: def.min_cash ?? null,
+    maxCash: def.max_cash ?? null,
+    minRespect: def.min_respect ?? null,
+    maxRespect: def.max_respect ?? null
+  };
+  return crime;
+}
+
+// The v2 API gives tool requirements as bare item IDs. Resolve display names
+// from the torn/items catalog (public selection, cached for 24h).
+async function fetchItemNameMap() {
+  const now = Date.now();
+  if (_itemNameCache.data && now - _itemNameCache.fetchedAt < ITEM_MAP_CACHE_MS) {
+    return _itemNameCache.data;
+  }
+  const key = await getFactionApiKey();
+  if (!key) return _itemNameCache.data || null;
+  try {
+    const res = await axios.get(
+      `https://api.torn.com/torn/?selections=items&key=${encodeURIComponent(key)}`
+    );
+    if (res.data.error) throw new Error(res.data.error.error);
+    const map = buildItemNameMap(res.data.items);
+    _itemNameCache = { data: map, fetchedAt: now };
+    return map;
+  } catch (err) {
+    console.error('Error fetching item catalog for OC tool names:', err.message);
+    return _itemNameCache.data || null; // stale-if-error
+  }
+}
+
+// Pure: { '<itemId>': 'Item Name' } from a torn/items response body.
+function buildItemNameMap(items) {
+  const map = {};
+  Object.entries(items || {}).forEach(([id, item]) => {
+    if (item && item.name) map[String(id)] = item.name;
+  });
+  return map;
+}
+
+// Pure: fill in participant tool names from exact item IDs when known.
+// Slots with no item requirement show 'None' instead of the old 'N/A'.
+// (Display-only — the DB keeps 'N/A' so My Day's `tool !== 'N/A'` gate keeps
+// working; use resolveToolNamesForStorage for writes.)
+function resolveToolNames(participants, itemNameMap) {
+  (participants || []).forEach(p => {
+    if (p.toolId != null) {
+      const itemName = itemNameMap && itemNameMap[String(p.toolId)];
+      if (itemName) p.tool = itemName;
+    } else if (!p.tool || p.tool === 'N/A') {
+      p.tool = 'None';
+    }
+  });
+  return participants;
+}
+
+// Pure: persist-time variant of resolveToolNames. Overwrites the static
+// ROLE_TOOLS guess with the exact catalog name when the item ID is known,
+// but keeps 'N/A' for slots without an item requirement — My Day and the
+// utilities loan view gate on that exact stored value.
+function resolveToolNamesForStorage(participants, itemNameMap) {
+  (participants || []).forEach(p => {
+    if (p.toolId != null) {
+      const itemName = itemNameMap && itemNameMap[String(p.toolId)];
+      if (itemName) p.tool = itemName;
+    }
+  });
+  return participants;
+}
+
+// Read-time enrichment: canonical definition + accurate tool names + stats.
+async function enrichCrimesWithMetadata(crimes) {
+  const [defs, itemNameMap] = await Promise.all([
+    fetchCrimeDefinitions(),
+    fetchItemNameMap()
+  ]);
+  const defsByName = indexDefinitionsByName(defs);
+
+  return crimes.map(crime => {
+    const obj = crime.toObject ? crime.toObject() : { ...crime };
+    resolveToolNames(obj.participants, itemNameMap);
+    applyDefinition(obj, defsByName);
+    const avgPassRate = OrganizedCrime.calculateAveragePassRate(obj.participants);
+    return {
+      ...obj,
+      averagePassRate: avgPassRate,
+      participantCount: obj.participants.length
+    };
+  });
+}
+
 // Update or create crimes in database
 async function updateCrimesInDatabase(apiCrimes, factionId = 53272) {
   const results = {
@@ -262,9 +401,16 @@ async function updateCrimesInDatabase(apiCrimes, factionId = 53272) {
     errors: []
   };
 
+  // Resolve exact tool names from the item catalog once per refresh
+  // (24h-cached). Falls back to the static ROLE_TOOLS names on failure.
+  const itemNameMap = await fetchItemNameMap();
+
   for (const [crimeId, apiCrime] of Object.entries(apiCrimes)) {
     try {
       const crimeData = transformCrimeData(apiCrime, factionId);
+      // Persist catalog-exact tool names so every consumer (My Day,
+      // utilities loans, OC page) reads accurate names from the DB.
+      resolveToolNamesForStorage(crimeData.participants, itemNameMap);
       const enrichedData = await enrichParticipantsWithFactionData(crimeData);
 
       // Check if crime already exists
@@ -321,18 +467,9 @@ async function refreshFactionCrimes(startDate = null) {
 async function getCrimesForFaction(factionId, filters = {}) {
   try {
     const crimes = await OrganizedCrime.getCrimesForFaction(factionId, filters);
-    
-    // Calculate average pass rate for each crime
-    const crimesWithStats = crimes.map(crime => {
-      const avgPassRate = OrganizedCrime.calculateAveragePassRate(crime.participants);
-      return {
-        ...crime.toObject(),
-        averagePassRate: avgPassRate,
-        participantCount: crime.participants.length
-      };
-    });
 
-    return crimesWithStats;
+    // Enrich with canonical OC definitions, exact tool names, and pass-rate stats
+    return await enrichCrimesWithMetadata(crimes);
   } catch (err) {
     console.error('Error getting crimes for faction:', err.message);
     throw err;
@@ -347,13 +484,8 @@ async function getCrimeDetails(crimeId) {
       throw new Error('Crime not found');
     }
 
-    const avgPassRate = OrganizedCrime.calculateAveragePassRate(crime.participants);
-    
-    return {
-      ...crime.toObject(),
-      averagePassRate: avgPassRate,
-      participantCount: crime.participants.length
-    };
+    const [enriched] = await enrichCrimesWithMetadata([crime]);
+    return enriched;
   } catch (err) {
     console.error('Error getting crime details:', err.message);
     throw err;
@@ -452,5 +584,12 @@ module.exports = {
   getCrimeDetails,
   updateCheckpointRates,
   getParticipantHistory,
-  getFactionApiKey
+  getFactionApiKey,
+  // Pure helpers exported for unit tests
+  transformCrimeData,
+  buildItemNameMap,
+  resolveToolNames,
+  resolveToolNamesForStorage,
+  indexDefinitionsByName,
+  applyDefinition
 };
