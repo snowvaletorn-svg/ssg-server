@@ -2543,8 +2543,14 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
     const enemyFactionId = enemyFaction?.id || null;
 
     let allAttacks = [];
+    const lossCounts = {};
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
+
+    // Results that count as a win for the attacker (and therefore a loss for
+    // the defender). Mugging is allowed in ranked wars at 75% score, so it
+    // counts on both sides of the ledger. Assists/escapes/etc. never do.
+    const WIN_RESULTS = ['Attacked', 'Hospitalized', 'Mug'];
 
     while (nextUrl && !reachedWarStart) {
       const attacksRes = await axios.get(nextUrl);
@@ -2558,22 +2564,59 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
         // Skip attacks that happened after the war ended (post-war attacks)
         if (warEnd && attack.started > warEnd) continue;
 
-        // Only count: ranked war attacks, by SSG members, against the enemy faction
+        const attackerFactionId = attack.attacker?.faction?.id ?? null;
         const defenderFactionId = attack.defender?.faction?.id ?? null;
+        const isWinResult = WIN_RESULTS.includes(attack.result);
+
+        // Only count: ranked war attacks, by SSG members, against the enemy faction
         const isValidTarget = attack.is_ranked_war &&
-          attack.attacker?.faction?.id === SSG_FACTION_ID &&
+          attackerFactionId === SSG_FACTION_ID &&
           (!enemyFactionId || defenderFactionId === enemyFactionId);
 
         if (isValidTarget) {
-          const isWin = attack.result === 'Attacked' || attack.result === 'Hospitalized';
           const isAssist = attack.result === 'Assist';
-          if (isWin || isAssist) {
+          if (isWinResult || isAssist) {
             allAttacks.push({ ...attack, _isAssist: isAssist });
+          }
+        }
+
+        // Losses: ranked war attacks BY the enemy faction ON an SSG member
+        // where the enemy won (mirrors the offensive win definition).
+        const isLoss = attack.is_ranked_war &&
+          enemyFactionId &&
+          attackerFactionId === enemyFactionId &&
+          defenderFactionId === SSG_FACTION_ID &&
+          isWinResult;
+
+        if (isLoss) {
+          const defId = attack.defender?.id;
+          if (defId) {
+            if (!lossCounts[defId]) lossCounts[defId] = { id: defId, name: attack.defender?.name, losses: 0 };
+            lossCounts[defId].losses++;
           }
         }
       }
 
       nextUrl = !reachedWarStart && prevLink ? prevLink + `&key=${factionKey}` : null;
+    }
+
+    // Seed every current SSG member so the War Stats table shows all members
+    // (including members with zero hits/losses), then merge in activity.
+    const memberMap = {};
+    try {
+      const encodedKey = encodeURIComponent(factionKey.trim());
+      const rosterRes = await axios.get(
+        `https://api.torn.com/v2/faction/?selections=basic,members&key=${encodedKey}`
+      );
+      const rawMembers = rosterRes.data.members || [];
+      const rosterMembers = Array.isArray(rawMembers) ? rawMembers : Object.values(rawMembers);
+      rosterMembers.forEach(m => {
+        if (!m?.id) return;
+        memberMap[m.id] = { id: m.id, name: m.name, hits: 0, assists: 0, losses: 0, respect: 0 };
+      });
+    } catch (err) {
+      // Degrade gracefully: fall back to only members seen in attack activity.
+      console.error('Error fetching faction roster for war stats:', err.message);
     }
 
     const hitCounts = {};
@@ -2589,7 +2632,27 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
       }
     });
 
-    const memberHits = Object.values(hitCounts).sort((a, b) => b.hits - a.hits || b.assists - a.assists);
+    // Members seen in attacks/losses but missing from the roster (e.g. left
+    // the faction mid-war) are still included so no activity is dropped.
+    const ensureMember = (id, name) => {
+      if (!memberMap[id]) memberMap[id] = { id, name, hits: 0, assists: 0, losses: 0, respect: 0 };
+      return memberMap[id];
+    };
+
+    Object.values(hitCounts).forEach(h => {
+      const member = ensureMember(h.id, h.name);
+      member.hits = h.hits;
+      member.assists = h.assists;
+      member.respect = h.respect;
+    });
+
+    Object.values(lossCounts).forEach(l => {
+      ensureMember(l.id, l.name).losses = l.losses;
+    });
+
+    const memberHits = Object.values(memberMap).sort(
+      (a, b) => b.hits - a.hits || b.assists - a.assists || a.losses - b.losses
+    );
 
     res.json({
       war: warData.wars?.ranked || null,

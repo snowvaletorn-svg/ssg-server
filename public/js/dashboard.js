@@ -2649,14 +2649,18 @@ function renderWarStats(data) {
   const enemyFaction = war.factions?.find(f => f.id !== 53272);
   const warStart = war.start ? new Date(war.start * 1000).toLocaleString() : '—';
 
-  const hitRows = memberHits.map((m, i) => `
+  const hitRows = memberHits.map((m, i) => {
+    const losses = m.losses || 0;
+    return `
     <tr>
       <td style="color:#555;font-size:0.8rem;">${i + 1}</td>
       <td>${escapeHtml(m.name)}</td>
       <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
       <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;">${m.assists > 0 ? m.assists : '—'}</td>
+      <td style="text-align:center;font-family:'Share Tech Mono',monospace;${losses > 0 ? 'color:#e74c3c;' : 'color:#aaa;'}">${losses > 0 ? losses : '—'}</td>
       <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${m.respect.toFixed(2)}</td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   return `
     <div class="stats-grid" style="margin-bottom:1.5rem;">
@@ -2675,8 +2679,8 @@ function renderWarStats(data) {
       <div class="card-header">Member Hits</div>
       <div style="overflow-x:auto;">
         <table class="members-table">
-          <thead><tr><th>#</th><th>Member</th><th style="text-align:center;">Hits</th><th style="text-align:center;">Assists</th><th style="text-align:right;">Respect Earned</th></tr></thead>
-          <tbody>${hitRows || '<tr><td colspan="5" class="muted" style="padding:1rem;">No war hits found.</td></tr>'}</tbody>
+          <thead><tr><th>#</th><th>Member</th><th style="text-align:center;">Hits</th><th style="text-align:center;">Assists</th><th style="text-align:center;">Losses</th><th style="text-align:right;">Respect Earned</th></tr></thead>
+          <tbody>${hitRows || '<tr><td colspan="6" class="muted" style="padding:1rem;">No war hits found.</td></tr>'}</tbody>
         </table>
       </div>
     </div>`;
@@ -3974,9 +3978,10 @@ const HELP_CONTENT = {
       {
         heading: 'War Stats',
         content: `
-          <p class="help-text">Displays current ranked war statistics including faction scores, total hits, and individual member contributions.</p>
+          <p class="help-text">Displays current ranked war statistics including faction scores, total hits, and individual member contributions (hits, assists, and losses received).</p>
           <div class="help-callout">💡 Click <strong style="color:#c0bcbc;">↻ Refresh</strong> to update war stats from the Torn API.</div>
-          <div class="help-callout">💡 The hit list shows which members have contributed the most respect in the current war.</div>
+          <div class="help-callout">💡 The member list shows everyone on the faction roster ranked by hits, with assists and respect earned.</div>
+          <div class="help-callout">💡 Losses count only defeats received from the war opponent during the war window (attacked, hospitalized, or mugged) — useful for tracking newer players' defensive records.</div>
         `
       }
     ]
