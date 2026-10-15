@@ -800,6 +800,29 @@
                 <p>Click Refresh to load war data overview.</p>
               </div>
             </div>
+
+            <% if (isLeadership) { %>
+            <!-- War Payout Calculator (Leadership/Ownership only) -->
+            <div class="section-header" style="margin-top:2rem;">
+              <h3>War Payout Calculator</h3>
+              <div style="display:flex;gap:0.75rem;">
+                <button class="btn btn-primary btn-small" onclick="fetchWarPayout(true)">↻ Refresh</button>
+                <button class="btn btn-primary btn-small" onclick="copyWarPayoutBreakdown()">📋 Copy Breakdown</button>
+              </div>
+            </div>
+            <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+              Leadership payout calculator: 20% of the total goes to the faction, the remaining 80% is split
+              per hit (assists optional). Growth members — judged by their role <strong>at war start</strong> —
+              receive a flat payout from the same pool while at or under the loss threshold. All values rounded
+              to the nearest dollar. Nothing is saved; figures are for your copy/paste breakdown.
+            </p>
+            <div id="war-payout-data">
+              <div class="empty-state">
+                <span class="empty-icon">💰</span>
+                <p>Click Refresh to load the payout calculator.</p>
+              </div>
+            </div>
+            <% } %>
             <div class="section-header" style="margin-top:2rem;">
               <h3>War Stats</h3>
               <button class="btn btn-primary btn-small" onclick="fetchWarStats()">↻ Refresh</button>

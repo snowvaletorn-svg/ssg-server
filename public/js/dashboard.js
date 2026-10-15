@@ -2626,6 +2626,8 @@ async function fetchWarStats() {
     const res = await fetch('/api/torn/wars');
     const data = await res.json();
     if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    // Cache for the payout calculator so it reuses this scan instead of re-hitting Torn.
+    lastWarStatsData = data;
     container.innerHTML = renderWarStats(data);
   } catch (err) {
     container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
@@ -3131,6 +3133,251 @@ function renderWarOverview() {
 }
 
 
+
+// ── War Payout Calculator ──────────────────────────────────────────────────────
+// Reuses the /api/torn/wars payload cached by fetchWarStats (memberHits rows
+// carry hits/assists/losses + war-start roles). The math lives server-side in
+// services/warPayoutService.js (unit-tested) behind POST /api/war/payout/calculate.
+let lastWarStatsData = null;
+let warPayoutMembers = [];
+let warPayoutWar = null;
+let warPayoutLastResult = null;
+let warPayoutRecalcTimer = null;
+const warPayoutInputs = {
+  total: '',
+  includeAssists: false,
+  growthFlatPay: '',
+  growthLossThreshold: ''       // blank = growth payouts disabled
+};
+
+const WP_FIELD = "background:#141414;border:1px solid #2a2828;color:#c0bcbc;border-radius:6px;padding:0.5rem 0.65rem;font-family:'Share Tech Mono',monospace;font-size:0.9rem;width:100%;box-sizing:border-box;";
+
+async function fetchWarPayout(force = false) {
+  const container = document.getElementById('war-payout-data');
+  if (!container) return;
+
+  let data = force ? null : lastWarStatsData;
+  if (!data) {
+    container.innerHTML = '<div class="channel-loading">LOADING PAYOUT DATA...</div>';
+    try {
+      const res = await fetch('/api/torn/wars');
+      data = await res.json();
+      if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error || 'Failed to load war data.')}</div>`; return; }
+      lastWarStatsData = data;
+    } catch (err) {
+      container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+      return;
+    }
+  }
+
+  warPayoutWar = data.war || null;
+  warPayoutMembers = data.memberHits || [];
+  if (!warPayoutWar || !warPayoutMembers.length) {
+    warPayoutLastResult = null;
+    container.innerHTML = '<div class="empty-state"><span class="empty-icon">💰</span><p>No war data available. War data clears once Torn drops a finished war from its API — calculate and copy the breakdown before that happens.</p></div>';
+    return;
+  }
+
+  renderWarPayoutShell(container);
+  recalculateWarPayout();
+}
+
+function renderWarPayoutShell(container) {
+  container.innerHTML = `
+    <div class="card">
+      <div class="card-header">💰 Payout Inputs</div>
+      <div class="card-body">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0.75rem;margin-bottom:0.9rem;align-items:end;">
+          <label style="font-size:0.8rem;color:#888;">
+            Total distribution ($)
+            <input type="number" id="wp-total" min="0" step="1" placeholder="e.g. 1000000" value="${escapeHtml(String(warPayoutInputs.total))}" style="${WP_FIELD}margin-top:0.25rem;">
+          </label>
+          <label style="font-size:0.8rem;color:#888;">
+            Growth flat pay ($ per member)
+            <input type="number" id="wp-growth-pay" min="0" step="1" placeholder="e.g. 5000" value="${escapeHtml(String(warPayoutInputs.growthFlatPay))}" style="${WP_FIELD}margin-top:0.25rem;">
+          </label>
+          <label style="font-size:0.8rem;color:#888;">
+            Growth max losses (blank = off)
+            <input type="number" id="wp-growth-threshold" min="0" step="1" placeholder="e.g. 3" value="${escapeHtml(String(warPayoutInputs.growthLossThreshold))}" style="${WP_FIELD}margin-top:0.25rem;">
+          </label>
+          <label style="font-size:0.8rem;color:#888;display:flex;align-items:center;gap:0.5rem;padding-bottom:0.4rem;cursor:pointer;">
+            <input type="checkbox" id="wp-assists" ${warPayoutInputs.includeAssists ? 'checked' : ''}>
+            Count assists (full value)
+          </label>
+        </div>
+        <div id="war-payout-results"></div>
+      </div>
+    </div>`;
+
+  const bindText = (id, key) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { warPayoutInputs[key] = el.value; scheduleWarPayoutRecalc(); });
+  };
+  bindText('wp-total', 'total');
+  bindText('wp-growth-pay', 'growthFlatPay');
+  bindText('wp-growth-threshold', 'growthLossThreshold');
+  const assistsEl = document.getElementById('wp-assists');
+  if (assistsEl) assistsEl.addEventListener('change', () => { warPayoutInputs.includeAssists = assistsEl.checked; recalculateWarPayout(); });
+}
+
+function scheduleWarPayoutRecalc() {
+  clearTimeout(warPayoutRecalcTimer);
+  warPayoutRecalcTimer = setTimeout(recalculateWarPayout, 300);
+}
+
+async function recalculateWarPayout() {
+  const results = document.getElementById('war-payout-results');
+  if (!results) return;
+  const total = Number(warPayoutInputs.total) || 0;
+  if (total <= 0) {
+    warPayoutLastResult = null;
+    results.innerHTML = '<p class="muted" style="font-size:0.85rem;margin:0;">Enter the total distribution above to calculate payouts.</p>';
+    return;
+  }
+  results.innerHTML = '<div class="channel-loading">CALCULATING...</div>';
+  try {
+    const res = await fetch('/api/war/payout/calculate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        total,
+        members: warPayoutMembers,
+        includeAssists: warPayoutInputs.includeAssists,
+        growthFlatPay: warPayoutInputs.growthFlatPay,
+        growthLossThreshold: warPayoutInputs.growthLossThreshold
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      warPayoutLastResult = null;
+      results.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error || 'Calculation failed.')}</div>`;
+      return;
+    }
+    warPayoutLastResult = data;
+    results.innerHTML = renderWarPayoutResults(data);
+  } catch (err) {
+    warPayoutLastResult = null;
+    results.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// Whole dollars everywhere, with a sign for the (possible) negative remainder.
+function fmtMoney(n) {
+  const v = Math.round(Number(n) || 0);
+  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US');
+}
+
+// Exact per-hit share (pool ÷ basis) — shown with cents so it's clear member
+// payouts are their individual share of the pool, not a rounded rate × hits.
+function fmtMoneyCents(n) {
+  const v = Number(n) || 0;
+  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderWarPayoutResults(r) {
+  const growthNote = r.growthEnabled
+    ? `🌱 ${r.growthCount} growth member${r.growthCount === 1 ? '' : 's'} × ${fmtMoney(r.growthFlatPay)} = <strong>${fmtMoney(r.growthTotal)}</strong> (drawn from the 80% pool)`
+    : '🌱 Growth payouts off — set a "Growth max losses" threshold to enable.';
+
+  const rows = r.rows.map((m, i) => {
+    const lossStyle = m.losses > 0 ? 'color:#e74c3c;' : 'color:#aaa;';
+    const payoutCell = `${fmtMoney(m.payout)}${m.qualifiesForGrowth ? `<span style="color:#2ecc71;"> + ${fmtMoney(r.growthFlatPay)} 🌱</span>` : ''}`;
+    return `
+      <tr>
+        <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
+        <td>${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;">${m.assists > 0 ? m.assists : '—'}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;${lossStyle}">${m.losses > 0 ? m.losses : '—'}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.qualifying}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${payoutCell}</td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="stats-grid" style="margin-bottom:1rem;">
+      ${statTile(fmtMoney(r.factionCut), 'Faction (20%)')}
+      ${statTile(fmtMoney(r.pool), 'Member Pool (80%)')}
+      ${statTile(r.perHitValue > 0 ? fmtMoneyCents(r.perHitValue) : '—', 'Value Per Hit')}
+      ${statTile(r.totalBasis, r.includeAssists ? 'Basis (hits + assists)' : 'Basis (hits only)')}
+    </div>
+    <p style="font-size:0.85rem;color:#888;margin:0 0 0.75rem;">${growthNote}</p>
+    <div style="overflow-x:auto;">
+      <table class="members-table">
+        <thead><tr>
+          <th>#</th><th>Member</th>
+          <th style="text-align:center;">Hits</th>
+          <th style="text-align:center;">Assists</th>
+          <th style="text-align:center;">Losses</th>
+          <th style="text-align:center;">Paid For</th>
+          <th style="text-align:right;">Payout</th>
+        </tr></thead>
+        <tbody>${rows || '<tr><td colspan="7" class="muted" style="padding:1rem;">No members to pay.</td></tr>'}</tbody>
+      </table>
+    </div>
+    <p style="font-size:0.8rem;color:#666;margin-top:0.75rem;padding:0 0.25rem;">
+      Hit payouts <strong>${fmtMoney(r.hitPayoutTotal)}</strong>${r.growthEnabled ? ` + growth <strong>${fmtMoney(r.growthTotal)}</strong>` : ''}
+      + rounding remainder <strong>${fmtMoney(r.roundingDelta)}</strong> (to faction) = pool <strong>${fmtMoney(r.pool)}</strong>.
+      Faction cut <strong>${fmtMoney(r.factionCut)}</strong> · Grand total <strong>${fmtMoney(r.total)}</strong>.
+      🌱 roles judged at war start (daily snapshot, falls back to current role).
+    </p>`;
+}
+
+// Plaintext breakdown for Discord/payout posts (built from the last calculation).
+function buildWarPayoutBreakdownText() {
+  const r = warPayoutLastResult;
+  if (!r) return null;
+  const enemyName = warPayoutWar?.factions?.find(f => f.id !== 53272)?.name || 'Unknown';
+  const lines = [
+    '💰 SSG WAR PAYOUT BREAKDOWN',
+    `War: S.S.G vs ${enemyName}`,
+    '━━━━━━━━━━━━━━━━━━━━',
+    `Total: ${fmtMoney(r.total)}`,
+    `Faction (20%): ${fmtMoney(r.factionCut)}`,
+    `Member pool (80%): ${fmtMoney(r.pool)}`
+  ];
+  if (r.growthEnabled) lines.push(`Growth payouts: ${r.growthCount} × ${fmtMoney(r.growthFlatPay)} = ${fmtMoney(r.growthTotal)}`);
+  lines.push(`Hit pool: ${fmtMoney(r.hitPool)}`);
+  lines.push(`Basis: ${r.totalBasis} (${r.includeAssists ? 'hits + assists at full value' : 'hits only'})`);
+  lines.push(`Value per hit: ${fmtMoneyCents(r.perHitValue)} (each member's share rounded to the nearest dollar)`);
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  r.rows.forEach((m, i) => {
+    const parts = [`${m.hits} hits`];
+    if (r.includeAssists && m.assists > 0) parts.push(`${m.assists} assists`);
+    if (m.losses > 0) parts.push(`${m.losses} losses`);
+    const growthBit = m.qualifiesForGrowth ? ` + ${fmtMoney(r.growthFlatPay)} growth` : '';
+    lines.push(`${i + 1}. ${m.name} — ${parts.join(', ')} → ${fmtMoney(m.payout)}${growthBit}`);
+  });
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`Hit payouts: ${fmtMoney(r.hitPayoutTotal)}`);
+  if (r.growthEnabled) lines.push(`Growth payouts: ${fmtMoney(r.growthTotal)}`);
+  lines.push(`Rounding remainder (to faction): ${fmtMoney(r.roundingDelta)}`);
+  lines.push(`Faction cut: ${fmtMoney(r.factionCut)}`);
+  lines.push(`GRAND TOTAL: ${fmtMoney(r.total)}`);
+  return lines.join('\n');
+}
+
+async function copyWarPayoutBreakdown() {
+  const text = buildWarPayoutBreakdownText();
+  if (!text) {
+    alert('Calculate payouts first — open the War page, load the calculator, and enter a total distribution.');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    // Fallback for older browsers / non-secure contexts
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) { /* ignore */ }
+    document.body.removeChild(ta);
+  }
+  alert('Payout breakdown copied to clipboard.');
+}
 
 // ── Admin Member Overview ─────────────────────────────────────────────────────
 let overviewData = [];

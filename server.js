@@ -43,6 +43,8 @@ const StockObservation = require('./models/StockObservation');
 const OrganizedCrime = require('./models/OrganizedCrime');
 const UserStatSnapshot = require('./models/UserStatSnapshot');
 const StatGoal = require('./models/StatGoal');
+const DailySnapshot = require('./models/DailySnapshot');
+const { computeWarPayout } = require('./services/warPayoutService');
 const {
   VALID_STATS: STAT_GOAL_STATS,
   parseStatInput: parseGoalStatInput,
@@ -2603,6 +2605,23 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
     // Seed every current SSG member so the War Stats table shows all members
     // (including members with zero hits/losses), then merge in activity.
     const memberMap = {};
+
+    // Roles as of war start (leadership policy: growth pay is judged by the
+    // role held when the war began). Uses the latest daily snapshot at or
+    // before war start — daily granularity is the best historical record.
+    // Missing entries fall back to the current role below.
+    const warStartRoles = {};
+    try {
+      const snap = await DailySnapshot.findOne({ snapshotDate: { $lte: new Date(warStart * 1000) } })
+        .sort({ snapshotDate: -1 })
+        .lean();
+      (snap?.memberStats || []).forEach(ms => {
+        if (ms?.playerId) warStartRoles[ms.playerId] = ms.position || null;
+      });
+    } catch (err) {
+      console.error('Error loading war-start roles for war stats:', err.message);
+    }
+
     try {
       const encodedKey = encodeURIComponent(factionKey.trim());
       const rosterRes = await axios.get(
@@ -2612,7 +2631,13 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
       const rosterMembers = Array.isArray(rawMembers) ? rawMembers : Object.values(rawMembers);
       rosterMembers.forEach(m => {
         if (!m?.id) return;
-        memberMap[m.id] = { id: m.id, name: m.name, hits: 0, assists: 0, losses: 0, respect: 0 };
+        memberMap[m.id] = {
+          id: m.id,
+          name: m.name,
+          position: m.position || null,
+          positionAtWarStart: warStartRoles[m.id] ?? (m.position || null),
+          hits: 0, assists: 0, losses: 0, respect: 0
+        };
       });
     } catch (err) {
       // Degrade gracefully: fall back to only members seen in attack activity.
@@ -2635,7 +2660,14 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
     // Members seen in attacks/losses but missing from the roster (e.g. left
     // the faction mid-war) are still included so no activity is dropped.
     const ensureMember = (id, name) => {
-      if (!memberMap[id]) memberMap[id] = { id, name, hits: 0, assists: 0, losses: 0, respect: 0 };
+      if (!memberMap[id]) {
+        memberMap[id] = {
+          id, name,
+          position: null,
+          positionAtWarStart: warStartRoles[id] || null,
+          hits: 0, assists: 0, losses: 0, respect: 0
+        };
+      }
       return memberMap[id];
     };
 
@@ -2659,6 +2691,22 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
       memberHits,
       totalWarAttacks: memberHits.reduce((sum, m) => sum + m.hits, 0)
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: War payout calculator ------------------------------------------------
+// Thin wrapper around the pure warPayoutService math so the War page's payout
+// calculator and the unit tests share one implementation. The client posts the
+// member rows it already loaded from /api/torn/wars (display-only numbers);
+// nothing is persisted. Leadership/Ownership only — matches the EJS card gate.
+app.post('/api/war/payout/calculate', isAuthenticated, isLeadershipOrOwnership, (req, res) => {
+  try {
+    const { total, members, includeAssists, growthFlatPay, growthLossThreshold } = req.body || {};
+    const result = computeWarPayout({ total, members, includeAssists, growthFlatPay, growthLossThreshold });
+    if (result.error) return res.status(400).json({ error: result.error });
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
