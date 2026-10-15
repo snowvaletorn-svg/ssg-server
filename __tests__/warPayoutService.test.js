@@ -192,3 +192,91 @@ describe('growth payouts', () => {
     expect(r.growthTotal).toBe(5000);
   });
 });
+
+describe('tiered pay structure', () => {
+  test('applies band multipliers at the exact qualifying boundaries', () => {
+    const counts = [9, 10, 19, 20, 34, 35, 100];
+    const members = counts.map((h, i) => member({ id: i + 1, hits: h }));
+    const r = computeWarPayout({ total: 100000, members, payoutStructure: 'tiered' });
+    expect(r.payoutStructure).toBe('tiered');
+    expect(r.rows.map(row => row.multiplier)).toEqual([0.25, 0.5, 0.5, 0.75, 0.75, 1, 1]);
+    expect(r.tierBands.map(b => b.minHits)).toEqual([35, 20, 10, 0]);
+  });
+
+  test('straight mode: every hit at 100%, zero tier discount (pre-tier behavior intact)', () => {
+    const members = [member({ id: 1, hits: 40 }), member({ id: 2, hits: 10 })];
+    const r = computeWarPayout({ total: 1000, members });
+    expect(r.payoutStructure).toBe('straight');
+    expect(r.rows.every(row => row.multiplier === 1)).toBe(true);
+    expect(r.tierDiscount).toBe(0);
+    expect(r.hitPayoutTotal).toBe(800); // pool fully paid, remainder 0
+    expect(r.roundingDelta).toBe(0);
+  });
+
+  test('tiered: fixed value per hit, low tier paid 50%, discount retained by faction', () => {
+    const members = [member({ id: 1, name: 'Grinder', hits: 40 }), member({ id: 2, name: 'Casual', hits: 10 })];
+    const r = computeWarPayout({ total: 1000, members, payoutStructure: 'tiered' });
+    expect(r.perHitValue).toBe(16);          // SAME value as straight: 800 / 50
+    expect(r.rows[0].multiplier).toBe(1);
+    expect(r.rows[1].multiplier).toBe(0.5);
+    expect(r.rows[0].payout).toBe(640);      // 40 × 16
+    expect(r.rows[1].payout).toBe(80);       // 10 × 0.5 × 16
+    expect(r.hitPayoutTotal).toBe(720);
+    expect(r.tierDiscount).toBe(80);         // 800 − 720 stays with the faction
+    expect(r.roundingDelta).toBe(0);
+    // Identity: cut + payouts(+growth) + discount + rounding = total
+    expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(r.total);
+  });
+
+  test('identity holds across assorted tiered datasets', () => {
+    const datasets = [
+      { total: 999, hits: [35, 10, 1] },
+      { total: 1234567, hits: [48, 22, 15, 9, 0, 33] },
+      { total: 50000, hits: [3, 7, 12, 34, 36] }
+    ];
+    for (const d of datasets) {
+      const members = d.hits.map((h, i) => member({ id: i + 1, hits: h }));
+      const r = computeWarPayout({ total: d.total, members, payoutStructure: 'tiered' });
+      expect(r.hitPayoutTotal + r.tierDiscount + r.roundingDelta).toBe(r.hitPool);
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(r.total);
+    }
+  });
+
+  test('growth pay is deducted before the tiered value per hit', () => {
+    const members = [member({ id: 1, hits: 40 }), member({ id: 2, hits: 10, positionAtWarStart: 'Recruit', losses: 0 })];
+    const r = computeWarPayout({
+      total: 10000, members, payoutStructure: 'tiered', growthFlatPay: 2000, growthLossThreshold: 5
+    });
+    // pool 8000 − growth 2000 → hitPool 6000; basis 50 → V = 120
+    expect(r.hitPool).toBe(6000);
+    expect(r.perHitValue).toBe(120);
+    expect(r.rows[0].payout).toBe(4800);     // 40 × 1 × 120
+    expect(r.rows[1].payout).toBe(600);      // 10 × 0.5 × 120
+    expect(r.tierDiscount).toBe(600);        // 6000 − 5400
+    expect(r.growthTotal).toBe(2000);
+    expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
+  });
+
+  test('assists count toward the band when included, not when excluded', () => {
+    const members = [member({ hits: 9, assists: 5 })];
+    const hitsOnly = computeWarPayout({ total: 10000, members, payoutStructure: 'tiered', includeAssists: false });
+    expect(hitsOnly.rows[0].multiplier).toBe(0.25);   // 9 qualifying → under 10
+    const withAssists = computeWarPayout({ total: 10000, members, payoutStructure: 'tiered', includeAssists: true });
+    expect(withAssists.rows[0].qualifying).toBe(14);
+    expect(withAssists.rows[0].multiplier).toBe(0.5);  // 14 qualifying → 10–19 band
+  });
+
+  test('unknown structure falls back to straight', () => {
+    const r = computeWarPayout({ total: 1000, members: [member({ hits: 5 })], payoutStructure: 'banana' });
+    expect(r.payoutStructure).toBe('straight');
+    expect(r.rows[0].multiplier).toBe(1);
+    expect(r.tierDiscount).toBe(0);
+  });
+
+  test('tiered with zero basis pays nothing and leaves the pool as rounding remainder', () => {
+    const r = computeWarPayout({ total: 1000, members: [], payoutStructure: 'tiered' });
+    expect(r.hitPayoutTotal).toBe(0);
+    expect(r.tierDiscount).toBe(0);     // no members -> no tier discounts claimed
+    expect(r.roundingDelta).toBe(800);
+  });
+});

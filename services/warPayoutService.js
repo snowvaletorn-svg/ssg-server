@@ -23,6 +23,31 @@ const { roleGroupForPosition } = require('./competitionService');
 
 const FACTION_CUT_RATE = 0.20;
 
+// Pay structures: 'straight' = every qualifying hit pays 100% of the value per
+// hit; 'tiered' = volume discounts per band, where tiered members are paid a
+// percentage OF THE SAME fixed value per hit and the withheld difference stays
+// with the faction (leadership policy: recoup the cost of free war Xanax
+// invested in members who don't pull their weight).
+const PAYOUT_STRUCTURES = ['straight', 'tiered'];
+
+// Tier bands for tiered pay, evaluated on the member's qualifying count
+// (hits + assists when the assists option is on — both cost the faction
+// Xanax). Ordered descending; first band whose minHits the count meets wins.
+const TIER_BANDS = [
+  { minHits: 35, multiplier: 1.00, label: '35+ hits' },
+  { minHits: 20, multiplier: 0.75, label: '20–34 hits' },
+  { minHits: 10, multiplier: 0.50, label: '10–19 hits' },
+  { minHits: 0, multiplier: 0.25, label: 'under 10 hits' }
+];
+
+// Multiplier for a member's qualifying count under the given structure.
+// Straight (default/unknown) always returns 1 — identical to pre-tier math.
+function tierMultiplier(count, structure) {
+  if (structure !== 'tiered') return 1;
+  const band = TIER_BANDS.find(b => count >= b.minHits);
+  return band ? band.multiplier : 1;
+}
+
 // Coerce a hit/assist/loss count to a safe non-negative integer.
 function toCount(value) {
   const n = Math.trunc(Number(value) || 0);
@@ -30,11 +55,13 @@ function toCount(value) {
 }
 
 // Compute the full payout table.
-// Inputs: { total, members, includeAssists, growthFlatPay, growthLossThreshold }
+// Inputs: { total, members, includeAssists, growthFlatPay, growthLossThreshold, payoutStructure }
 //   members: [{ id, name, hits, assists, losses, position, positionAtWarStart }]
 //   growthLossThreshold: null/''/non-numeric = growth payouts disabled.
+//   payoutStructure: 'straight' (default) | 'tiered' (invalid values -> straight).
 // Returns summary fields + rows, or { error } when growth pay exceeds the pool.
-function computeWarPayout({ total, members = [], includeAssists = false, growthFlatPay = 0, growthLossThreshold = null } = {}) {
+function computeWarPayout({ total, members = [], includeAssists = false, growthFlatPay = 0, growthLossThreshold = null, payoutStructure = 'straight' } = {}) {
+  const structure = PAYOUT_STRUCTURES.includes(payoutStructure) ? payoutStructure : 'straight';
   const payoutTotal = Math.max(0, Math.round(Number(total) || 0));
   const factionCut = Math.round(payoutTotal * FACTION_CUT_RATE);
   const pool = payoutTotal - factionCut;
@@ -53,6 +80,7 @@ function computeWarPayout({ total, members = [], includeAssists = false, growthF
     const isGrowthRole = roleGroupForPosition(position) === 'growth';
     const qualifiesForGrowth = isGrowthRole && growthEnabled && losses <= threshold;
     const qualifying = hits + (includeAssists ? assists : 0);
+    const multiplier = tierMultiplier(qualifying, structure);
     return {
       id: m.id,
       name: m.name,
@@ -63,6 +91,7 @@ function computeWarPayout({ total, members = [], includeAssists = false, growthF
       isGrowthRole,
       qualifiesForGrowth,
       qualifying,
+      multiplier,
       payout: 0
     };
   });
@@ -81,22 +110,30 @@ function computeWarPayout({ total, members = [], includeAssists = false, growthF
 
   const hitPool = pool - growthTotal;
   const totalBasis = rows.reduce((sum, r) => sum + r.qualifying, 0);
-  // Exact share per qualifying unit (pool ÷ basis). Each member's payout is
-  // THEIR share rounded to the nearest dollar — not the rounded rate × hits
-  // (leadership spreadsheet method: ROUND(hits × pool / totalHits)). Rounding
-  // the rate first drifts above the pool; rounding shares last keeps the sum
-  // at (or within a dollar or two of) the exact pool — surfaced as roundingDelta.
+  const weightedBasis = rows.reduce((sum, r) => sum + r.qualifying * r.multiplier, 0);
+  // Fixed value per hit (hitPool ÷ basis) in BOTH modes: tiered members are
+  // paid a percentage OF this same value, so anything withheld from low-tier
+  // members stays with the faction (recoups free-Xanax cost). Each member's
+  // payout is THEIR share rounded to the nearest dollar — never a rounded
+  // rate × hits (leadership spreadsheet method: ROUND(qualifying × pool / basis)).
   const perHitValue = totalBasis > 0 ? hitPool / totalBasis : 0;
-  rows.forEach(r => { r.payout = Math.round(r.qualifying * perHitValue); });
+  rows.forEach(r => { r.payout = Math.round(r.qualifying * r.multiplier * perHitValue); });
 
   const hitPayoutTotal = rows.reduce((sum, r) => sum + r.payout, 0);
+  // Exact tiered total before member-level rounding. tierDiscount = the part
+  // of the hit pool no tier member earns (0 in straight mode and on zero
+  // basis); roundingDelta = the few dollars of member-level rounding drift.
+  // Identity: hitPool = hitPayoutTotal + tierDiscount + roundingDelta.
+  const exactPayoutTotal = totalBasis > 0 ? hitPool * weightedBasis / totalBasis : 0;
+  const tierDiscount = totalBasis > 0 ? Math.round(hitPool - exactPayoutTotal) : 0;
+  const roundingDelta = hitPool - hitPayoutTotal - tierDiscount;
   const distributed = hitPayoutTotal + growthTotal;
-  const roundingDelta = pool - distributed;
 
   return {
     total: payoutTotal,
     factionCut,
     pool,
+    payoutStructure: structure,
     includeAssists: !!includeAssists,
     growthEnabled,
     growthFlatPay: flatPay,
@@ -105,7 +142,10 @@ function computeWarPayout({ total, members = [], includeAssists = false, growthF
     growthTotal,
     hitPool,
     totalBasis,
+    weightedBasis,
     perHitValue,
+    tierDiscount,
+    tierBands: TIER_BANDS,
     hitPayoutTotal,
     distributed,
     roundingDelta,
@@ -113,4 +153,4 @@ function computeWarPayout({ total, members = [], includeAssists = false, growthF
   };
 }
 
-module.exports = { FACTION_CUT_RATE, computeWarPayout };
+module.exports = { FACTION_CUT_RATE, PAYOUT_STRUCTURES, TIER_BANDS, tierMultiplier, computeWarPayout };

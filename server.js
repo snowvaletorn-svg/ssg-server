@@ -2703,8 +2703,8 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
 // nothing is persisted. Leadership/Ownership only — matches the EJS card gate.
 app.post('/api/war/payout/calculate', isAuthenticated, isLeadershipOrOwnership, (req, res) => {
   try {
-    const { total, members, includeAssists, growthFlatPay, growthLossThreshold } = req.body || {};
-    const result = computeWarPayout({ total, members, includeAssists, growthFlatPay, growthLossThreshold });
+    const { total, members, includeAssists, growthFlatPay, growthLossThreshold, payoutStructure } = req.body || {};
+    const result = computeWarPayout({ total, members, includeAssists, growthFlatPay, growthLossThreshold, payoutStructure });
     if (result.error) return res.status(400).json({ error: result.error });
     res.json(result);
   } catch (err) {

@@ -3147,7 +3147,8 @@ const warPayoutInputs = {
   total: '',
   includeAssists: false,
   growthFlatPay: '',
-  growthLossThreshold: ''       // blank = growth payouts disabled
+  growthLossThreshold: '',       // blank = growth payouts disabled
+  structure: 'straight'          // 'straight' | 'tiered'
 };
 
 const WP_FIELD = "background:#141414;border:1px solid #2a2828;color:#c0bcbc;border-radius:6px;padding:0.5rem 0.65rem;font-family:'Share Tech Mono',monospace;font-size:0.9rem;width:100%;box-sizing:border-box;";
@@ -3200,11 +3201,21 @@ function renderWarPayoutShell(container) {
             Growth max losses (blank = off)
             <input type="number" id="wp-growth-threshold" min="0" step="1" placeholder="e.g. 3" value="${escapeHtml(String(warPayoutInputs.growthLossThreshold))}" style="${WP_FIELD}margin-top:0.25rem;">
           </label>
+          <div style="font-size:0.8rem;color:#888;padding-bottom:0.4rem;">
+            <span style="display:block;margin-bottom:0.35rem;">Pay structure</span>
+            <label style="margin-right:0.9rem;cursor:pointer;">
+              <input type="radio" name="wp-structure" value="straight" ${warPayoutInputs.structure === 'straight' ? 'checked' : ''}> Straight
+            </label>
+            <label style="cursor:pointer;">
+              <input type="radio" name="wp-structure" value="tiered" ${warPayoutInputs.structure === 'tiered' ? 'checked' : ''}> Tiered
+            </label>
+          </div>
           <label style="font-size:0.8rem;color:#888;display:flex;align-items:center;gap:0.5rem;padding-bottom:0.4rem;cursor:pointer;">
             <input type="checkbox" id="wp-assists" ${warPayoutInputs.includeAssists ? 'checked' : ''}>
             Count assists (full value)
           </label>
         </div>
+        <div id="wp-tier-legend" style="display:${warPayoutInputs.structure === 'tiered' ? 'block' : 'none'};font-size:0.78rem;color:#e67e22;margin:-0.35rem 0 0.85rem;font-family:'Share Tech Mono',monospace;">Bands: …</div>
         <div id="war-payout-results"></div>
       </div>
     </div>`;
@@ -3218,6 +3229,15 @@ function renderWarPayoutShell(container) {
   bindText('wp-growth-threshold', 'growthLossThreshold');
   const assistsEl = document.getElementById('wp-assists');
   if (assistsEl) assistsEl.addEventListener('change', () => { warPayoutInputs.includeAssists = assistsEl.checked; recalculateWarPayout(); });
+  document.querySelectorAll('input[name="wp-structure"]').forEach(el => {
+    el.addEventListener('change', () => {
+      if (!el.checked) return;
+      warPayoutInputs.structure = el.value;
+      const legend = document.getElementById('wp-tier-legend');
+      if (legend) legend.style.display = el.value === 'tiered' ? 'block' : 'none';
+      recalculateWarPayout();
+    });
+  });
 }
 
 function scheduleWarPayoutRecalc() {
@@ -3244,7 +3264,8 @@ async function recalculateWarPayout() {
         members: warPayoutMembers,
         includeAssists: warPayoutInputs.includeAssists,
         growthFlatPay: warPayoutInputs.growthFlatPay,
-        growthLossThreshold: warPayoutInputs.growthLossThreshold
+        growthLossThreshold: warPayoutInputs.growthLossThreshold,
+        payoutStructure: warPayoutInputs.structure
       })
     });
     const data = await res.json();
@@ -3254,6 +3275,11 @@ async function recalculateWarPayout() {
       return;
     }
     warPayoutLastResult = data;
+    // Single-source the band legend from the service constants.
+    const legend = document.getElementById('wp-tier-legend');
+    if (legend && Array.isArray(data.tierBands)) {
+      legend.innerHTML = 'Bands: ' + data.tierBands.map(b => `${b.label} → ${Math.round(b.multiplier * 100)}%`).join(' · ');
+    }
     results.innerHTML = renderWarPayoutResults(data);
   } catch (err) {
     warPayoutLastResult = null;
@@ -3275,6 +3301,7 @@ function fmtMoneyCents(n) {
 }
 
 function renderWarPayoutResults(r) {
+  const tiered = r.payoutStructure === 'tiered';
   const growthNote = r.growthEnabled
     ? `🌱 ${r.growthCount} growth member${r.growthCount === 1 ? '' : 's'} × ${fmtMoney(r.growthFlatPay)} = <strong>${fmtMoney(r.growthTotal)}</strong> (drawn from the 80% pool)`
     : '🌱 Growth payouts off — set a "Growth max losses" threshold to enable.';
@@ -3290,6 +3317,7 @@ function renderWarPayoutResults(r) {
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;">${m.assists > 0 ? m.assists : '—'}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;${lossStyle}">${m.losses > 0 ? m.losses : '—'}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.qualifying}</td>
+        ${tiered ? `<td style="text-align:center;font-family:'Share Tech Mono',monospace;color:${m.multiplier === 1 ? '#2ecc71' : '#e67e22'};">${Math.round(m.multiplier * 100)}%</td>` : ''}
         <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${payoutCell}</td>
       </tr>`;
   }).join('');
@@ -3301,7 +3329,7 @@ function renderWarPayoutResults(r) {
       ${statTile(r.perHitValue > 0 ? fmtMoneyCents(r.perHitValue) : '—', 'Value Per Hit')}
       ${statTile(r.totalBasis, r.includeAssists ? 'Basis (hits + assists)' : 'Basis (hits only)')}
     </div>
-    <p style="font-size:0.85rem;color:#888;margin:0 0 0.75rem;">${growthNote}</p>
+    <p style="font-size:0.85rem;color:#888;margin:0 0 0.75rem;">${growthNote}${tiered ? ` · 💠 Tiered — low-tier shares stay with the faction` : ''}</p>
     <div style="overflow-x:auto;">
       <table class="members-table">
         <thead><tr>
@@ -3310,14 +3338,16 @@ function renderWarPayoutResults(r) {
           <th style="text-align:center;">Assists</th>
           <th style="text-align:center;">Losses</th>
           <th style="text-align:center;">Paid For</th>
+          ${tiered ? '<th style="text-align:center;">Rate</th>' : ''}
           <th style="text-align:right;">Payout</th>
         </tr></thead>
-        <tbody>${rows || '<tr><td colspan="7" class="muted" style="padding:1rem;">No members to pay.</td></tr>'}</tbody>
+        <tbody>${rows || `<tr><td colspan="${tiered ? 8 : 7}" class="muted" style="padding:1rem;">No members to pay.</td></tr>`}</tbody>
       </table>
     </div>
     <p style="font-size:0.8rem;color:#666;margin-top:0.75rem;padding:0 0.25rem;">
+      Structure: <strong>${tiered ? 'TIERED' : 'STRAIGHT'}</strong> ·
       Hit payouts <strong>${fmtMoney(r.hitPayoutTotal)}</strong>${r.growthEnabled ? ` + growth <strong>${fmtMoney(r.growthTotal)}</strong>` : ''}
-      + rounding remainder <strong>${fmtMoney(r.roundingDelta)}</strong> (to faction) = pool <strong>${fmtMoney(r.pool)}</strong>.
+      ${tiered ? `+ tier discount retained <strong>${fmtMoney(r.tierDiscount)}</strong> (to faction) ` : ''}+ rounding remainder <strong>${fmtMoney(r.roundingDelta)}</strong> (to faction) = pool <strong>${fmtMoney(r.pool)}</strong>.
       Faction cut <strong>${fmtMoney(r.factionCut)}</strong> · Grand total <strong>${fmtMoney(r.total)}</strong>.
       🌱 roles judged at war start (daily snapshot, falls back to current role).
     </p>`;
@@ -3331,6 +3361,7 @@ function buildWarPayoutBreakdownText() {
   const lines = [
     '💰 SSG WAR PAYOUT BREAKDOWN',
     `War: S.S.G vs ${enemyName}`,
+    `Structure: ${r.payoutStructure === 'tiered' ? 'TIERED' : 'STRAIGHT'}`,
     '━━━━━━━━━━━━━━━━━━━━',
     `Total: ${fmtMoney(r.total)}`,
     `Faction (20%): ${fmtMoney(r.factionCut)}`,
@@ -3340,6 +3371,9 @@ function buildWarPayoutBreakdownText() {
   lines.push(`Hit pool: ${fmtMoney(r.hitPool)}`);
   lines.push(`Basis: ${r.totalBasis} (${r.includeAssists ? 'hits + assists at full value' : 'hits only'})`);
   lines.push(`Value per hit: ${fmtMoneyCents(r.perHitValue)} (each member's share rounded to the nearest dollar)`);
+  if (r.payoutStructure === 'tiered') {
+    lines.push(`Bands: ${(r.tierBands || []).map(b => `${b.label} ${Math.round(b.multiplier * 100)}%`).join(' · ')}`);
+  }
   lines.push('━━━━━━━━━━━━━━━━━━━━');
   r.rows.forEach((m, i) => {
     const parts = [`${m.hits} hits`];
@@ -3351,6 +3385,7 @@ function buildWarPayoutBreakdownText() {
   lines.push('━━━━━━━━━━━━━━━━━━━━');
   lines.push(`Hit payouts: ${fmtMoney(r.hitPayoutTotal)}`);
   if (r.growthEnabled) lines.push(`Growth payouts: ${fmtMoney(r.growthTotal)}`);
+  if (r.payoutStructure === 'tiered') lines.push(`Tier discount retained by faction: ${fmtMoney(r.tierDiscount)}`);
   lines.push(`Rounding remainder (to faction): ${fmtMoney(r.roundingDelta)}`);
   lines.push(`Faction cut: ${fmtMoney(r.factionCut)}`);
   lines.push(`GRAND TOTAL: ${fmtMoney(r.total)}`);
