@@ -1,8 +1,18 @@
 // Unit tests for the war payout pay table math (pure — no Mongo/network).
-const { FACTION_CUT_RATE, computeWarPayout } = require('../services/warPayoutService');
+const {
+  FACTION_CUT_RATE,
+  lossMultiplier,
+  growthEligibility,
+  computeWarPayout
+} = require('../services/warPayoutService');
 
 function member(overrides = {}) {
-  return { id: 1, name: 'Member', hits: 0, assists: 0, losses: 0, position: null, positionAtWarStart: null, ...overrides };
+  return {
+    id: 1, name: 'Member', hits: 0, assists: 0, losses: 0,
+    position: null, positionAtWarStart: null,
+    daysInFaction: null, growthBenefitUsed: false, growthBenefitOverride: false,
+    ...overrides
+  };
 }
 
 describe('faction cut and pool', () => {
@@ -31,9 +41,7 @@ describe('faction cut and pool', () => {
     const r = computeWarPayout({
       total: 777777,
       members: [member({ id: 1, hits: 7 }), member({ id: 2, hits: 3, assists: 4 })],
-      includeAssists: true,
-      growthFlatPay: 5000,
-      growthLossThreshold: 3
+      includeAssists: true
     });
     expect(r.factionCut + r.distributed + r.roundingDelta).toBe(r.total);
   });
@@ -114,82 +122,160 @@ describe('per-hit value and payouts', () => {
   });
 });
 
-describe('growth payouts', () => {
-  const growthAtWarStart = [
-    member({ id: 1, name: 'GrowthKid', losses: 2, positionAtWarStart: 'Team Growth' }),
-    member({ id: 2, name: 'Newbie', losses: 3, position: 'Recruit' }),            // war-start falls back to current
-    member({ id: 3, name: 'StrongGuy', losses: 0, position: 'Team Strength' }),
-    member({ id: 4, name: 'RiskyKid', losses: 4, position: 'Team Growth' })       // over threshold
-  ];
-
-  test('pays Team Growth and Recruit members at or under the loss threshold', () => {
-    const r = computeWarPayout({ total: 100000, members: growthAtWarStart, growthFlatPay: 5000, growthLossThreshold: 3 });
-    expect(r.growthEnabled).toBe(true);
-    expect(r.growthCount).toBe(2); // GrowthKid (2 ≤ 3) + Newbie (3 ≤ 3); RiskyKid (4) out
-    expect(r.growthTotal).toBe(10000);
+describe('growth baseline (first-war) pay', () => {
+  test('growthEligibility: 21-day rule, used records, and overrides', () => {
+    expect(growthEligibility({ daysInFaction: 21 })).toEqual({ eligible: true, reason: null }); // exactly 21 still eligible
+    expect(growthEligibility({ daysInFaction: 22 }).reason).toBe('aged');
+    expect(growthEligibility({ daysInFaction: null }).reason).toBe('aged');   // unknown -> auto-check
+    expect(growthEligibility({ daysInFaction: 5, used: true }).reason).toBe('used');
+    expect(growthEligibility({ daysInFaction: 30, override: true }).eligible).toBe(true);
+    expect(growthEligibility({ daysInFaction: 30, used: true, override: true }).eligible).toBe(true); // one extra war
   });
 
-  test('growth pay comes OUT of the 80% pool and reduces the per-hit value', () => {
-    const members = [member({ id: 1, hits: 10 }), member({ id: 2, losses: 0, positionAtWarStart: 'Recruit' })];
-    const withoutGrowth = computeWarPayout({ total: 100000, members });
-    const withGrowth = computeWarPayout({ total: 100000, members, growthFlatPay: 16000, growthLossThreshold: 0 });
-    expect(withGrowth.growthTotal).toBe(16000);
-    expect(withGrowth.hitPool).toBe(80000 - 16000);
-    expect(withGrowth.perHitValue).toBeCloseTo(64000 / 10, 6);
-    expect(withGrowth.perHitValue).toBeLessThan(withoutGrowth.perHitValue);
-    // Reconciliation still holds
-    expect(withGrowth.factionCut + withGrowth.distributed + withGrowth.roundingDelta).toBe(100000);
+  test('loss bands are inclusive: 10 -> 100%, 11–12 -> 75%, 13–15 -> 50%, 16–18 -> 25%, 19+ -> nothing', () => {
+    expect(lossMultiplier(9)).toBe(1);
+    expect(lossMultiplier(10)).toBe(1);
+    expect(lossMultiplier(11)).toBe(0.75);
+    expect(lossMultiplier(12)).toBe(0.75);
+    expect(lossMultiplier(13)).toBe(0.5);
+    expect(lossMultiplier(15)).toBe(0.5);
+    expect(lossMultiplier(16)).toBe(0.25);
+    expect(lossMultiplier(18)).toBe(0.25);
+    expect(lossMultiplier(19)).toBe(0);
+  });
+
+  test('Y-method: baseline valued pre-growth, remainder re-divided for hit pay', () => {
+    const members = [
+      member({ id: 1, name: 'Grinder', hits: 40 }),
+      member({ id: 2, name: 'Rookie', positionAtWarStart: 'Team Growth', daysInFaction: 5, losses: 0 })
+    ];
+    const r = computeWarPayout({ total: 1000, members });
+    // pool 800; V0 = 800/40 = 20; growth = 10 × 1 × 20 = 200; hitPool 600; V = 15
+    expect(r.growthBaselineValue).toBe(20);
+    expect(r.rows[1].growthPay).toBe(200);
+    expect(r.hitPool).toBe(600);
+    expect(r.perHitValue).toBe(15);
+    expect(r.rows[0].payout).toBe(600);
+    expect(r.tierDiscount).toBe(0);
+    expect(r.roundingDelta).toBe(0);
+    expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(r.total);
+  });
+
+  test('growth shortfall flows to the hit pool, never to the faction', () => {
+    // Same roster, but Rookie loses 15 -> only 50% of the baseline is deducted.
+    const members = [
+      member({ id: 1, name: 'Grinder', hits: 40 }),
+      member({ id: 2, name: 'Rookie', positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 15 })
+    ];
+    const r = computeWarPayout({ total: 1000, members });
+    // V0 = 20; growth = 10 × 0.5 × 20 = 100; hitPool 700; V = 17.5 (higher than full-baseline)
+    expect(r.rows[1].growthPay).toBe(100);
+    expect(r.perHitValue).toBe(17.5);
+    expect(r.rows[0].payout).toBe(700);
+    expect(r.tierDiscount).toBe(0);
+    expect(r.hitPayoutTotal + r.growthTotal + r.tierDiscount + r.roundingDelta).toBe(r.pool);
+  });
+
+  test('19+ losses pays nothing and does not dilute the pool', () => {
+    const members = [
+      member({ id: 1, hits: 40 }),
+      member({ id: 2, positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 19 })
+    ];
+    const r = computeWarPayout({ total: 1000, members });
+    expect(r.rows[1].growthPay).toBe(0);
+    expect(r.growthPaidCount).toBe(0);
+    expect(r.growthTotal).toBe(0);
+    expect(r.perHitValue).toBe(20); // untouched: 800 / 40
+  });
+
+  test('used and aged members are excluded; overrides beat both', () => {
+    const members = [
+      member({ id: 1, hits: 40 }),
+      member({ id: 2, positionAtWarStart: 'Team Growth', daysInFaction: 5, losses: 0, growthBenefitUsed: true }),
+      member({ id: 3, positionAtWarStart: 'Team Growth', daysInFaction: 90, losses: 0 }),
+      member({ id: 4, positionAtWarStart: 'Team Growth', daysInFaction: 90, losses: 0, growthBenefitOverride: true })
+    ];
+    const r = computeWarPayout({ total: 1000, members });
+    expect(r.rows[1].growthReason).toBe('used');
+    expect(r.rows[2].growthReason).toBe('aged');
+    expect(r.rows[1].growthPay).toBe(0);
+    expect(r.rows[2].growthPay).toBe(0);
+    expect(r.rows[3].growthPay).toBeGreaterThan(0); // leadership exception
+    expect(r.growthEligibleCount).toBe(1);
   });
 
   test('positionAtWarStart wins over the current position both ways', () => {
     const moved = computeWarPayout({
       total: 100000,
-      members: [member({ position: 'Team Growth', positionAtWarStart: 'Team Strength', losses: 0 })],
-      growthFlatPay: 1000,
-      growthLossThreshold: 5
+      members: [member({ position: 'Team Growth', positionAtWarStart: 'Team Strength', daysInFaction: 5, losses: 0 })]
     });
-    expect(moved.growthCount).toBe(0); // was Strength at war start -> not growth
+    expect(moved.growthEligibleCount).toBe(0); // Strength at war start -> not growth
 
     const promoted = computeWarPayout({
       total: 100000,
-      members: [member({ position: 'Team Strength', positionAtWarStart: 'Recruit', losses: 0 })],
-      growthFlatPay: 1000,
-      growthLossThreshold: 5
+      members: [member({ position: 'Team Strength', positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 0 })]
     });
-    expect(promoted.growthCount).toBe(1); // was Recruit at war start -> growth
+    expect(promoted.growthEligibleCount).toBe(1); // Recruit at war start -> growth
   });
 
-  test('no threshold (null/empty/non-numeric) disables growth payouts', () => {
-    for (const threshold of [null, '', 'abc', undefined]) {
-      const r = computeWarPayout({ total: 100000, members: growthAtWarStart, growthFlatPay: 5000, growthLossThreshold: threshold });
-      expect(r.growthEnabled).toBe(false);
-      expect(r.growthCount).toBe(0);
-      expect(r.growthTotal).toBe(0);
-    }
-  });
-
-  test('growth exceeding the pool returns an error', () => {
+  test('growth members also earn hit pay for their own hits', () => {
     const r = computeWarPayout({
-      total: 1000, // pool = 800
-      members: [member({ positionAtWarStart: 'Recruit', losses: 0 })],
-      growthFlatPay: 999999,
-      growthLossThreshold: 5
+      total: 100000,
+      members: [member({ hits: 40, positionAtWarStart: 'Team Growth', daysInFaction: 5, losses: 2 })]
+    });
+    // V0 = 80000/40 = 2000; growth = 10 × 1 × 2000 = 20000; hitPool 60000; V = 1500
+    expect(r.rows[0].qualifying).toBe(40);
+    expect(r.rows[0].growthPay).toBe(20000); // baseline
+    expect(r.rows[0].payout).toBe(60000);    // plus hit pay for their own hits
+  });
+
+  test('zero hit basis splits the pool across the baselines', () => {
+    const r = computeWarPayout({
+      total: 1000,
+      members: [member({ positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 10 })]
+    });
+    // V0 = 800/10 = 80; growth takes the full pool; nothing left for hits
+    expect(r.growthBaselineValue).toBe(80);
+    expect(r.rows[0].growthPay).toBe(800);
+    expect(r.hitPayoutTotal).toBe(0);
+    expect(r.roundingDelta).toBe(0);
+    expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(1000);
+  });
+
+  test('baselines exceeding the pool return an error', () => {
+    const r = computeWarPayout({
+      total: 1000, // pool 800; V0 = 800/5 = 160; one baseline = 1600 > pool
+      members: [member({ hits: 5 }), member({ positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 0 })]
     });
     expect(r.error).toMatch(/exceed the 80% member pool/);
     expect(r.pool).toBe(800);
   });
 
-  test('growth members can also earn hit pay (both columns)', () => {
-    const r = computeWarPayout({
-      total: 100000,
-      members: [member({ hits: 10, positionAtWarStart: 'Team Growth', losses: 1 })],
-      growthFlatPay: 5000,
-      growthLossThreshold: 3
-    });
-    expect(r.rows[0].qualifying).toBe(10);
-    expect(r.rows[0].payout).toBeGreaterThan(0);
-    expect(r.rows[0].qualifiesForGrowth).toBe(true);
-    expect(r.growthTotal).toBe(5000);
+  test('matches the leadership spreadsheet: $246M tiered war with two growth baselines', () => {
+    const hits = [40, 35, 30, 29, 13, 2, 23, 18, 10, 19, 15, 20, 0, 24, 6, 0, 6, 0];
+    const members = hits.map((h, i) => member({ id: i + 1, name: `M${i + 1}`, hits: h }));
+    members.push(
+      member({ id: 101, name: 'R3VERSE', losses: 10, positionAtWarStart: 'Team Growth', daysInFaction: 14 }),
+      member({ id: 102, name: 'GameMaker01', losses: 15, positionAtWarStart: 'Team Growth', daysInFaction: 9 })
+    );
+    const r = computeWarPayout({ total: 246000000, members, payoutStructure: 'tiered' });
+    expect(r.factionCut).toBe(49200000);
+    expect(r.pool).toBe(196800000);
+    expect(r.totalBasis).toBe(290);
+    expect(r.growthBaselineValue).toBeCloseTo(196800000 / 290, 6);
+    const byId = {};
+    r.rows.forEach(row => { byId[row.id] = row; });
+    expect(byId[101].growthPay).toBe(6786207); // R3VERSE: 10 losses -> 100% of 10 hits
+    expect(byId[102].growthPay).toBe(3393103); // GameMaker01: 15 losses -> 50%
+    expect(byId[1].payout).toBe(25740785);     // The_Rev_Skippy 40 @100%
+    expect(byId[3].payout).toBe(14479191);     // Gryffie 30 @75%
+    expect(byId[15].payout).toBe(965279);      // GrimTheKnight 6 @25%
+    expect(byId[13].payout).toBe(0);           // Arc_Padilla 0 hits
+    expect(r.hitPayoutTotal).toBe(135460879);
+    expect(r.growthTotal).toBe(10179310);
+    expect(r.tierDiscount).toBe(51159810);     // retained by faction
+    expect(r.roundingDelta).toBe(1);
+    expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(246000000);
   });
 });
 
@@ -242,18 +328,22 @@ describe('tiered pay structure', () => {
     }
   });
 
-  test('growth pay is deducted before the tiered value per hit', () => {
-    const members = [member({ id: 1, hits: 40 }), member({ id: 2, hits: 10, positionAtWarStart: 'Recruit', losses: 0 })];
-    const r = computeWarPayout({
-      total: 10000, members, payoutStructure: 'tiered', growthFlatPay: 2000, growthLossThreshold: 5
-    });
-    // pool 8000 − growth 2000 → hitPool 6000; basis 50 → V = 120
-    expect(r.hitPool).toBe(6000);
-    expect(r.perHitValue).toBe(120);
-    expect(r.rows[0].payout).toBe(4800);     // 40 × 1 × 120
-    expect(r.rows[1].payout).toBe(600);      // 10 × 0.5 × 120
-    expect(r.tierDiscount).toBe(600);        // 6000 − 5400
-    expect(r.growthTotal).toBe(2000);
+  test('growth baseline combines with tiered hits (Y-method)', () => {
+    const members = [
+      member({ id: 1, hits: 40 }),
+      member({ id: 2, hits: 10, positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 0 })
+    ];
+    const r = computeWarPayout({ total: 10000, members, payoutStructure: 'tiered' });
+    // pool 8000; V0 = 8000/50 = 160; growth = 10 × 1 × 160 = 1600; hitPool 6400; V = 128
+    expect(r.growthBaselineValue).toBe(160);
+    expect(r.growthTotal).toBe(1600);
+    expect(r.hitPool).toBe(6400);
+    expect(r.perHitValue).toBe(128);
+    expect(r.rows[0].payout).toBe(5120);     // 40 × 1.00 × 128
+    expect(r.rows[1].payout).toBe(640);      // 10 × 0.50 × 128 (tiered hits)
+    expect(r.rows[1].growthPay).toBe(1600);  // plus the first-war baseline
+    expect(r.tierDiscount).toBe(640);        // (50 − 45) × 128 — hit tiers only
+    expect(r.roundingDelta).toBe(0);
     expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
   });
 

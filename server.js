@@ -44,6 +44,7 @@ const OrganizedCrime = require('./models/OrganizedCrime');
 const UserStatSnapshot = require('./models/UserStatSnapshot');
 const StatGoal = require('./models/StatGoal');
 const DailySnapshot = require('./models/DailySnapshot');
+const GrowthBenefit = require('./models/GrowthBenefit');
 const { computeWarPayout } = require('./services/warPayoutService');
 const {
   VALID_STATS: STAT_GOAL_STATS,
@@ -2636,6 +2637,7 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
           name: m.name,
           position: m.position || null,
           positionAtWarStart: warStartRoles[m.id] ?? (m.position || null),
+          daysInFaction: m.days_in_faction ?? null,
           hits: 0, assists: 0, losses: 0, respect: 0
         };
       });
@@ -2665,6 +2667,7 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
           id, name,
           position: null,
           positionAtWarStart: warStartRoles[id] || null,
+          daysInFaction: null,
           hits: 0, assists: 0, losses: 0, respect: 0
         };
       }
@@ -2700,13 +2703,99 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
 // Thin wrapper around the pure warPayoutService math so the War page's payout
 // calculator and the unit tests share one implementation. The client posts the
 // member rows it already loaded from /api/torn/wars (display-only numbers);
-// nothing is persisted. Leadership/Ownership only — matches the EJS card gate.
-app.post('/api/war/payout/calculate', isAuthenticated, isLeadershipOrOwnership, (req, res) => {
+// nothing is persisted here. Leadership/Ownership only — matches the EJS card
+// gate. The growth one-war ledger is authoritative SERVER-side: the client's
+// growthBenefitUsed/Override flags are always overwritten from the DB.
+app.post('/api/war/payout/calculate', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
-    const { total, members, includeAssists, growthFlatPay, growthLossThreshold, payoutStructure } = req.body || {};
-    const result = computeWarPayout({ total, members, includeAssists, growthFlatPay, growthLossThreshold, payoutStructure });
+    const { total, members, includeAssists, payoutStructure } = req.body || {};
+    const rawMembers = Array.isArray(members) ? members : [];
+    const memberIds = [...new Set(rawMembers.map(m => Number(m?.id)).filter(Number.isFinite))];
+    const ledger = memberIds.length
+      ? await GrowthBenefit.find({ playerId: { $in: memberIds } }).lean()
+      : [];
+    const ledgerById = {};
+    ledger.forEach(doc => { ledgerById[doc.playerId] = doc; });
+    const annotated = rawMembers.map(m => {
+      const rec = ledgerById[Number(m?.id)];
+      return { ...m, growthBenefitUsed: !!rec?.used, growthBenefitOverride: !!rec?.override };
+    });
+    const result = computeWarPayout({ total, members: annotated, includeAssists, payoutStructure });
     if (result.error) return res.status(400).json({ error: result.error });
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Growth benefit — mark paid (Leadership/Ownership only) ---------------
+// Records the one-war growth baseline as consumed for each recipient. One doc
+// per player EVER; marking paid clears any leadership `override` so an
+// exception buys exactly one extra war.
+app.post('/api/war/growth-benefit/mark-paid', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const { warKey, records } = req.body || {};
+    if (!Array.isArray(records) || records.length === 0) {
+      return res.status(400).json({ error: 'No growth recipients supplied.' });
+    }
+    const recordedBy = req.session.user?.username || req.session.user?.tornName || null;
+    const parsedWarKey = Number(warKey) || null;
+    const recorded = [];
+    const skipped = [];
+    for (const rec of records) {
+      const playerId = Number(rec?.playerId);
+      if (!Number.isFinite(playerId)) continue;
+      const amount = Math.max(0, Math.round(Number(rec?.amount) || 0));
+      const existing = await GrowthBenefit.findOne({ playerId });
+      if (existing) {
+        if (existing.used && !existing.override) { skipped.push(playerId); continue; }
+        existing.used = true;
+        existing.override = false;
+        if (rec?.playerName) existing.playerName = rec.playerName;
+        existing.warKey = parsedWarKey;
+        existing.amount = amount;
+        existing.recordedBy = recordedBy;
+        existing.recordedAt = new Date();
+        await existing.save();
+      } else {
+        await GrowthBenefit.create({
+          playerId,
+          playerName: rec?.playerName || '',
+          used: true,
+          override: false,
+          warKey: parsedWarKey,
+          amount,
+          recordedBy
+        });
+      }
+      recorded.push(playerId);
+    }
+    res.json({ recorded: recorded.length, skipped: skipped.length, playerIds: recorded });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Growth benefit — per-member corrections (Leadership/Ownership only) --
+//   undo   -> clear a used record (eligibility falls back to the 21-day rule)
+//   allow  -> grant an exception (eligible despite days or a used record)
+//   revoke -> remove an exception
+app.post('/api/war/growth-benefit', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const { action, playerId, playerName } = req.body || {};
+    const ACTIONS = ['undo', 'allow', 'revoke'];
+    const id = Number(playerId);
+    if (!ACTIONS.includes(action) || !Number.isFinite(id)) {
+      return res.status(400).json({ error: 'action must be undo, allow, or revoke with a playerId.' });
+    }
+    let doc = await GrowthBenefit.findOne({ playerId: id });
+    if (!doc) doc = new GrowthBenefit({ playerId: id, playerName: playerName || '' });
+    if (playerName) doc.playerName = playerName;
+    if (action === 'undo') { doc.used = false; doc.override = false; }
+    if (action === 'allow') { doc.override = true; }
+    if (action === 'revoke') { doc.override = false; }
+    await doc.save();
+    res.json({ playerId: id, used: doc.used, override: doc.override });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

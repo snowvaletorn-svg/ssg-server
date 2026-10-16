@@ -3146,8 +3146,6 @@ let warPayoutRecalcTimer = null;
 const warPayoutInputs = {
   total: '',
   includeAssists: false,
-  growthFlatPay: '',
-  growthLossThreshold: '',       // blank = growth payouts disabled
   structure: 'straight'          // 'straight' | 'tiered'
 };
 
@@ -3193,14 +3191,6 @@ function renderWarPayoutShell(container) {
             Total distribution ($)
             <input type="number" id="wp-total" min="0" step="1" placeholder="e.g. 1000000" value="${escapeHtml(String(warPayoutInputs.total))}" style="${WP_FIELD}margin-top:0.25rem;">
           </label>
-          <label style="font-size:0.8rem;color:#888;">
-            Growth flat pay ($ per member)
-            <input type="number" id="wp-growth-pay" min="0" step="1" placeholder="e.g. 5000" value="${escapeHtml(String(warPayoutInputs.growthFlatPay))}" style="${WP_FIELD}margin-top:0.25rem;">
-          </label>
-          <label style="font-size:0.8rem;color:#888;">
-            Growth max losses (blank = off)
-            <input type="number" id="wp-growth-threshold" min="0" step="1" placeholder="e.g. 3" value="${escapeHtml(String(warPayoutInputs.growthLossThreshold))}" style="${WP_FIELD}margin-top:0.25rem;">
-          </label>
           <div style="font-size:0.8rem;color:#888;padding-bottom:0.4rem;">
             <span style="display:block;margin-bottom:0.35rem;">Pay structure</span>
             <label style="margin-right:0.9rem;cursor:pointer;">
@@ -3215,7 +3205,8 @@ function renderWarPayoutShell(container) {
             Count assists (full value)
           </label>
         </div>
-        <div id="wp-tier-legend" style="display:${warPayoutInputs.structure === 'tiered' ? 'block' : 'none'};font-size:0.78rem;color:#e67e22;margin:-0.35rem 0 0.85rem;font-family:'Share Tech Mono',monospace;">Bands: …</div>
+        <div id="wp-tier-legend" style="display:${warPayoutInputs.structure === 'tiered' ? 'block' : 'none'};font-size:0.78rem;color:#e67e22;margin:-0.35rem 0 0.4rem;font-family:'Share Tech Mono',monospace;">Bands: …</div>
+        <div id="wp-growth-legend" style="font-size:0.78rem;color:#2ecc71;margin:0 0 0.85rem;font-family:'Share Tech Mono',monospace;">🌱 Growth baseline: …</div>
         <div id="war-payout-results"></div>
       </div>
     </div>`;
@@ -3225,8 +3216,6 @@ function renderWarPayoutShell(container) {
     if (el) el.addEventListener('input', () => { warPayoutInputs[key] = el.value; scheduleWarPayoutRecalc(); });
   };
   bindText('wp-total', 'total');
-  bindText('wp-growth-pay', 'growthFlatPay');
-  bindText('wp-growth-threshold', 'growthLossThreshold');
   const assistsEl = document.getElementById('wp-assists');
   if (assistsEl) assistsEl.addEventListener('change', () => { warPayoutInputs.includeAssists = assistsEl.checked; recalculateWarPayout(); });
   document.querySelectorAll('input[name="wp-structure"]').forEach(el => {
@@ -3263,8 +3252,6 @@ async function recalculateWarPayout() {
         total,
         members: warPayoutMembers,
         includeAssists: warPayoutInputs.includeAssists,
-        growthFlatPay: warPayoutInputs.growthFlatPay,
-        growthLossThreshold: warPayoutInputs.growthLossThreshold,
         payoutStructure: warPayoutInputs.structure
       })
     });
@@ -3275,10 +3262,16 @@ async function recalculateWarPayout() {
       return;
     }
     warPayoutLastResult = data;
-    // Single-source the band legend from the service constants.
+    // Single-source the band legends from the service constants.
     const legend = document.getElementById('wp-tier-legend');
     if (legend && Array.isArray(data.tierBands)) {
       legend.innerHTML = 'Bands: ' + data.tierBands.map(b => `${b.label} → ${Math.round(b.multiplier * 100)}%`).join(' · ');
+    }
+    const gLegend = document.getElementById('wp-growth-legend');
+    if (gLegend && Array.isArray(data.growthBands)) {
+      gLegend.innerHTML = `🌱 Growth baseline: ${data.growthBaselineHits} hits (first war, ≤21 days in faction) — ` +
+        data.growthBands.map(b => `${b.label} ${Math.round(b.multiplier * 100)}%`).join(' · ') +
+        '. Un-earned amounts stay in the hit pool.';
     }
     results.innerHTML = renderWarPayoutResults(data);
   } catch (err) {
@@ -3302,17 +3295,31 @@ function fmtMoneyCents(n) {
 
 function renderWarPayoutResults(r) {
   const tiered = r.payoutStructure === 'tiered';
-  const growthNote = r.growthEnabled
-    ? `🌱 ${r.growthCount} growth member${r.growthCount === 1 ? '' : 's'} × ${fmtMoney(r.growthFlatPay)} = <strong>${fmtMoney(r.growthTotal)}</strong> (drawn from the 80% pool)`
-    : '🌱 Growth payouts off — set a "Growth max losses" threshold to enable.';
+  const growthNote = r.growthEligibleCount > 0
+    ? `🌱 Growth: ${r.growthPaidCount}/${r.growthEligibleCount} eligible paid <strong>${fmtMoney(r.growthTotal)}</strong> (baseline ${r.growthBaselineHits} hits @ ${fmtMoneyCents(r.growthBaselineValue)} pre-growth; un-earned stays in the hit pool)`
+    : '🌱 No eligible growth members this war (first-war benefit, ≤21 days in faction).';
 
   const rows = r.rows.map((m, i) => {
     const lossStyle = m.losses > 0 ? 'color:#e74c3c;' : 'color:#aaa;';
-    const payoutCell = `${fmtMoney(m.payout)}${m.qualifiesForGrowth ? `<span style="color:#2ecc71;"> + ${fmtMoney(r.growthFlatPay)} 🌱</span>` : ''}`;
+    const payoutCell = `${fmtMoney(m.payout)}${m.growthPay > 0 ? `<span style="color:#2ecc71;"> + ${fmtMoney(m.growthPay)} 🌱</span>` : ''}`;
+    let nameCell = `${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}`;
+    if (m.isGrowthRole) {
+      const btnStyle = 'padding:0.05rem 0.35rem;font-size:0.68rem;margin-left:0.3rem;line-height:1.3;';
+      if (m.growthReason === 'used') {
+        nameCell += ` <span title="Growth benefit already used" style="color:#c678dd;font-size:0.72rem;">🌸 used</span>` +
+          ` <button class="btn btn-primary btn-small" style="${btnStyle}" title="Undo — restore eligibility" onclick="growthBenefitAction('undo', ${m.id})">↩</button>`;
+      } else if (m.growthReason === 'aged') {
+        nameCell += ` <span title="Over 21 days in faction — auto-checked" style="color:#e67e22;font-size:0.72rem;">⏳ 21+ days</span>` +
+          ` <button class="btn btn-primary btn-small" style="${btnStyle}" title="Allow the benefit anyway (one war)" onclick="growthBenefitAction('allow', ${m.id})">＋</button>`;
+      } else if (m.growthEligible && m.growthOverride) {
+        nameCell += ` <span title="Leadership exception active" style="color:#2ecc71;font-size:0.72rem;">🌱 exception</span>` +
+          ` <button class="btn btn-primary btn-small" style="${btnStyle}" title="Revoke the exception" onclick="growthBenefitAction('revoke', ${m.id})">−</button>`;
+      }
+    }
     return `
       <tr>
         <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
-        <td>${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}</td>
+        <td>${nameCell}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;">${m.assists > 0 ? m.assists : '—'}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;${lossStyle}">${m.losses > 0 ? m.losses : '—'}</td>
@@ -3346,7 +3353,7 @@ function renderWarPayoutResults(r) {
     </div>
     <p style="font-size:0.8rem;color:#666;margin-top:0.75rem;padding:0 0.25rem;">
       Structure: <strong>${tiered ? 'TIERED' : 'STRAIGHT'}</strong> ·
-      Hit payouts <strong>${fmtMoney(r.hitPayoutTotal)}</strong>${r.growthEnabled ? ` + growth <strong>${fmtMoney(r.growthTotal)}</strong>` : ''}
+      Hit payouts <strong>${fmtMoney(r.hitPayoutTotal)}</strong>${r.growthEligibleCount > 0 ? ` + growth <strong>${fmtMoney(r.growthTotal)}</strong> (${r.growthPaidCount} member${r.growthPaidCount === 1 ? '' : 's'})` : ''}
       ${tiered ? `+ tier discount retained <strong>${fmtMoney(r.tierDiscount)}</strong> (to faction) ` : ''}+ rounding remainder <strong>${fmtMoney(r.roundingDelta)}</strong> (to faction) = pool <strong>${fmtMoney(r.pool)}</strong>.
       Faction cut <strong>${fmtMoney(r.factionCut)}</strong> · Grand total <strong>${fmtMoney(r.total)}</strong>.
       🌱 roles judged at war start (daily snapshot, falls back to current role).
@@ -3367,7 +3374,9 @@ function buildWarPayoutBreakdownText() {
     `Faction (20%): ${fmtMoney(r.factionCut)}`,
     `Member pool (80%): ${fmtMoney(r.pool)}`
   ];
-  if (r.growthEnabled) lines.push(`Growth payouts: ${r.growthCount} × ${fmtMoney(r.growthFlatPay)} = ${fmtMoney(r.growthTotal)}`);
+  if (r.growthEligibleCount > 0) {
+    lines.push(`Growth payouts: ${fmtMoney(r.growthTotal)} (${r.growthPaidCount}/${r.growthEligibleCount} members · baseline @ ${fmtMoneyCents(r.growthBaselineValue)}/hit pre-growth)`);
+  }
   lines.push(`Hit pool: ${fmtMoney(r.hitPool)}`);
   lines.push(`Basis: ${r.totalBasis} (${r.includeAssists ? 'hits + assists at full value' : 'hits only'})`);
   lines.push(`Value per hit: ${fmtMoneyCents(r.perHitValue)} (each member's share rounded to the nearest dollar)`);
@@ -3379,12 +3388,12 @@ function buildWarPayoutBreakdownText() {
     const parts = [`${m.hits} hits`];
     if (r.includeAssists && m.assists > 0) parts.push(`${m.assists} assists`);
     if (m.losses > 0) parts.push(`${m.losses} losses`);
-    const growthBit = m.qualifiesForGrowth ? ` + ${fmtMoney(r.growthFlatPay)} growth` : '';
+    const growthBit = m.growthPay > 0 ? ` + ${fmtMoney(m.growthPay)} growth` : '';
     lines.push(`${i + 1}. ${m.name} — ${parts.join(', ')} → ${fmtMoney(m.payout)}${growthBit}`);
   });
   lines.push('━━━━━━━━━━━━━━━━━━━━');
   lines.push(`Hit payouts: ${fmtMoney(r.hitPayoutTotal)}`);
-  if (r.growthEnabled) lines.push(`Growth payouts: ${fmtMoney(r.growthTotal)}`);
+  if (r.growthEligibleCount > 0) lines.push(`Growth payouts: ${fmtMoney(r.growthTotal)}`);
   if (r.payoutStructure === 'tiered') lines.push(`Tier discount retained by faction: ${fmtMoney(r.tierDiscount)}`);
   lines.push(`Rounding remainder (to faction): ${fmtMoney(r.roundingDelta)}`);
   lines.push(`Faction cut: ${fmtMoney(r.factionCut)}`);
@@ -3412,6 +3421,53 @@ async function copyWarPayoutBreakdown() {
     document.body.removeChild(ta);
   }
   alert('Payout breakdown copied to clipboard.');
+}
+
+// Growth benefit per-member corrections (rows only render for Leadership/
+// Ownership, matching the endpoint gate).
+async function growthBenefitAction(action, playerId) {
+  const m = warPayoutMembers.find(x => x.id === playerId);
+  const labels = { undo: 'Undo the used benefit', allow: 'Allow the benefit (one war)', revoke: 'Revoke the exception' };
+  if (!confirm(`${labels[action] || action} for ${m?.name || 'player ' + playerId}?`)) return;
+  try {
+    const res = await fetch('/api/war/growth-benefit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action, playerId, playerName: m?.name || '' })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Update failed.'); return; }
+    recalculateWarPayout();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+// Record the one-war growth benefit as consumed for everyone currently being
+// paid growth in this calculation (their pay > 0). Consumes the benefit until
+// leadership undoes/allows an exception.
+async function markGrowthPaid() {
+  const r = warPayoutLastResult;
+  if (!r) { alert('Calculate payouts first — enter a total distribution.'); return; }
+  const recipients = (r.rows || []).filter(row => row.growthPay > 0);
+  if (!recipients.length) { alert('No growth members are being paid in this calculation.'); return; }
+  if (!confirm(`Mark the growth benefit as PAID for ${recipients.length} member(s)? This consumes their one-time benefit.`)) return;
+  try {
+    const res = await fetch('/api/war/growth-benefit/mark-paid', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        warKey: warPayoutWar?.start || null,
+        records: recipients.map(row => ({ playerId: row.id, playerName: row.name, amount: row.growthPay }))
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.error || 'Failed to record.'); return; }
+    alert(`Recorded the growth benefit for ${data.recorded} member(s).`);
+    recalculateWarPayout(); // badges flip to 🌸 used
+  } catch (err) {
+    alert(err.message);
+  }
 }
 
 // ── Admin Member Overview ─────────────────────────────────────────────────────
