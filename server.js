@@ -2553,7 +2553,9 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
     // Results that count as a win for the attacker (and therefore a loss for
     // the defender). Mugging is allowed in ranked wars at 75% score, so it
     // counts on both sides of the ledger. Assists/escapes/etc. never do.
-    const WIN_RESULTS = ['Attacked', 'Hospitalized', 'Mug'];
+    // NOTE: the v2 API returns the string "Mugged" (verified against live
+    // data 2026-10-17); "Mug" is kept as a defensive alias.
+    const WIN_RESULTS = ['Attacked', 'Hospitalized', 'Mugged', 'Mug'];
 
     while (nextUrl && !reachedWarStart) {
       const attacksRes = await axios.get(nextUrl);
@@ -2880,6 +2882,14 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
 
+    // Results that count as a hit for the attacker (and therefore a loss for
+    // the defender) in a ranked war — mirrors the "my team" win definition.
+    // Mugging is allowed in ranked wars at 75% score, so it counts on both
+    // sides of the ledger; assists/escapes/etc. never do.
+    // NOTE: the v2 API returns the string "Mugged" (verified against live
+    // data 2026-10-17); "Mug" is kept as a defensive alias.
+    const WIN_RESULTS = ['Attacked', 'Hospitalized', 'Mugged', 'Mug'];
+
     while (nextUrl && !reachedWarStart) {
       const attacksRes = await axios.get(nextUrl);
       const attacks = attacksRes.data.attacks || [];
@@ -2900,7 +2910,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
             if (!enemyHitCounts[atkId]) enemyHitCounts[atkId] = { hits: 0, assists: 0, respect: 0 };
             if (attack.result === 'Assist') {
               enemyHitCounts[atkId].assists++;
-            } else if (attack.result === 'Attacked' || attack.result === 'Hospitalized') {
+            } else if (WIN_RESULTS.includes(attack.result)) {
               enemyHitCounts[atkId].hits++;
               enemyHitCounts[atkId].respect += attack.respect_gain || 0;
             }
