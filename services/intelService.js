@@ -144,6 +144,7 @@ function statSplitFromPercentages(pct) {
   if (Number.isFinite(+pct.strength) && +pct.strength > 0) entries.push({ stat: 'Strength', pct: Math.round(+pct.strength) });
   if (Number.isFinite(+pct.speed) && +pct.speed > 0) entries.push({ stat: 'Speed', pct: Math.round(+pct.speed) });
   if (Number.isFinite(+pct.dexterity) && +pct.dexterity > 0) entries.push({ stat: 'Dexterity', pct: Math.round(+pct.dexterity) });
+  if (Number.isFinite(+pct.defense) && +pct.defense > 0) entries.push({ stat: 'Defense', pct: Math.round(+pct.defense) });
   if (!entries.length) return null;
   entries.sort((a, b) => b.pct - a.pct);
   return { top1: entries[0], top2: entries[1] || null, source: 'ffscouter-premium' };

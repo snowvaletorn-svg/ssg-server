@@ -126,10 +126,24 @@ describe('statSplitFromPercentages (FFScouter premium distribution)', () => {
     });
   });
 
-  test('handles a single stat and rejects empty input', () => {
-    expect(statSplitFromPercentages({ speed: 40 }).top2).toBeNull();
-    expect(statSplitFromPercentages({})).toBeNull();
-    expect(statSplitFromPercentages(null)).toBeNull();
+  test('includes defense in the top-two selection', () => {
+    expect(statSplitFromPercentages({ defense: 45, strength: 30, speed: 25 })).toEqual({
+      top1: { stat: 'Defense', pct: 45 },
+      top2: { stat: 'Strength', pct: 30 },
+      source: 'ffscouter-premium'
+    });
+  });
+
+  test('defense can be top1 over speed', () => {
+    expect(statSplitFromPercentages({ defense: 50, speed: 30 })).toEqual({
+      top1: { stat: 'Defense', pct: 50 },
+      top2: { stat: 'Speed', pct: 30 },
+      source: 'ffscouter-premium'
+    });
+  });
+
+  test('handles a defense-only distribution', () => {
+    expect(statSplitFromPercentages({ defense: 100 }).top2).toBeNull();
   });
 });
 

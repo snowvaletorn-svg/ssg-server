@@ -2934,12 +2934,18 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
     const FF_BATCH_SIZE = 150;
     const statsMap = {};
 
+    // Resolve the FFScouter key. Prefer The_Rev_Skippy's premium key so the
+    // premium distribution (top-two stat percentages) is returned for every
+    // enemy; fall back to any saved key if the premium user has none.
+    const getStatsKey = (await getPremiumFFScouterKey()) || decryptOrRaw(dbUser.ffScouterKey);
+
+
     for (let i = 0; i < targetIdsList.length; i += FF_BATCH_SIZE) {
       const chunk = targetIdsList.slice(i, i + FF_BATCH_SIZE);
       const targetIds = chunk.join(',');
 
       const ffRes = await axios.get('https://ffscouter.com/api/v1/get-stats', {
-        params: { key: decryptOrRaw(dbUser.ffScouterKey), targets: targetIds },
+        params: { key: getStatsKey, targets: targetIds },
         timeout: 15000
       });
 
