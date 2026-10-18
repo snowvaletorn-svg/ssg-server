@@ -2477,6 +2477,7 @@ app.get('/api/torn/wars-debug', isAuthenticated, isFactionMember, async (req, re
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
     let pageCount = 0;
+    const seenAttackCodes = new Set(); // dedupe page-overlap duplicates
 
     while (nextUrl && !reachedWarStart && pageCount < 5) {
       const attacksRes = await axios.get(nextUrl);
@@ -2487,6 +2488,12 @@ app.get('/api/torn/wars-debug', isAuthenticated, isFactionMember, async (req, re
       for (const attack of attacks) {
         if (attack.started < warStart) { reachedWarStart = true; break; }
         if (warEnd && attack.started > warEnd) continue;
+        // v2 offset pagination can repeat rows at page boundaries while new
+        // attacks land mid-scan (sort=desc), which would double-count hits and
+        // respect — skip anything already seen.
+        const attackKey = attack.code || attack.id;
+        if (attackKey && seenAttackCodes.has(attackKey)) continue;
+        if (attackKey) seenAttackCodes.add(attackKey);
         if (attack.is_ranked_war && attack.attacker?.faction?.id === SSG_FACTION_ID) {
           const defFactionId = attack.defender?.faction?.id ?? null;
           if (!enemyFactionId || defFactionId === enemyFactionId) {
@@ -2549,6 +2556,7 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
     const lossCounts = {};
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
+    const seenAttackCodes = new Set(); // dedupe page-overlap duplicates
 
     // Results that count as a win for the attacker (and therefore a loss for
     // the defender). Mugging is allowed in ranked wars at 75% score, so it
@@ -2568,6 +2576,13 @@ app.get('/api/torn/wars', isAuthenticated, isFactionMember, async (req, res) => 
 
         // Skip attacks that happened after the war ended (post-war attacks)
         if (warEnd && attack.started > warEnd) continue;
+
+        // v2 offset pagination can repeat rows at page boundaries while new
+        // attacks land mid-scan (sort=desc), which would double-count hits,
+        // losses and respect — skip anything already seen.
+        const attackKey = attack.code || attack.id;
+        if (attackKey && seenAttackCodes.has(attackKey)) continue;
+        if (attackKey) seenAttackCodes.add(attackKey);
 
         const attackerFactionId = attack.attacker?.faction?.id ?? null;
         const defenderFactionId = attack.defender?.faction?.id ?? null;
@@ -2881,6 +2896,7 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
     const enemyHitCounts = {};
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
+    const seenAttackCodes = new Set(); // dedupe page-overlap duplicates
 
     // Results that count as a hit for the attacker (and therefore a loss for
     // the defender) in a ranked war — mirrors the "my team" win definition.
@@ -2898,6 +2914,13 @@ app.get('/api/war/enemy-stats', isAuthenticated, isFactionMember, async (req, re
       for (const attack of attacks) {
         if (attack.started < warStart) { reachedWarStart = true; break; }
         if (warEnd && attack.started > warEnd) continue;
+
+        // v2 offset pagination can repeat rows at page boundaries while new
+        // attacks land mid-scan (sort=desc), which would double-count enemy
+        // hits and respect — skip anything already seen.
+        const attackKey = attack.code || attack.id;
+        if (attackKey && seenAttackCodes.has(attackKey)) continue;
+        if (attackKey) seenAttackCodes.add(attackKey);
 
         if (!attack.is_ranked_war) continue;
 
@@ -3286,6 +3309,7 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     // have been missed by the roster (e.g. recent joiners/leavers).
     let nextUrl = `https://api.torn.com/v2/faction/attacks?limit=100&sort=desc&key=${factionKey}`;
     let reachedWarStart = false;
+    const seenAttackCodes = new Set(); // dedupe page-overlap duplicates
 
     while (nextUrl && !reachedWarStart) {
       const attacksRes = await axios.get(nextUrl);
@@ -3295,6 +3319,9 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
       for (const attack of attacks) {
         if (attack.started < rankedWar.start) { reachedWarStart = true; break; }
         if (rankedWar.end && attack.started > rankedWar.end) continue;
+        const attackKey = attack.code || attack.id;
+        if (attackKey && seenAttackCodes.has(attackKey)) continue;
+        if (attackKey) seenAttackCodes.add(attackKey);
 
         if (!attack.is_ranked_war) continue;
 
