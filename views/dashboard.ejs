@@ -143,6 +143,20 @@
                       <% } %>
               </div>
             </div>
+
+            <!-- Equipped Gear (weapons & armor, live from Torn) -->
+            <div class="card mt-2">
+              <div class="card-header"
+                style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.5rem;">
+                <span>⚔️ Equipped Gear</span>
+                <button class="btn btn-small btn-outline" onclick="fetchEquipment(true)"
+                  style="font-size:0.75rem;padding:2px 10px;">↻ Refresh</button>
+              </div>
+              <div class="card-body" id="equipment-data">
+                <p class="muted" style="font-size:0.85rem;margin:0;">Loading equipment…</p>
+              </div>
+            </div>
+
             <!-- Leadership: Post Announcement -->
             <% if (isOwner || isLeadership) { %>
               <div id="announcement-form-card" class="card mt-2" style="border-left: 4px solid #2ecc71;">

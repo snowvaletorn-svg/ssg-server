@@ -33,6 +33,7 @@ const { sendEmail } = require('./services/emailService');
 const { encrypt, decrypt, isEncrypted } = require('./services/keyCipher');
 const { checkKeySufficient } = require('./services/tornKeyInfo');
 const { fetchFactionPerks } = require('./services/factionPerksService');
+const { getEquipmentLoadout, evaluateGear } = require('./services/equipmentService');
 const { logAudit } = require('./models/AuditLog');
 const { decryptOrRaw } = require('./services/keyCipher');
 // Registers global axios timeout + transient-failure retry (GET only)
@@ -1991,6 +1992,65 @@ app.get('/api/torn/crimeskills', isAuthenticated, async (req, res) => {
     }
     res.json(tornRes.data);
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Member equipped gear (Profile "Equipped Gear" card) -----------------
+// Live loadout from Torn's v2 user/equipment selection (member's own key).
+// Groups weapons by slot (primary/secondary/melee/temporary) and armor pieces,
+// and flags the most-used weapon (highest weapon experience) for the ranked
+// gear evaluation buttons.
+app.get('/api/user/equipment', isAuthenticated, async (req, res) => {
+  try {
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+    const result = await getEquipmentLoadout(decryptOrRaw(dbUser.tornApiKey));
+    if (!result.ok) return res.status(502).json({ error: result.error });
+    res.json(result.data);
+  } catch (err) {
+    console.error('Equipment endpoint error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Ranked gear evaluation (weav3r.dev proxy) --------------------------
+// tab=weapons → evaluates the member's most-used equipped weapon;
+// tab=armor   → evaluates an equipped armor piece (?slot=4 body by default).
+// Results come back sorted cheapest → most expensive. Responses are cached
+// for 5 minutes (service-side) to stay inside weav3r's anonymous rate budget.
+app.get('/api/user/weaponeval', isAuthenticated, async (req, res) => {
+  try {
+    const tab = req.query.tab === 'armor' ? 'armor' : 'weapons';
+    const dbUser = await User.findOne({ tornPlayerId: req.session.userId });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+
+    const loadoutResult = await getEquipmentLoadout(decryptOrRaw(dbUser.tornApiKey));
+    if (!loadoutResult.ok) return res.status(502).json({ error: loadoutResult.error });
+    const { weapons, armor, mostUsedWeapon } = loadoutResult.data;
+
+    let current = null;
+    if (tab === 'armor') {
+      const slot = Number(req.query.slot) || 4;
+      current = armor.find(a => a.slot === slot) || armor[0] || null;
+    } else {
+      current = mostUsedWeapon || weapons.primary || null;
+    }
+    if (!current) {
+      return res.status(404).json({
+        error: tab === 'armor' ? 'No armor equipped.' : 'No weapon equipped.'
+      });
+    }
+
+    const result = await evaluateGear(tab, current);
+    if (!result.ok) return res.status(502).json({ error: result.error, current });
+    res.json(result.data);
+  } catch (err) {
+    console.error('Weapon eval endpoint error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

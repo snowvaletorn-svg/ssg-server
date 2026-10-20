@@ -1138,6 +1138,220 @@ async function deleteStatGoal(goalId) {
   }
 }
 
+// ── Profile: Equipped Gear (weapons & armor) ─────────────────────────────────
+// Cached per page load until the member clicks ↻ Refresh; the ranked-gear
+// evaluation results (weav3r.dev) render inline below each subsection.
+let cachedEquipmentData = null;
+
+const GEAR_RARITY_COLORS = { yellow: '#f1c40f', orange: '#e67e22', red: '#e74c3c' };
+
+function gearRarityBadge(rarity) {
+  if (!rarity) return '';
+  const color = GEAR_RARITY_COLORS[String(rarity).toLowerCase()] || '#888';
+  return `<span style="font-size:0.7rem;color:${color};border:1px solid ${color};border-radius:4px;padding:0 6px;text-transform:capitalize;">${escapeHtml(rarity)}</span>`;
+}
+
+function gearBonusBadges(bonuses) {
+  if (!bonuses || !bonuses.length) return '';
+  return bonuses.map(b =>
+    `<span title="${escapeHtml(b.description || '')}"
+      style="font-size:0.75rem;background:#161515;border:1px solid #2a2828;border-radius:4px;padding:2px 8px;color:#c0bcbc;">
+      ${escapeHtml(b.title)}${b.value != null ? ` ${b.value}%` : ''}
+    </span>`
+  ).join(' ');
+}
+
+function gearStatBadges(item, kind) {
+  const badges = [];
+  if (kind === 'weapon') {
+    if (item.stats?.damage != null) badges.push(infoBadge('⚔ Damage', item.stats.damage.toFixed(2)));
+    if (item.stats?.accuracy != null) badges.push(infoBadge('🎯 Accuracy', item.stats.accuracy.toFixed(2)));
+  } else {
+    if (item.stats?.armor != null) badges.push(infoBadge('🛡 Armor', item.stats.armor.toFixed(2)));
+  }
+  if (item.stats?.quality != null) badges.push(infoBadge('⭐ Quality', item.stats.quality.toFixed(2)));
+  return badges.join(' ');
+}
+
+function gearRow(item, kind, isMostUsed) {
+  if (!item) return '';
+  const extras = [];
+  if (item.ammo) extras.push(`Ammo: ${escapeHtml(item.ammo.name)} ×${formatNumFull(item.ammo.quantity)}`);
+  if (item.mods && item.mods.length) extras.push(`Mods: ${item.mods.map(escapeHtml).join(', ')}`);
+
+  return `
+    <div style="background:#161515;border:1px solid #2a2828;border-radius:6px;padding:0.75rem;margin-bottom:0.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <span style="color:#c0bcbc;font-weight:600;">
+          ${escapeHtml(item.name)}
+          ${isMostUsed ? '<span style="font-size:0.7rem;color:#4caf50;margin-left:0.35rem;">⭐ most used</span>' : ''}
+        </span>
+        <span style="font-size:0.75rem;color:#888;">${escapeHtml(item.slotLabel || '')} ${gearRarityBadge(item.rarity)}</span>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">${gearStatBadges(item, kind)}</div>
+      ${item.bonuses && item.bonuses.length
+        ? `<div style="margin-top:0.5rem;display:flex;gap:0.35rem;flex-wrap:wrap;">${gearBonusBadges(item.bonuses)}</div>`
+        : ''}
+      ${extras.length
+        ? `<div style="margin-top:0.5rem;font-size:0.75rem;color:#888;">${extras.join(' &nbsp;·&nbsp; ')}</div>`
+        : ''}
+    </div>`;
+}
+
+async function fetchEquipment(force) {
+  const container = document.getElementById('equipment-data');
+  if (!container) return;
+
+  if (!force && cachedEquipmentData) {
+    container.innerHTML = renderEquipment(cachedEquipmentData);
+    return;
+  }
+
+  container.innerHTML = '<div class="channel-loading">LOADING EQUIPMENT...</div>';
+  try {
+    const res = await fetch('/api/user/equipment');
+    const data = await res.json();
+    if (!res.ok) {
+      const hint = data.error === 'No Torn API key saved.'
+        ? ' Add your Torn API key in the 🔑 Torn API Key card below to see your equipped gear.'
+        : '';
+      container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error || 'Failed to load equipment.')}${hint}</div>`;
+      return;
+    }
+    cachedEquipmentData = data;
+    container.innerHTML = renderEquipment(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function renderEquipment(d) {
+  const mostUsedId = d.mostUsedWeapon ? d.mostUsedWeapon.id : null;
+  const weaponRows = [
+    d.weapons?.primary, d.weapons?.secondary, d.weapons?.melee, d.weapons?.temporary
+  ].filter(Boolean)
+    .map(w => gearRow(w, 'weapon', w.id === mostUsedId))
+    .join('');
+
+  const armorRows = (d.armor || []).map(a => gearRow(a, 'armor', false)).join('');
+
+  const weaponsHtml = weaponRows || '<p class="muted" style="margin:0;font-size:0.85rem;">No weapons equipped.</p>';
+  const armorHtml = armorRows || '<p class="muted" style="margin:0;font-size:0.85rem;">No armor equipped.</p>';
+
+  const evalButton = (tab, label) => `
+    <button class="btn btn-small btn-outline" onclick="evaluateGear('${tab}')" style="font-size:0.8rem;">${label}</button>`;
+
+  return `
+    <div style="margin-bottom:1rem;">
+      <div class="badge-label">Weapons</div>
+      ${weaponsHtml}
+      ${d.weapons?.primary || d.weapons?.secondary || d.weapons?.melee
+        ? `<div style="margin-top:0.5rem;">${evalButton('weapons', '🔍 Find a Better Ranked Weapon')}</div>` : ''}
+      <div id="gear-eval-weapons" class="hidden" style="margin-top:0.75rem;"></div>
+    </div>
+    <div>
+      <div class="badge-label">Armor</div>
+      ${armorHtml}
+      ${(d.armor || []).length
+        ? `<div style="margin-top:0.5rem;">${evalButton('armor', '🛡 Find Ranked War Armor')}</div>` : ''}
+      <div id="gear-eval-armor" class="hidden" style="margin-top:0.75rem;"></div>
+    </div>`;
+}
+
+// ── Ranked gear evaluation (weav3r.dev) ──────────────────────────────────────
+async function evaluateGear(tab) {
+  const panel = document.getElementById(`gear-eval-${tab}`);
+  if (!panel) return;
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<p class="muted" style="margin:0;font-size:0.85rem;">Searching ranked listings…</p>';
+
+  try {
+    const res = await fetch(`/api/user/weaponeval?tab=${encodeURIComponent(tab)}`);
+    const data = await res.json();
+    if (!res.ok) {
+      panel.innerHTML = `
+        <div style="background:#161515;border:1px solid #2a2828;border-radius:6px;padding:0.75rem;">
+          <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:#e67e22;">⚠️ ${escapeHtml(data.error || 'Evaluation unavailable.')}</p>
+          <a href="https://weav3r.dev/ranked-weapons" target="_blank" rel="noopener" style="font-size:0.85rem;">Browse ranked gear on weav3r.dev →</a>
+        </div>`;
+      return;
+    }
+    panel.innerHTML = renderGearEval(tab, data);
+  } catch (err) {
+    panel.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function closeGearEval(tab) {
+  const panel = document.getElementById(`gear-eval-${tab}`);
+  if (panel) { panel.innerHTML = ''; panel.classList.add('hidden'); }
+}
+
+function gearEvalRow(w, kind) {
+  const stats = [];
+  if (kind === 'weapons') {
+    if (w.damage != null) stats.push(`⚔ ${w.damage.toFixed(2)}`);
+    if (w.accuracy != null) stats.push(`🎯 ${w.accuracy.toFixed(2)}`);
+  }
+  if (w.quality != null) stats.push(`⭐ Q${w.quality.toFixed(2)}`);
+
+  const bonuses = (w.bonuses || []).map(b =>
+    `<span title="${escapeHtml(b.description || '')}"
+      style="font-size:0.75rem;background:#1a1919;border:1px solid #2a2828;border-radius:4px;padding:2px 8px;color:#c0bcbc;">
+      ${escapeHtml(b.bonus)}${b.value != null ? ` ${b.value}%` : ''}
+    </span>`
+  ).join(' ');
+
+  const seller = w.seller ? `${escapeHtml(w.seller)}` : (w.source === 'market' ? 'Item Market' : 'Listed');
+  const source = w.source ? `<span style="font-size:0.7rem;color:#888;text-transform:capitalize;">${escapeHtml(w.source)}</span>` : '';
+
+  return `
+    <div style="display:flex;gap:0.75rem;align-items:center;background:#161515;border:1px solid #2a2828;border-radius:6px;padding:0.6rem 0.75rem;margin-bottom:0.4rem;">
+      ${w.itemImage ? `<img src="${escapeHtml(w.itemImage)}" alt="" style="width:32px;height:32px;border-radius:4px;flex-shrink:0;">` : ''}
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;align-items:center;">
+          <span style="color:#c0bcbc;font-weight:600;font-size:0.9rem;">${escapeHtml(w.name)} ${gearRarityBadge(w.rarity)}</span>
+          <span style="color:#4caf50;font-weight:600;font-size:0.9rem;" title="$${formatNumFull(w.price)}">$${goalCompact(w.price)}</span>
+        </div>
+        <div style="font-size:0.75rem;color:#888;margin-top:2px;">${stats.join(' &nbsp;·&nbsp; ')}${seller ? ` &nbsp;·&nbsp; ${seller}` : ''} ${source}</div>
+        ${bonuses ? `<div style="margin-top:0.35rem;display:flex;gap:0.35rem;flex-wrap:wrap;">${bonuses}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function renderGearEval(tab, data) {
+  const kind = tab === 'armor' ? 'armor' : 'weapons';
+  const current = data.current;
+  const currentStats = kind === 'armor'
+    ? (current.stats?.armor != null ? `armor ${current.stats.armor.toFixed(2)}, ` : '') +
+      (current.stats?.quality != null ? `quality ${current.stats.quality.toFixed(2)}` : '')
+    : ((current.stats?.damage != null ? `damage ${current.stats.damage.toFixed(2)}` : '') +
+       (current.stats?.accuracy != null ? `, accuracy ${current.stats.accuracy.toFixed(2)}` : ''));
+
+  const count = data.totalCount || 0;
+  const shownNote = count > (data.results || []).length
+    ? `Showing cheapest ${data.results.length} of ${formatNumFull(count)} listings`
+    : `${formatNumFull(count)} listing${count === 1 ? '' : 's'}, cheapest first`;
+
+  const rows = (data.results || []).length
+    ? data.results.map(w => gearEvalRow(w, kind)).join('')
+    : `<p class="muted" style="margin:0;font-size:0.85rem;">No better listings found right now — check back later.</p>`;
+
+  return `
+    <div style="background:#1a1919;border:1px solid #2a2828;border-radius:6px;padding:0.75rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <span style="font-size:0.85rem;color:#c0bcbc;">
+          Better options for <strong>${escapeHtml(current.name)}</strong>${currentStats ? ` (${currentStats})` : ''}
+        </span>
+        <button class="btn btn-small btn-outline" onclick="closeGearEval('${tab}')" style="font-size:0.7rem;padding:2px 8px;">✕ Close</button>
+      </div>
+      <div style="font-size:0.75rem;color:#888;margin-bottom:0.5rem;">${shownNote} · via weav3r.dev</div>
+      ${rows}
+      <a href="${escapeHtml(data.pageUrl || 'https://weav3r.dev/ranked-weapons')}" target="_blank" rel="noopener"
+        style="font-size:0.8rem;">Browse all ranked ${kind === 'armor' ? 'armor' : 'weapons'} on weav3r.dev →</a>
+    </div>`;
+}
+
 // ── Honors, Merits & Awards ───────────────────────────────────────────────────
 async function fetchHonors() {
   const container = document.getElementById('honors-data');
@@ -6193,12 +6407,13 @@ function downloadNotificationCsv(notificationId) {
     .catch(err => console.error('Error downloading CSV:', err));
 }
 
-// Auto-fetch notifications when profile section is shown
+// Auto-fetch notifications + equipped gear when profile section is shown
 (function () {
   const origShowSection = window.showSection;
   window.showSection = function (sectionId, el) {
     if (sectionId === 'profile') {
       setTimeout(fetchNotifications, 100);
+      setTimeout(fetchEquipment, 150);
     }
     if (origShowSection) origShowSection(sectionId, el);
   };
@@ -6206,6 +6421,9 @@ function downloadNotificationCsv(notificationId) {
   // Also call on page load
   if (document.getElementById('notification-card')) {
     setTimeout(fetchNotifications, 500);
+  }
+  if (document.getElementById('equipment-data')) {
+    setTimeout(fetchEquipment, 600);
   }
 })();
 
