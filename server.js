@@ -1824,45 +1824,16 @@ app.get('/api/user/stats/last-increase', isAuthenticated, async (req, res) => {
 
 // ---- API: Stat Goals — list with live status ---------------------------------
 // Returns the member's saved goals with current values, growth-based ETA and
-// pace. Non-fatally refreshes the stat snapshot if it is >24h old so progress
-// stays accurate without the member clicking "Refresh Stats" first.
+// pace. Read-only: snapshots are only created when the member clicks
+// "Refresh Stats", never automatically.
 app.get('/api/user/stat-goals', isAuthenticated, async (req, res) => {
   try {
     const playerId = req.session.userId;
-    const [goalDoc, dbUser] = await Promise.all([
-      StatGoal.findOne({ tornPlayerId: playerId }).lean(),
-      User.findOne({ tornPlayerId: playerId })
-    ]);
+    const goalDoc = await StatGoal.findOne({ tornPlayerId: playerId }).lean();
 
-    let latest = await UserStatSnapshot.findOne({ tornPlayerId: playerId })
+    const latest = await UserStatSnapshot.findOne({ tornPlayerId: playerId })
       .sort({ timestamp: -1 })
       .lean();
-
-    // Snapshot freshness: take a new one if missing/stale and a key exists.
-    const snapshotAgeMs = latest ? Date.now() - new Date(latest.timestamp).getTime() : Infinity;
-    if (dbUser?.tornApiKey && snapshotAgeMs > 24 * 60 * 60 * 1000) {
-      try {
-        const tornRes = await axios.get(
-          `https://api.torn.com/user/?selections=personalstats&key=${encodeURIComponent(decryptOrRaw(dbUser.tornApiKey))}`,
-          { timeout: 10000 }
-        );
-        if (!tornRes.data.error) {
-          const ps = tornRes.data.personalstats || {};
-          const fresh = await UserStatSnapshot.create({
-            tornPlayerId: playerId,
-            strength: ps.strength || 0,
-            defense: ps.defense || 0,
-            speed: ps.speed || 0,
-            dexterity: ps.dexterity || 0,
-            totalStats: ps.totalstats || 0
-          });
-          latest = fresh.toObject();
-        }
-      } catch (refreshErr) {
-        // Non-fatal: fall back to whatever snapshot we already have.
-        console.error('Stat goals: snapshot refresh failed (non-fatal):', refreshErr.message);
-      }
-    }
 
     const currentStats = latest
       ? { strength: latest.strength, defense: latest.defense, speed: latest.speed,

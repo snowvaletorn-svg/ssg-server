@@ -4046,7 +4046,7 @@ const HELP_CONTENT = {
       {
         heading: 'How ETA is Calculated',
         content: `
-          <p class="help-text">The server compares your snapshots (taken when you click Refresh Stats, or automatically once a day) to work out your average daily growth, then projects forward from there.</p>
+          <p class="help-text">The server compares your snapshots (taken when you click Refresh Stats) to work out your average daily growth, then projects forward from there.</p>
           <div class="help-callout">💡 Snapshot at least twice for ETAs to appear. The more often you snapshot, the more accurate the projection.</div>
         `
       }
