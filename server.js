@@ -34,6 +34,13 @@ const { encrypt, decrypt, isEncrypted } = require('./services/keyCipher');
 const { checkKeySufficient } = require('./services/tornKeyInfo');
 const { fetchFactionPerks } = require('./services/factionPerksService');
 const { getEquipmentLoadout, evaluateGear } = require('./services/equipmentService');
+const {
+  takeMemberEquipmentSnapshot,
+  refreshMemberRecommendation,
+  purgeMemberEquipment,
+  saveMemberRecommendation,
+  getLatestMemberEquipment
+} = require('./services/memberEquipmentService');
 const { logAudit } = require('./models/AuditLog');
 const { decryptOrRaw } = require('./services/keyCipher');
 // Registers global axios timeout + transient-failure retry (GET only)
@@ -1396,6 +1403,40 @@ app.post('/api/torn/key', isAuthenticated, async (req, res) => {
     req.session.user.tornApiKey = apiKey.trim();
     await auditKeyEvent('key_save', req, { targetId: tornRes.data.player_id });
     res.json({ success: true, player: tornRes.data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ---- API: Remove my Torn API key ------------------------------------------------
+// Lets a member unlink their key. This is the only way a stored key can be
+// removed, so it also purges the member's stored equipment snapshot rows.
+app.post('/api/torn/key/remove', isAuthenticated, async (req, res) => {
+  try {
+    const playerId = req.session.userId;
+    const dbUser = await User.findOne({ tornPlayerId: playerId });
+    if (!dbUser?.tornApiKey) {
+      return res.status(400).json({ error: 'No Torn API key saved.' });
+    }
+
+    await User.findOneAndUpdate(
+      { tornPlayerId: playerId },
+      { $unset: { tornApiKey: '', tornKeyUpdatedAt: '' } },
+      { returnDocument: 'after' }
+    );
+
+    // Drop this member's stored equipment rows so leadership no longer sees
+    // gear collected with the now-removed key.
+    try {
+      await purgeMemberEquipment(playerId);
+    } catch (purgeErr) {
+      console.warn('[MemberEquipment] purge on key removal failed:', purgeErr.message);
+    }
+
+    // Session copy for this browser session only.
+    if (req.session.user) req.session.user.tornApiKey = null;
+    await auditKeyEvent('key_remove', req, { targetId: playerId });
+    res.json({ success: true, message: 'Your Torn API key has been removed.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -3871,6 +3912,83 @@ app.get('/api/admin/weapon-armor-inventory', isAuthenticated, isLeadershipOrOwne
   }
 });
 
+// ---- API: Member Equipment (leadership only) -----------------------------------
+// Reads the DAILY stored snapshot of every member's equipped gear. This
+// endpoint makes NO live Torn calls — the 03:00 UTC cron does the pulling, so
+// opening the Admin tab is a cheap DB read and never hammers Torn's API.
+//
+// Privacy: equipment is collected with each member's own saved Torn API key
+// and is only visible to Leadership/Ownership. We never store what a member
+// paid for their gear — only the market price of a suggested UPGRADE.
+app.get('/api/admin/member-equipment', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const snapshot = await getLatestMemberEquipment();
+    if (!snapshot) {
+      return res.json({
+        members: [],
+        snapshotDate: null,
+        message: 'No member equipment snapshot yet. It is collected daily at 03:00 UTC, or you can run a refresh now.'
+      });
+    }
+    res.json({
+      members: snapshot.members || [],
+      snapshotDate: snapshot.snapshotDate || null,
+      createdAt: snapshot.createdAt || null,
+      createdBy: snapshot.createdBy || null
+    });
+  } catch (err) {
+    console.error('Member equipment error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// On-demand re-sweep. Pulls gear for every member right now (the daily cron
+// remains the normal path). `evaluate=false` skips the weav3r lookup stage
+// when you just want the raw loadout.
+app.post('/api/admin/member-equipment/refresh', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const evaluate = req.body?.evaluate !== false;
+    const result = await takeMemberEquipmentSnapshot(`admin:${req.session.userId}`, { evaluate });
+    const snapshot = await getLatestMemberEquipment();
+    res.json({
+      success: true,
+      ...result,
+      members: snapshot?.members || [],
+      snapshotDate: snapshot?.snapshotDate || null
+    });
+  } catch (err) {
+    console.error('Member equipment refresh error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Re-check a single member's upgrade recommendation, reusing the cached
+// weav3r response. Useful when a listing changes and you want a fresh answer
+// without re-pulling everyone's gear.
+app.post('/api/admin/member-equipment/recommend', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
+  try {
+    const playerId = Number(req.body?.playerId);
+    if (!Number.isFinite(playerId)) {
+      return res.status(400).json({ error: 'playerId is required.' });
+    }
+
+    const snapshot = await getLatestMemberEquipment();
+    if (!snapshot) return res.status(404).json({ error: 'No member equipment snapshot available yet.' });
+
+    const memberRow = (snapshot.members || []).find(m => Number(m.playerId) === playerId);
+    if (!memberRow) return res.status(404).json({ error: 'Member not found in the current snapshot.' });
+
+    const updated = await refreshMemberRecommendation(memberRow);
+    // Persist the refreshed recommendation so it survives a page reload.
+    await saveMemberRecommendation(playerId, updated);
+    res.json({ success: true, member: updated });
+  } catch (err) {
+    console.error('Member equipment recommend error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // ---- API: Medical Inventory ------------------------------------------------------
 app.get('/api/admin/medical-inventory', isAuthenticated, isLeadershipOrOwnership, async (req, res) => {
   try {
@@ -5994,6 +6112,9 @@ app.delete('/api/admin/employees/:playerId', isAuthenticated, isOwnership, async
 
     // Clean up their stat snapshots
     await UserStatSnapshot.deleteMany({ tornPlayerId: playerId });
+
+    // Clean up their stored member-equipment records
+    await purgeMemberEquipment(playerId);
 
     // Clean up any employee_removal notifications for this employee
     await AppNotification.deleteMany({ type: 'employee_removal', employeeId: playerId });

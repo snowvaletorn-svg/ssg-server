@@ -223,6 +223,10 @@
                         <code id="my-key-value" style="user-select:all; word-break:break-all;"></code>
                         <div id="my-key-status" class="hint" style="margin-top:4px;"></div>
                       </div>
+                      <div class="mt-1">
+                        <button class="btn btn-small btn-outline" onclick="removeTornKey()">🗑️ Remove my key</button>
+                        <p class="hint">Removing your key also deletes the equipment data collected with it.</p>
+                      </div>
                       <% } else { %>
                         <p class="muted">No Torn API key saved yet. Add one to enable Torn stats.</p>
                         <% } %>
@@ -1337,6 +1341,8 @@
               <div class="admin-tabs">
                 <button class="admin-tab active" data-tab="member-overview"
                   onclick="showAdminTab('member-overview', this)">👥 Member Overview</button>
+                <button class="admin-tab" data-tab="member-equipment" onclick="showAdminTab('member-equipment', this)">⚔️
+                  Member Equipment</button>
                 <button class="admin-tab" data-tab="faction-loans" onclick="showAdminTab('faction-loans', this)">📋
                   Faction Loans</button>
                 <button class="admin-tab" data-tab="weapon-armor" onclick="showAdminTab('weapon-armor', this)">⚔️
@@ -1387,6 +1393,30 @@
                   </div>
                 </div>
               </div>
+              <!-- Tab Content: Member Equipment -->
+              <div id="tab-member-equipment" class="admin-tab-content">
+                <div class="section-header" style="margin-top:0;">
+                  <h3>Member Equipment</h3>
+                  <div style="display:flex;gap:0.75rem;">
+                    <button class="btn btn-primary btn-small" onclick="fetchMemberEquipment()">↻ Refresh</button>
+                    <button class="btn btn-small btn-outline" onclick="sweepMemberEquipmentNow()">🔄 Run Sweep Now</button>
+                    <button class="btn btn-small btn-outline" onclick="exportMemberEquipmentCSV()">⬇️ Export CSV</button>
+                  </div>
+                </div>
+                <p class="muted" style="margin-bottom:1rem;font-size:0.85rem;">
+                  What each member has equipped, with upgrade suggestions. Equipment is collected once a day
+                  (03:00 UTC) using each member's saved Torn API key and is visible to leadership only.
+                  Gear marked <strong>faction-loaned</strong> is already owned by us — no need to buy it.
+                </p>
+                <div id="admin-member-equipment-data">
+                  <div class="empty-state">
+                    <span class="empty-icon">⚔️</span>
+                    <p>Click Refresh to load member equipment data.</p>
+                  </div>
+                </div>
+              </div>
+
+
 
               <!-- Tab Content: Weapon & Armor Inventory -->
               <div id="tab-weapon-armor" class="admin-tab-content">

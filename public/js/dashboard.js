@@ -632,6 +632,22 @@ async function saveTornKey() {
   }
 }
 
+// ─── Remove my Torn API key ────────────────────────────────────────────────────
+// Unlinks the key and purges the member's stored equipment rows server-side.
+async function removeTornKey() {
+  if (!confirm('Remove your saved Torn API key?\n\nThis will also delete the equipment data we collected with it. You can add it again any time.')) return;
+
+  try {
+    const res = await fetch('/api/torn/key/remove', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) { alert(`⚠️ ${data.error}`); return; }
+    alert('✅ Your Torn API key has been removed.');
+    location.reload();
+  } catch (err) {
+    alert(`⚠️ ${err.message}`);
+  }
+}
+
 // ─── Self-service key reveal (own key only; audit-logged server-side) ────────
 async function revealMyKey() {
   const wrap = document.getElementById('my-key-reveal');
@@ -3998,6 +4014,253 @@ function renderFactionLoans(members, totals, armoryItems) {
       </table>
     </div>`;
 }
+// ─── Member Equipment (leadership only) ─────────────────────────────────────────
+// Reads the DAILY stored snapshot from the server. Opening this tab never
+// triggers a live Torn pull — the 03:00 UTC cron collects the data. The
+// ↻ Refresh button here only re-reads the stored snapshot.
+let memberEquipmentData = [];
+let memberEquipmentSnapshotDate = null;
+
+async function fetchMemberEquipment() {
+  const container = document.getElementById('admin-member-equipment-data');
+  container.innerHTML = '<div class="channel-loading">LOADING MEMBER EQUIPMENT...</div>';
+  try {
+    const res = await fetch('/api/admin/member-equipment');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error)}</div>`; return; }
+    memberEquipmentData = data.members || [];
+    memberEquipmentSnapshotDate = data.snapshotDate || null;
+    renderMemberEquipment(memberEquipmentData, data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// A small "faction-loaned" marker so leadership never tells a member to buy
+// something the faction already owns and loans out.
+function factionOwnedTag(item) {
+  if (!item || !item.factionOwned) return '';
+  return `<span title="This piece is in the faction armory — the faction loans it out."
+    style="display:inline-block;background:#1f2d1f;border:1px solid #3a5a3a;color:#8fce8f;
+           border-radius:3px;padding:0 4px;font-size:0.6rem;margin-left:3px;white-space:nowrap;">faction-loaned</span>`;
+}
+
+
+// The "upgrade available" cell — stat deltas plus the price of the UPGRADE
+// (never the price the member paid for what they already own).
+function recommendationCell(rec, playerId) {
+  if (!rec || !rec.name) {
+    return `<span style="color:#555;font-size:0.72rem;">—</span>` +
+      (playerId ? `<button class="btn btn-small btn-outline" style="font-size:0.6rem;padding:1px 4px;margin-top:2px;" onclick="refreshMemberRec(${playerId})">🔍 check</button>` : '');
+  }
+  const deltas = [];
+  if (rec.damageDelta != null && rec.damageDelta > 0) deltas.push(`+${formatNumFull(rec.damageDelta)} dmg`);
+  if (rec.accuracyDelta != null && rec.accuracyDelta > 0) deltas.push(`+${formatNumFull(rec.accuracyDelta)} acc`);
+  if (rec.qualityDelta != null && rec.qualityDelta > 0) deltas.push(`+${formatNumFull(rec.qualityDelta)} qual`);
+  if (rec.armorDelta != null && rec.armorDelta > 0) deltas.push(`+${formatNumFull(rec.armorDelta)} armor`);
+  return `<span title="${escapeHtml(rec.name)}"
+    style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:130px;">
+    ${escapeHtml(rec.name)}</span>
+    <span style="color:#8fce8f;font-size:0.65rem;">${deltas.join(' · ') || 'better'}</span>
+    ${rec.price != null ? `<span style="color:#888;font-size:0.65rem;">${fmtMoney(rec.price)}</span>` : ''}` +
+    (playerId ? `<button class="btn btn-small btn-outline" style="font-size:0.6rem;padding:1px 4px;margin-top:2px;" onclick="refreshMemberRec(${playerId})">🔍 re-check</button>` : '');
+}
+
+// One weapon cell: name, damage/accuracy, faction tag.
+function weaponCell(item) {
+  if (!item || !item.name) return '<span style="color:#555;font-size:0.72rem;">—</span>';
+  const stats = [];
+  if (item.damage != null) stats.push(`⚔ ${formatNumFull(item.damage)}`);
+  if (item.accuracy != null) stats.push(`🎯 ${formatNumFull(item.accuracy)}`);
+  return `<span title="${escapeHtml(item.name)}${item.quality != null ? ` | quality ${item.quality}` : ''}"
+    style="display:block;word-wrap:break-word;overflow-wrap:break-word;font-size:0.72rem;max-width:110px;">
+    ${escapeHtml(item.name)}${factionOwnedTag(item)}</span>
+    <span style="color:#666;font-size:0.65rem;">${stats.join(' · ')}</span>`;
+}
+
+function renderMemberEquipment(members, meta = {}) {
+  const container = document.getElementById('admin-member-equipment-data');
+  if (!container) return;
+
+  if (!members.length) {
+    container.innerHTML = `<div class="empty-state">
+      <span class="empty-icon">⚔️</span>
+      <p class="muted">${escapeHtml(meta.message || 'No member equipment data yet.')}</p>
+    </div>`;
+    return;
+  }
+
+  const positionOrder = {
+    'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
+    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+  };
+
+  const sorted = [...members].sort((a, b) => {
+    const aO = positionOrder[a.position] ?? 99;
+    const bO = positionOrder[b.position] ?? 99;
+    if (aO !== bO) return aO - bO;
+    return (a.playerName || '').localeCompare(b.playerName || '');
+  });
+
+  const statusLabel = {
+    ok: '',
+    no_key: 'no API key',
+    key_restricted: 'key restricted',
+    error: 'error'
+  };
+
+  const rows = sorted.map(m => {
+    const w = m.weapons || {};
+    const armorPieces = Array.isArray(m.armor) ? m.armor : [];
+
+    // Armor summary: total rating + piece count, and flag the weakest piece.
+    const weak = m.lowestQualityArmor;
+    const armorCell = armorPieces.length
+      ? `<span style="font-size:0.72rem;">🛡 ${formatNumFull(m.armorRatingTotal)}</span>
+         <span style="color:#666;font-size:0.65rem;display:block;">${armorPieces.length} piece${armorPieces.length === 1 ? '' : 's'}</span>
+         ${weak ? `<span title="Weakest piece: ${escapeHtml(weak.name)}"
+            style="color:#c9a227;font-size:0.65rem;display:block;">lowest: ${escapeHtml(weak.name)}</span>` : ''}`
+      : '<span style="color:#555;font-size:0.72rem;">—</span>';
+
+    const status = m.status && m.status !== 'ok'
+      ? `<span style="color:#8a6a6a;font-size:0.65rem;display:block;">${escapeHtml(statusLabel[m.status] || m.status)}</span>`
+      : '';
+
+    return `<tr style="vertical-align:top;">
+      <td style="max-width:100px;">
+        <a href="https://www.torn.com/profiles.php?XID=${m.playerId}" target="_blank" rel="noopener"
+          style="color:#a78df5;text-decoration:none;font-size:0.78rem;">${escapeHtml(m.playerName || 'Unknown')}</a>
+        ${status}
+      </td>
+      <td style="font-size:0.72rem;text-align:center;">${weaponCell(w.primary)}</td>
+      <td style="font-size:0.72rem;text-align:center;">${weaponCell(w.secondary)}</td>
+      <td style="font-size:0.72rem;text-align:center;">${weaponCell(w.melee)}</td>
+      <td style="font-size:0.72rem;text-align:center;">${armorCell}</td>
+      <td style="font-size:0.72rem;text-align:center;">${weaponCell(m.mostUsedWeapon)}</td>
+      <td style="font-size:0.72rem;text-align:center;">${recommendationCell(m.recommendations?.weapon, m.playerId)}</td>
+      <td style="font-size:0.72rem;text-align:center;">${recommendationCell(m.recommendations?.armor, m.playerId)}</td>
+    </tr>`;
+  }).join('');
+
+  const stamp = meta.snapshotDate
+    ? `Last synced <strong>${escapeHtml(meta.snapshotDate)}</strong>`
+    : 'Not yet synced';
+
+  container.innerHTML = `
+    <p class="muted" style="margin-bottom:0.5rem;font-size:0.75rem;">${stamp}</p>
+    <div style="overflow-x:auto;">
+      <table class="members-table overview-table" style="table-layout:fixed;width:100%;">
+        <thead>
+          <tr>
+            <th style="width:11%;">Member</th>
+            <th style="text-align:center;width:12%;">Primary</th>
+            <th style="text-align:center;width:12%;">Secondary</th>
+            <th style="text-align:center;width:11%;">Melee</th>
+            <th style="text-align:center;width:12%;">Armor</th>
+            <th style="text-align:center;width:12%;">Most Used</th>
+            <th style="text-align:center;width:15%;">Weapon Upgrade</th>
+            <th style="text-align:center;width:15%;">Armor Upgrade</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// Run a live re-sweep of every member's gear right now. The daily 03:00 UTC
+// cron is the normal path; this is the manual override.
+async function sweepMemberEquipmentNow() {
+  if (!confirm('Run a live equipment sweep for every member now?\n\nThis pulls each member\'s current gear from Torn and may take a minute.')) return;
+
+  const container = document.getElementById('admin-member-equipment-data');
+  container.innerHTML = '<div class="channel-loading">SWEEPING MEMBER EQUIPMENT — THIS TAKES A MOMENT...</div>';
+
+  try {
+    const res = await fetch('/api/admin/member-equipment/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(data.error)}</div>`; return; }
+    memberEquipmentData = data.members || [];
+    memberEquipmentSnapshotDate = data.snapshotDate || null;
+    renderMemberEquipment(memberEquipmentData, data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+// Re-check one member's upgrade suggestion (reuses the cached weav3r response).
+async function refreshMemberRec(playerId) {
+  try {
+    const res = await fetch('/api/admin/member-equipment/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId })
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(`⚠️ ${data.error}`); return; }
+
+    const updated = data.member;
+    const idx = memberEquipmentData.findIndex(m => Number(m.playerId) === Number(playerId));
+    if (idx !== -1) memberEquipmentData[idx] = updated;
+    renderMemberEquipment(memberEquipmentData, { snapshotDate: memberEquipmentSnapshotDate });
+  } catch (err) {
+    alert(`⚠️ ${err.message}`);
+  }
+}
+
+// Export the member equipment table as CSV for offline analysis.
+function exportMemberEquipmentCSV() {
+  if (!memberEquipmentData.length) {
+    alert('No data to export. Please click Refresh first.');
+    return;
+  }
+
+  const headers = [
+    'Name', 'Torn ID', 'Position', 'Status',
+    'Primary', 'Primary Damage', 'Primary Accuracy',
+    'Secondary', 'Secondary Damage', 'Secondary Accuracy',
+    'Melee', 'Melee Damage', 'Melee Accuracy',
+    'Armor Pieces', 'Total Armor Rating', 'Lowest Quality Piece',
+    'Most Used Weapon',
+    'Weapon Upgrade', 'Weapon Upgrade Damage', 'Weapon Upgrade Accuracy', 'Weapon Upgrade Price',
+    'Armor Upgrade', 'Armor Upgrade Quality', 'Armor Upgrade Price'
+  ];
+
+  const quote = (val) => '"' + String(val).split('"').join('""') + '"';
+
+  const rows = memberEquipmentData.map(m => {
+    const w = m.weapons || {};
+    const p = w.primary || {}, s = w.secondary || {}, me = w.melee || {};
+    const ru = (m.recommendations && m.recommendations.weapon) || {};
+    const ra = (m.recommendations && m.recommendations.armor) || {};
+    return [
+      m.playerName || '—', m.playerId == null ? '—' : m.playerId, m.position || '—', m.status || '—',
+      p.name || '—', p.damage == null ? '—' : p.damage, p.accuracy == null ? '—' : p.accuracy,
+      s.name || '—', s.damage == null ? '—' : s.damage, s.accuracy == null ? '—' : s.accuracy,
+      me.name || '—', me.damage == null ? '—' : me.damage, me.accuracy == null ? '—' : me.accuracy,
+      (m.armor || []).length, m.armorRatingTotal == null ? 0 : m.armorRatingTotal,
+      (m.lowestQualityArmor && m.lowestQualityArmor.name) || '—',
+      (m.mostUsedWeapon && m.mostUsedWeapon.name) || '—',
+      ru.name || '—', ru.damage == null ? '—' : ru.damage, ru.accuracy == null ? '—' : ru.accuracy,
+      ru.price == null ? '—' : ru.price,
+      ra.name || '—', ra.quality == null ? '—' : ra.quality, ra.price == null ? '—' : ra.price
+    ].map(quote).join(',');
+  });
+
+  const csv = [headers.map(quote).join(',')].concat(rows).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const date = new Date().toISOString().slice(0, 10);
+  link.href = url;
+  link.download = 'SSG_Member_Equipment_' + (memberEquipmentSnapshotDate || date) + '.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 
 function formatCooldown(seconds) {
   if (!seconds || seconds <= 0) return 'Ready';
@@ -6454,6 +6717,11 @@ function showAdminTab(tabId, el) {
     case 'faction-loans':
       if (document.getElementById('admin-loans-data').innerHTML.includes('empty-state')) {
         fetchFactionLoans();
+      }
+      break;
+    case 'member-equipment':
+      if (document.getElementById('admin-member-equipment-data').innerHTML.includes('empty-state')) {
+        fetchMemberEquipment();
       }
       break;
     case 'weapon-armor':

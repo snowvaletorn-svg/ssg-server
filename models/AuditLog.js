@@ -7,7 +7,7 @@ const auditLogSchema = new mongoose.Schema({
   action: {
     type: String,
     required: true,
-    enum: ['key_reveal', 'key_save', 'key_login', 'key_access_check', 'faction_key_save']
+    enum: ['key_reveal', 'key_save', 'key_login', 'key_access_check', 'faction_key_save', 'key_remove']
   },
   // Who performed the action (tornPlayerId from the session)
   actorId: { type: Number, required: true },

@@ -3,6 +3,7 @@
 const cron = require('node-cron');
 const axios = require('axios');
 const { takeSnapshot, takeDailySnapshot, sendWeeklyReport } = require('./snapshotService');
+const { takeMemberEquipmentSnapshot } = require('./memberEquipmentService');
 const StockPriceSnapshot = require('../models/StockPriceSnapshot');
 const { decryptOrRaw } = require('./keyCipher');
 
@@ -216,11 +217,32 @@ function startScheduler() {
     timezone: 'UTC'
   });
 
+  // Daily member equipment snapshot: Every day at 03:00 UTC. Collects each
+  // member's equipped gear (via their own saved API key) so the Admin panel's
+  // "Member Equipment" tab can show leadership what everyone is wearing and
+  // suggest cheaper upgrades. Silent — no report/email is sent.
+  const equipmentSnapshotTask = cron.schedule('0 3 * * *', async () => {
+    console.log('[Scheduler] Daily member equipment snapshot triggered — 03:00 UTC');
+    try {
+      const result = await takeMemberEquipmentSnapshot('scheduler');
+      if (!result.success) {
+        console.error('[Scheduler] Equipment snapshot failed:', result.message);
+        return;
+      }
+      console.log(`[Scheduler] Equipment snapshot saved: ${result.snapshotId} (${result.withGear}/${result.members} members with gear)`);
+    } catch (err) {
+      console.error('[Scheduler] Uncaught error during equipment snapshot:', err.message);
+    }
+  }, {
+    timezone: 'UTC'
+  });
+
   schedulerStarted = true;
   console.log('[Scheduler] ✅ Weekly snapshot scheduled — every Sunday at 12:00 UTC');
-  console.log('[Scheduler] ✅ Daily member stat snapshot scheduled — every day at 06:00 UTC');
+  console.log('[Scheduler] ✅ Daily member stat snapshot scheduled — every day at 02:00 UTC');
   console.log('[StockScheduler] ✅ Daily stock snapshot scheduled — every day at 00:00 UTC');
-  return { weeklyTask, stockTask, dailySnapshotTask };
+  console.log('[Scheduler] ✅ Daily member equipment snapshot scheduled — every day at 03:00 UTC');
+  return { weeklyTask, stockTask, dailySnapshotTask, equipmentSnapshotTask };
 }
 
 module.exports = { startScheduler };
