@@ -70,6 +70,7 @@ organizedCrimeSchema.index({ factionId: 1 });
 organizedCrimeSchema.index({ status: 1 });
 organizedCrimeSchema.index({ timeStarted: 1 });
 organizedCrimeSchema.index({ isComplete: 1 });
+organizedCrimeSchema.index({ 'participants.playerId': 1 });
 
 // Update timestamp before saving
 organizedCrimeSchema.pre('save', function(next) {

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.7.2
+// @version      2.8.1
 // @description  Precision Data Harvesting Engine - Travel Page Only
 // @author       SSG
 // @match        *://*.torn.com/page.php?sid=travel*

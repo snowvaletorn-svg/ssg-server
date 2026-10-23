@@ -414,6 +414,148 @@ function renderMyDay(d) {
   return `<div class="myday-grid">${cards.join('')}</div>`;
 }
 
+async function fetchTravelProfits() {
+  const container = document.getElementById('travel-profits-data');
+  container.innerHTML = '<div class="channel-loading">LOADING TRAVEL PROFITS...</div>';
+  try {
+    const res = await fetch('/api/travel-profits');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    travelProfitsCache = data || {};
+    renderTravelProfits();
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+function renderTravelProfits() {
+  const container = document.getElementById('travel-profits-data');
+
+  if (!travelProfitsCache || !travelProfitsCache.profits || !travelProfitsCache.profits.length) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">💰</span>
+        <p>No profitable items found.</p>
+        <p class="muted">Items may not be available or market prices may not exceed foreign costs.</p>
+      </div>`;
+    return;
+  }
+
+  // Get travel method from radio buttons
+  const travelMethod = document.querySelector('input[name="travelMethod"]:checked')?.value || 'standard';
+
+  // Get selected country from dropdown
+  const selectedCountry = document.getElementById('travel-country-select')?.value || '';
+
+  // Get quantity from input (default 25, min 5, max 29)
+  const quantityInput = document.getElementById('profit-quantity');
+  let quantity = parseInt(quantityInput?.value) || 25;
+  quantity = Math.max(5, Math.min(29, quantity));
+
+  // Get item types from checkboxes
+  const typePlushie = document.getElementById('type-plushie')?.checked ?? true;
+  const typeFlower = document.getElementById('type-flower')?.checked ?? true;
+  const typeDrug = document.getElementById('type-drug')?.checked ?? true;
+  const typeOther = document.getElementById('type-other')?.checked ?? true;
+
+  const sortBy = document.getElementById('profit-sort')?.value || 'profitPerRun';
+
+  let profits = [...travelProfitsCache.profits];
+
+  // Filter by item type using checkboxes
+  profits = profits.filter(p => {
+    const type = p.type.toLowerCase();
+    const normalizedType = type.endsWith('s') ? type.slice(0, -1) : type;
+
+    if (normalizedType === 'plushie' && typePlushie) return true;
+    if (normalizedType === 'flower' && typeFlower) return true;
+    if (normalizedType === 'drug' && typeDrug) return true;
+    if (!['plushie', 'flower', 'drug'].includes(normalizedType) && typeOther) return true;
+
+    return false;
+  });
+
+  // Filter by selected country if one is chosen
+  if (selectedCountry) {
+    profits = profits.filter(p => p.country === selectedCountry);
+  }
+
+  // Sort
+  switch (sortBy) {
+    case 'profit':
+      profits.sort((a, b) => b.profit - a.profit);
+      break;
+    case 'profitPercent':
+      profits.sort((a, b) => b.profitPercent - a.profitPercent);
+      break;
+    case 'country':
+      profits.sort((a, b) => a.country.localeCompare(b.country));
+      break;
+    case 'profitPerRun':
+    default:
+      profits.sort((a, b) => {
+        const aFlightCost = getFlightCost(a.country, travelMethod);
+        const bFlightCost = getFlightCost(b.country, travelMethod);
+        return ((b.profit * quantity) - bFlightCost) - ((a.profit * quantity) - aFlightCost);
+      });
+      break;
+  }
+
+  // Group by country
+  const grouped = {};
+  profits.forEach(p => {
+    if (!grouped[p.country]) grouped[p.country] = [];
+    grouped[p.country].push(p);
+  });
+
+  const summary = travelProfitsCache.summary || {};
+  const inStockProfits = profits.filter(p => !p.outOfStock);
+
+  // Find the best profit per run from IN-STOCK items only
+  const bestRun = inStockProfits.length > 0 ? inStockProfits.reduce((best, current) => {
+    const bestFlightCost = getFlightCost(best.country, travelMethod);
+    const currentFlightCost = getFlightCost(current.country, travelMethod);
+    const bestProfit = (best.profit * quantity) - bestFlightCost;
+    const currentProfit = (current.profit * quantity) - currentFlightCost;
+    return currentProfit > bestProfit ? current : best;
+  }) : null;
+
+  // Calculate maximum possible profit for selected country
+  let selectedCountryTotal = 0;
+  if (selectedCountry && profits.length > 0) {
+    const flightCost = getFlightCost(selectedCountry, travelMethod);
+    let slotsRemaining = quantity;
+    let totalProfit = 0;
+
+    const sortedItems = [...profits].sort((a, b) => b.profit - a.profit);
+    for (const item of sortedItems) {
+      if (slotsRemaining <= 0) break;
+      const takeAmount = Math.min(item.quantity, slotsRemaining);
+      totalProfit += item.profit * takeAmount;
+      slotsRemaining -= takeAmount;
+    }
+    selectedCountryTotal = totalProfit - flightCost;
+  }
+
+  let html = `
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        💰 Travel Profits Summary
+        <span style="float:right;font-size:0.8rem;color:#555;">
+          ${profits.length} items ${selectedCountry ? `for ${getCountryName(selectedCountry)}` : `across ${Object.keys(grouped).length} countries`}
+        </span>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">
+          ${selectedCountry ? statTile(getCountryName(selectedCountry), 'Selected Country') : (bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country'))}
+          ${selectedCountry ? statTile('$' + formatNum(selectedCountryTotal), 'Total Profit') : (bestRun ? statTile('+' + formatNum((bestRun.profit * quantity) - getFlightCost(bestRun.country, travelMethod)), 'Best Profit/Run') : statTile('—', 'Best Profit/Run'))}
+          ${bestRun ? statTile(escapeHtml(bestRun.name), 'Best Item') : statTile('—', 'Best Item')}
+          ${statTile(travelMethod === 'standard' ? '✈️ Standard' : travelMethod === 'airstrip' ? '🛫 Airstrip' : '🚀 Private', 'Travel Method')}
+        </div>
+      </div>
+    </div>`;
+
+  container.innerHTML = html;
+}
+}
 // ── Utilities Armory Request Ticket card (all faction members) ────────────────
 function renderUtilitiesRequestCard() {
   const options = utilityItems.length
