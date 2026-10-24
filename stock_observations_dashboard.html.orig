@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSG Stock Observations Dashboard</title>
+    <style>
+        body {
+            font-family: 'Share Tech Mono', monospace, sans-serif;
+            background: #1a1919;
+            color: #c0bcbc;
+            margin: 0;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #a78df5; border-bottom: 1px solid #2a2828; padding-bottom: 1rem; }
+        .card { background: #2a2828; border: 1px solid #2a2828; border-radius: 8px; margin-bottom: 2rem; padding: 1.5rem; }
+        .card-header { color: #f0a500; font-size: 1.2rem; margin-bottom: 1rem; display: flex; justify-content: between; align-items: center; }
+        .empty-state { color: #555; font-size: 1.1rem; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 0.75rem; text-align: left; border-bottom: 1px solid #333; }
+        th { color: #888; font-size: 0.7rem; text-transform: uppercase; }
+        td { color: #c0bcbc; }
+        .name-cell { color: #a78df5; }
+        .country-cell { color: #e74c3c; }
+        .status-cell { font-size: 0.8rem; }
+        .no-data { text-align: center; padding: 3rem; color: #555; }
+        .refresh-btn { background: #4caf50; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; font-size: 0.9rem; margin-top: 1rem; }
+        .refresh-btn:hover { background: #45a049; }
+        .loading { text-align: center; padding: 2rem; color: #888; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📦 Stock Observations Dashboard</h1>
+        
+        <button class="refresh-btn" onclick="loadStockObservations()">Refresh Data</button>
+        
+        <div id="stocks-data" class="card">
+            <div class="card-header">Stock Observations</div>
+            <div id="loading">Loading data...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadStockObservations() {
+            const loadingEl = document.getElementById('loading');
+            const stocksData = document.getElementById('stocks-data');
+            
+            loadingEl.innerHTML = '<div class="loading">Loading stock observations...</div>';
+            
+            try {
+                const res = await fetch('/api/stock-observations');
+                if (!res.ok) {
+                    const errData = await res.json();
+                    loadingEl.innerHTML = `<div class="channel-error">⚠️ ${errData.error || 'Failed to load data'}</div>`;
+                    return;
+                }
+                const data = await res.json();
+                renderStockObservations(data);
+            } catch (err) {
+                loadingEl.innerHTML = `<div class="channel-error">⚠️ Error: ${err.message}</div>`;
+            }
+        }
+
+        function renderStockObservations(data) {
+            const stocksData = document.getElementById('stocks-data');
+            
+            if (!data || data.length === 0) {
+                stocksData.innerHTML = '<div class="empty-state">No stock observations found. Make sure users are using the SSG Stock Observer script on Torn travel pages.</div>';
+                return;
+            }
+            
+            let rows = '';
+            data.forEach((obs, idx) => {
+                const observedAt = obs.observedAt ? new Date(obs.observedAt).toLocaleString() : 'N/A';
+                const playerName = obs.playerName || 'Unknown';
+                const country = obs.country || 'N/A';
+                
+                let stocksHtml = '';
+                if (obs.stocks && obs.stocks.length > 0) {
+                    obs.stocks.forEach((stock, i) => {
+                        const cost = stock.cost !== undefined ? `$${stock.cost}` : 'N/A';
+                        const quantity = stock.quantity !== undefined ? `${stock.quantity}` : 'N/A';
+                        const name = stock.name || `Item #${i}`;
+                        stocksHtml += `
+                            <tr>
+                                <td style="color: #a78df5; font-family: 'Share Tech Mono', monospace;">${name}</td>
+                                <td style="text-align: center; font-family: 'Share Tech Mono', monospace;">${quantity}</td>
+                                <td style="text-align: right; font-family: 'Share Tech Mono', monospace;">${cost}</td>
+                            </tr>`;
+                    });
+                } else {
+                    stocksHtml = '<tr><td colspan="3" class="muted">No stock items recorded</td></tr>';
+                }
+                
+                rows += `
+                    <div style="margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #333;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <span style="color: #a78df5; font-family: 'Share Tech Mono', monospace;">${playerName}</span>
+                            <span style="color: #888; font-size: 0.8rem;">${observedAt}</span>
+                        </div>
+                        <div style="display: flex; gap: 1rem; margin-bottom: 0.5rem;">
+                            <span style="color: #e74c3c; font-size: 0.8rem;">Country: ${country}</span>
+                        </div>
+                        ${stocksHtml}
+                    </div>`;
+            });
+            
+            stocksData.innerHTML = `
+                ${rows.length > 0 ? rows : '<div class="empty-state">No stock observations found.</div>'}
+            `;
+        }
+        
+        // Initial load
+        window.onload = loadStockObservations;
+    </script>
+</body>
+</html>

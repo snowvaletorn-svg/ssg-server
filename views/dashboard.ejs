@@ -58,6 +58,7 @@
             <a href="#faction" class="nav-item" onclick="showSection('faction', this)">⚔️ Faction</a>
             <% } %>
             <a href="#travel" class="nav-item" onclick="showSection('travel', this)">✈️ Travel</a>
+            <a href="#stock-observations" class="nav-item" onclick="showSection('stock-observations', this)">📊 Stock Observations</a>
             <% if (!isEmployee) { %>
             <a href="#training" class="nav-item" onclick="showSection('training', this)">📚 Training</a>
             <% } %>
@@ -100,6 +101,32 @@
               </div>
             </div>
           </section>
+<!-- ── STOCK OBSERVATIONS ── -->
+          <% if (!isEmployee) { %>
+          <section id="stock-observations" class="section">
+            <div class="section-header">
+              <h3>📊 Stock Observations</h3>
+              <div style=\"display:flex;gap:0.5rem;align-items:center;\">
+                <button class=\"btn btn-primary btn-small\" onclick=\"loadStockObservations()\">↻ Refresh</button>
+                <button class=\"btn btn-small btn-outline\" onclick=\"openHelp('stockObservations')\">❓ Help</button>
+              </div>
+            </div>
+            <div id="stock-observations-data">
+              <div class=\"empty-state\">
+                <span class=\"empty-icon\">⏳</span>
+                <p>No stock observations yet.</p>
+                <p class=\"muted\">Visiting Torn travel pages with the SSG Stock Observer script will collect data.</p>
+              </div>
+            </div>
+          </section>
+          <% } else { %>
+          <section id="stock-observations" class="section">
+            <div class=\"empty-state\">
+              <span class=\"empty-icon\">🏢</span>
+              <p>Stock observations available for faction members only.</p>
+            </div>
+          </section>
+          <% } %>
 
           <!-- ── PROFILE ── -->
           <section id="profile" class="section">

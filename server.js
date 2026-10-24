@@ -6358,6 +6358,60 @@ app.get('/api/travel-recommendations', async (req, res) => {
   }
 });
 
+// ---- API: Get stock observations dashboard data -------------------
+app.get('/api/stock-observations', async (req, res) => {
+  try {
+    const StockObservation = require('./models/StockObservation');
+    
+    // Get query parameters
+    const country = req.query.country; // Filter by country (optional)
+    const limit = parseInt(req.query.limit) || 50; // Max records to return
+    const sortBy = req.query.sort || 'observedAt'; // Sort field
+    const sortOrder = req.query.order === 'desc' ? -1 : 1; // Sort direction
+
+    // Build query filter
+    const filter = {};
+    if (country) {
+      filter['country'] = country.toLowerCase();
+    }
+
+    // Fetch observations, sorted by observedAt descending (newest first)
+    const observations = await StockObservation.find(filter)
+      .sort({ [sortBy]: sortOrder })
+      .limit(limit)
+      .lean();
+
+    // Count total for this filter
+    const totalCount = await StockObservation.countDocuments(filter);
+
+    // Group data by country for summary
+    const countryStats = await StockObservation.aggregate([
+      { $match: filter },
+      { $group: {
+          _id: '$country',
+          totalObservations: { $sum: 1 },
+          totalItems: { $sum: { $size: '$stocks' } },
+          lastObserved: { $max: '$observedAt' }
+        }
+      }
+    ]);
+
+    res.json({
+      success: true,
+      observations,
+      totalCount,
+      countryStats,
+      pagination: {
+        limit,
+        filteredCount: totalCount
+      }
+    });
+  } catch (err) {
+    console.error('Stock observations dashboard error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---- API: Stock Advisory - hybrid YATA + userscript data ----------------------
 // Returns per-country stock data with deterministic restock countdown,
 // burn rates from userscript observations, and departure recommendations.

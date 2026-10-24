@@ -46,6 +46,31 @@
         'china': 'chi', 'uae': 'uae', 'south africa': 'sou'
     };
 
+    // Mapping of Torn shop names/country names → short country codes
+    // Used to decode sell locations from price format like "5000 (Mexico)"
+    const SELL_LOCATION_MAP = {
+        // Country names
+        'mexico': 'mex', 'mex': 'mex',
+        'cayman': 'cay', 'cayman-islands': 'cay', 'cay': 'cay',
+        'canada': 'can', 'can': 'can',
+        'hawaii': 'haw', 'haw': 'haw',
+        'uk': 'uni', 'united kingdom': 'uni', 'uk': 'uni',
+        'argentina': 'arg', 'arg': 'arg',
+        'switzerland': 'swi', 'switzerland': 'swi',
+        'japan': 'jap', 'japan': 'jap',
+        'china': 'chi', 'china': 'chi',
+        'uae': 'uae', 'uae': 'uae',
+        'south africa': 'sou', 'south-africa': 'sou', 'sou': 'sou',
+        // Common Torn shop names
+        'big al\'s gun shop': 'usa', 'big al gun shop': 'usa',
+        'bit\'s n\' bobs': 'uk', "bit's n' bobs": 'uk',
+        'torn market': 'global', 'torn-market': 'global',
+        'torn city': 'global', 'torn-city': 'global',
+        'market': 'global',
+        // USA variants
+        'usa': 'usa', 'united states': 'usa',
+    };
+
     function log(msg) {
         const ts = new Date().toLocaleTimeString();
         logs.push(`[${ts}] ${msg}`);
@@ -396,13 +421,25 @@
             // Only accept items that have ALL letters (not purely numeric like "1234")
             if (/^[0-9\s]+$/.test(name)) return;
 
+            // Extract sell location from price format like "$5000 (Mexico)" or "5000 (UAE)"
+            // The price text from the element includes the dollar sign
+            const priceText = el.textContent.trim();
+            let sellLocation = null;
+            const locationMatch = priceText.match(/\(\s*([^)]+)\s*\)/);
+            if (locationMatch) {
+                const locationName = locationMatch[1].trim().toLowerCase();
+                // Use the COUNTRY_MAP to convert full name to short code
+                sellLocation = SELL_LOCATION_MAP[locationName] || locationName;
+                log(`  Sell location extracted: "${locationName}" -> "${sellLocation}"`);
+            }
+
             if (!seen.has(name)) {
                 seen.add(name);
                 candidatesFound++;
                 log(`  Item: "${name}" cost=${cost} qty=${qty}`);
                 // DON'T send sequential IDs - let the backend generate stable
                 // name-based IDs for proper analytics across visits
-                stocks.push({ name, quantity: qty, cost });
+                stocks.push({ name, quantity: qty, cost, sellLocation });
             }
         });
 
@@ -460,10 +497,20 @@
                     }
 
                     if (name && !seen.has(name)) {
+                        // Extract sell location from price text if available
+                        let sellLocation = null;
+                        const locationMatch = name.match(/\\(\\s*([^)]+)\\s*\\)/);
+                        if (locationMatch) {
+                            const locationName = locationMatch[1].trim().toLowerCase();
+                            sellLocation = SELL_LOCATION_MAP[locationName] || locationName;
+                            log(`  TextScan location extracted: "${locationName}" -> "${sellLocation}"`);
+                        }
                         seen.add(name);
                         candidatesFound++;
                         log(`  TextScan: "${name}" cost=${cost} qty=${qty}`);
-                        stocks.push({ name, quantity: qty, cost });
+                        // DON'T send sequential IDs - let the backend generate stable
+                        // name-based IDs for proper analytics across visits
+                        stocks.push({ name, quantity: qty, cost, sellLocation });
                     }
                 }
             });
