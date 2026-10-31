@@ -17,9 +17,10 @@ const stockObservationSchema = new mongoose.Schema({
     },
     name: { type: String, required: true },
     quantity: { type: Number, required: true },
-    cost: { type: Number, required: true },
+    cost: { type: Number, required: true },      // What user paid to buy
+    sellPrice: { type: Number },                  // What user can sell it for (from "(Country)")
     sellPrices: Map,
-    sellLocation: { type: String }  // e.g., 'mex', 'can', 'arg', 'usa' - from price format "(Mexico)"
+    sellLocation: { type: String }                // e.g., 'mex', 'can', 'arg', 'usa' - from price format "(Mexico)"
   }],
   // Server metadata
   // Explicitly keep this as a basic un-indexed field here

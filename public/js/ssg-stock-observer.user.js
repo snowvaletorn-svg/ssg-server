@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSG Stock Observer
 // @namespace    https://ssg-server.onrender.com
-// @version      2.8.1
+// @version      2.8.2
 // @description  Precision Data Harvesting Engine - Travel Page Only
 // @author       SSG
 // @match        *://*.torn.com/page.php?sid=travel*
@@ -28,6 +28,14 @@
     console.log('[SSG] Travel page detected, initializing stock observer...');
 
     const SSG_SERVER = 'https://ssg-server.onrender.com';
+
+// DRUG DETECTION for black market pricing
+const DRUG_NAMES = ['weed', 'cocaine', 'heroin', 'lsd', 'ecstasy', 'mdma', 'shrooms', 'acid', 'benzos', 'valium', 'xanax', 'oxy', 'perc', 'vicodin', 'codeine', 'meth', 'crystal', 'ice', 'fat', 'lean'];
+function isDrugName(name) {
+    const lower = (name || '').toLowerCase().trim();
+    if (!lower) return false;
+    if (DRUG_NAMES.includes(lower)) return true;
+    return DRUG_NAMES.some(d => lower.includes(d) || d.includes(lower));
     const MIN_SUBMIT_INTERVAL_MS = 6000;
     const FOREIGN_COUNTRIES = ['mexico', 'cayman', 'cayman-islands', 'canada', 'hawaii', 'uk', 'argentina', 'switzerland', 'japan', 'china', 'uae', 'south africa'];
 
@@ -417,29 +425,38 @@
             if (!name) return;
             if (name.endsWith(':') || name.endsWith(':')) return;           // "Money:", "Travel:", etc.
             if (['Torn', 'Travel', 'Home', 'Items', 'Events', 'Money', 'Lye'].includes(name)) return;
-            if (name.length < 3) return;
-            // Only accept items that have ALL letters (not purely numeric like "1234")
-            if (/^[0-9\s]+$/.test(name)) return;
-
-            // Extract sell location from price format like "$5000 (Mexico)" or "5000 (UAE)"
+            // Extract sell location and sell price from price format like "$5000 (Mexico)" or "5000 (UAE)"
             // The price text from the element includes the dollar sign
             const priceText = el.textContent.trim();
             let sellLocation = null;
-            const locationMatch = priceText.match(/\(\s*([^)]+)\s*\)/);
-            if (locationMatch) {
-                const locationName = locationMatch[1].trim().toLowerCase();
-                // Use the COUNTRY_MAP to convert full name to short code
+            let sellPrice = null;
+            
+            // Match price pattern: number (location) - e.g., "$5000 (Mexico)" or "5000 (UAE)"
+            const priceLocationMatch = priceText.match(/(\$?\d+(?:,\d{3})*)\s*\(([^)]+)\)/);
+            if (priceLocationMatch) {
+                const price = priceLocationMatch[1].replace(/[$,]/g, '');
+                sellPrice = parseInt(price, 10);
+                const locationName = priceLocationMatch[2].trim().toLowerCase();
+                // Use the SELL_LOCATION_MAP to convert full name to short code
                 sellLocation = SELL_LOCATION_MAP[locationName] || locationName;
-                log(`  Sell location extracted: "${locationName}" -> "${sellLocation}"`);
+                log(`  Sell location: "${sellLocation}", sell price: ${sellPrice}`);
             }
-
+            
+            // Also extract cost (purchase price) - looks for standalone price without location
+            let cost = null;
+            // Match standalone price pattern (number with optional comma)
+            const costMatch = priceText.match(/(?<!\$)\$(\d+(?:,\d{3})*)/);
+            if (costMatch) {
+                cost = parseInt(costMatch[1].replace(/,/g, ''), 10);
+            }
+            
             if (!seen.has(name)) {
                 seen.add(name);
                 candidatesFound++;
-                log(`  Item: "${name}" cost=${cost} qty=${qty}`);
+                log(`  Item: "${name}", cost=${cost}, sellPrice=${sellPrice}, qty=${qty}`);
                 // DON'T send sequential IDs - let the backend generate stable
                 // name-based IDs for proper analytics across visits
-                stocks.push({ name, quantity: qty, cost, sellLocation });
+                stocks.push({ name, quantity: qty, cost, sellPrice, sellLocation });
             }
         });
 
@@ -510,7 +527,8 @@
                         log(`  TextScan: "${name}" cost=${cost} qty=${qty}`);
                         // DON'T send sequential IDs - let the backend generate stable
                         // name-based IDs for proper analytics across visits
-                        stocks.push({ name, quantity: qty, cost, sellLocation });
+                        const type = isDrugName(name) ? 'drug' : 'other';
+stocks.push({ name, quantity: qty, cost, sellLocation, type });
                     }
                 }
             });

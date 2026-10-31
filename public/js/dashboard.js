@@ -189,6 +189,114 @@ function closeStockDetail(event) {
   }
 }
 
+// ── Stock Observations ─────────────────────────────────────────────────────────
+async function loadStockObservations() {
+  const container = document.getElementById('stock-observations-data');
+  container.innerHTML = '<div class="channel-loading">LOADING STOCK OBSERVATIONS...</div>';
+  try {
+    const res = await fetch('/api/stock-observations');
+    const data = await res.json();
+    if (!res.ok) { container.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }
+    container.innerHTML = renderStockObservations(data);
+  } catch (err) {
+    container.innerHTML = `<div class="channel-error">⚠️ ${err.message}</div>`;
+  }
+}
+
+function renderStockObservations(data) {
+  const observations = data.observations || [];
+  const countryStats = data.countryStats || [];
+  const totalCount = data.totalCount || 0;
+
+  if (observations.length === 0) {
+    return `
+      <div class="empty-state">
+        <span class="empty-icon">⏳</span>
+        <p>No stock observations yet.</p>
+        <p class="muted">Visiting Torn travel pages with the SSG Stock Observer script will collect data.</p>
+      </div>`;
+  }
+
+  // Country summary
+  const countrySummary = countryStats.map(cs => {
+    const countryName = {
+      'mex': 'Mexico', 'can': 'Canada', 'arg': 'Argentina', 'swi': 'Switzerland',
+      'jap': 'Japan', 'chi': 'China', 'uae': 'UAE', 'sou': 'South Africa',
+      'cay': 'Cayman Islands', 'haw': 'Hawaii', 'uni': 'United Kingdom'
+    }[cs._id] || cs._id;
+    return `<div class="stat-tile"><div class="stat-value">${cs.totalObservations}</div><div class="stat-label">${countryName} (${cs.totalItems} items)</div></div>`;
+  }).join('');
+
+  // Build table rows
+  const rows = observations.map(obs => {
+    const date = new Date(obs.observedAt * 1000).toLocaleDateString();
+    const countryLabel = {
+      'mex': 'MEX', 'can': 'CAN', 'arg': 'ARG', 'swi': 'SWI',
+      'jap': 'JAP', 'chi': 'CHN', 'uae': 'UAE', 'sou': 'SOU',
+      'cay': 'CAY', 'haw': 'HAW', 'uni': 'UK'
+    }[obs.country] || obs.country.toUpperCase();
+
+    const stockRows = obs.stocks.map(s => {
+      const sellLoc = s.sellLocation ? `(${s.sellLocation.toUpperCase()})` : '';
+      const sellPrice = s.sellPrice ? `$${s.sellPrice.toLocaleString()}` : '—';
+      return `<tr>
+        <td style="font-size:0.8rem;">${escapeHtml(s.name)}</td>
+        <td style="text-align:center;font-size:0.8rem;">${s.quantity}</td>
+        <td style="text-align:right;font-size:0.8rem;">$${s.cost.toLocaleString()}</td>
+        <td style="text-align:center;font-size:0.8rem;color:#a78df5;">${sellPrice}</td>
+        <td style="text-align:center;font-size:0.8rem;">${sellLoc}</td>
+      </tr>`;
+    }).join('');
+
+    return `
+      <tr style="border-bottom:1px solid #333;">
+        <td style="padding:0.5rem 0;">
+          <div style="font-size:0.82rem;color:#c0bcbc;font-weight:600;">${escapeHtml(obs.playerName)}</div>
+          <div style="font-size:0.7rem;color:#555;">${date} • ${countryLabel}</div>
+        </td>
+        <td style="padding:0.5rem 0;">
+          <table style="width:100%;font-size:0.75rem;">
+            <thead>
+              <tr>
+                <th style="text-align:left;">Item</th>
+                <th style="text-align:center;">Qty</th>
+                <th style="text-align:right;">Cost</th>
+                <th style="text-align:center;">Sell Price</th>
+                <th style="text-align:center;">Sell Loc</th>
+              </tr>
+            </thead>
+            <tbody>${stockRows}</tbody>
+          </table>
+        </td>
+      </tr>`;
+  }).join('');
+
+  return `
+    <div class="card" style="margin-bottom:1rem;">
+      <div class="card-header">
+        📊 Stock Observations Summary
+        <span style="float:right;font-size:0.8rem;color:#555;">${totalCount} observations</span>
+      </div>
+      <div class="card-body">
+        <div class="stats-grid">${countrySummary}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">Observations</div>
+      <div style="overflow-x:auto;">
+        <table class="members-table">
+          <thead>
+            <tr>
+              <th style="width:30%;">Player / Date / Country</th>
+              <th style="width:70%;">Stock Items</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+}
+
 // ── Section Navigation ────────────────────────────────────────────────────────
 function showSection(sectionId, el) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -207,6 +315,7 @@ function showSection(sectionId, el) {
   if (sectionId === 'war') { fetchWarDataOverview(); fetchWarStats(); fetchEnemyStats(); }
   if (sectionId === 'targets') { checkFFScouterKeyStatus(); checkTornStatsKeyStatus(); fetchTargets(); }
   if (sectionId === 'stocks') { fetchStocks(); }
+  if (sectionId === 'stock-observations') { loadStockObservations(); }
   if (sectionId === 'competition') { loadCompetitionMeta(); }
 }
 
