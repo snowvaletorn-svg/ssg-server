@@ -39,6 +39,7 @@ function getNotifyEmails() {
 }
 
 const { decryptOrRaw } = require('./keyCipher');
+const { buildStatCatalog, filterRequestedStats } = require('./competitionService');
 
 // Helper function to get faction API key (decrypted at point of use)
 async function getFactionApiKey() {
@@ -750,11 +751,170 @@ async function getLatestCompetitionSnapshot() {
   }
 }
 
+// ─── Get all available competition snapshot dates ─────────────────────────────
+// Returns an array of { snapshotId, snapshotDate } sorted descending, plus min/max dates.
+async function getCompetitionSnapshotDates() {
+  try {
+    const dailies = await DailySnapshot.find({})
+      .sort({ snapshotDate: -1 })
+      .select('snapshotId snapshotDate')
+      .lean();
+
+    const dates = dailies.map(d => ({
+      snapshotId: d.snapshotId,
+      snapshotDate: d.snapshotDate
+    }));
+
+    if (dates.length === 0) {
+      return { dates: [], minDate: null, maxDate: null };
+    }
+
+    return {
+      dates,
+      minDate: dates[dates.length - 1].snapshotDate,
+      maxDate: dates[0].snapshotDate
+    };
+  } catch (err) {
+    console.error('Error getting competition snapshot dates:', err.message);
+    return { dates: [], minDate: null, maxDate: null };
+  }
+}
+
+// ─── Get competition snapshot by specific date ────────────────────────────────
+// Returns { source, snapshot } for the given date (YYYY-MM-DD string or Date).
+async function getCompetitionSnapshotByDate(dateStr) {
+  try {
+    const targetDate = new Date(dateStr);
+    targetDate.setUTCHours(0, 0, 0, 0);
+    const endDate = new Date(targetDate);
+    endDate.setUTCDate(endDate.getUTCDate() + 1);
+
+    // Try daily snapshots first
+    const daily = await DailySnapshot.findOne({
+      snapshotDate: { $gte: targetDate, $lt: endDate }
+    }).lean();
+
+    if (daily) return { source: 'daily', snapshot: daily };
+
+    // Fall back to weekly
+    const weekly = await WeeklySnapshot.findOne({
+      snapshotDate: { $gte: targetDate, $lt: endDate },
+      snapshotId: { $not: /^test_/ }
+    }).lean();
+
+    if (weekly) return { source: 'weekly', snapshot: weekly };
+
+    return null;
+  } catch (err) {
+    console.error('Error getting competition snapshot by date:', err.message);
+    return null;
+  }
+}
+
+// ─── Get competition stats aggregated across a date range ─────────────────────
+// If startDate === endDate, returns that single snapshot's data.
+// If startDate < endDate, compares the earliest and latest snapshots in range
+// and returns the difference (latest - earliest) for each stat.
+async function getCompetitionDataByDateRange(startDate, endDate, requestedStats, selectedMembers, isAdmin) {
+  try {
+    const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999);
+
+    // Find all snapshots in range
+    const snapshots = await DailySnapshot.find({
+      snapshotDate: { $gte: start, $lte: end }
+    }).sort({ snapshotDate: 1 }).lean();
+
+    if (snapshots.length === 0) {
+      return { error: 'No snapshot data found for the selected date range.' };
+    }
+
+    // Use the first and last snapshot for comparison
+    const firstSnap = snapshots[0];
+    const lastSnap = snapshots[snapshots.length - 1];
+
+    // Build catalog from the last snapshot's keys
+    const lastMembers = Array.isArray(lastSnap.memberStats) ? lastSnap.memberStats : [];
+    const snapshotKeys = lastMembers.length > 0 && lastMembers[0].personalstats
+      ? Object.keys(lastMembers[0].personalstats)
+      : null;
+    const catalog = buildStatCatalog({ isAdmin, snapshotKeys });
+
+    // Parse requested stats
+    const { allowed, rejected } = filterRequestedStats(
+      requestedStats.length ? requestedStats : Object.keys(catalog).slice(0, 1),
+      catalog
+    );
+
+    if (allowed.length === 0) {
+      return { error: 'No valid stats requested.', rejected };
+    }
+
+    // Build member maps for both snapshots
+    const firstMembers = Array.isArray(firstSnap.memberStats) ? firstSnap.memberStats : [];
+    const lastMembersMap = new Map();
+    for (const m of lastMembers) lastMembersMap.set(m.playerId, m);
+
+    const firstMembersMap = new Map();
+    for (const m of firstMembers) firstMembersMap.set(m.playerId, m);
+
+    // Determine which members to include
+    let memberIds;
+    if (selectedMembers === 'all' || !selectedMembers) {
+      memberIds = lastMembers.map(m => m.playerId);
+    } else {
+      memberIds = selectedMembers.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+    }
+
+    // Build series with difference (last - first) for each member
+    const series = [];
+    for (const pid of memberIds) {
+      const lastM = lastMembersMap.get(pid);
+      const firstM = firstMembersMap.get(pid);
+
+      if (!lastM) continue;
+
+      const playerName = lastM.playerName || (firstM ? firstM.playerName : `Player ${pid}`);
+
+      const values = {};
+      for (const key of allowed) {
+        const lastVal = typeof lastM.personalstats?.[key] === 'number' ? lastM.personalstats[key] : 0;
+        const firstVal = firstM ? (typeof firstM.personalstats?.[key] === 'number' ? firstM.personalstats[key] : 0) : 0;
+        values[key] = lastVal - firstVal;
+      }
+
+      series.push({
+        playerId: pid,
+        playerName,
+        values
+      });
+    }
+
+    return {
+      source: 'date-range',
+      snapshotDate: lastSnap.snapshotDate,
+      startDate: firstSnap.snapshotDate,
+      endDate: lastSnap.snapshotDate,
+      stats: allowed,
+      rejected,
+      series
+    };
+  } catch (err) {
+    console.error('Error getting competition data by date range:', err.message);
+    return { error: err.message };
+  }
+}
+
 module.exports = {
   takeSnapshot,
   takeTestSnapshot,
   takeDailySnapshot,
   getLatestCompetitionSnapshot,
+  getCompetitionSnapshotDates,
+  getCompetitionSnapshotByDate,
+  getCompetitionDataByDateRange,
   fetchAllMemberStats,
   mapWithConcurrency,
   getSnapshotByDate,

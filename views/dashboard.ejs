@@ -1204,6 +1204,32 @@
               <span id="competition-snapshot-info"></span>
             </p>
 
+<!-- DATE SELECTION -->
+<div class="card" style="margin-bottom:1rem;background:#1a1919;border:1px solid #2a2828;">
+  <div class="card-header"><span>📅 Select Date Range</span></div>
+  <div class="card-body">
+    <div style="display:flex;gap:0.75rem;align-items:flex-start;flex-wrap:wrap;">
+      <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;color: #1d88f3;">
+        <input type="radio" name="competition-date-mode" value="all"
+          onchange="competitionDateModeChanged()"> All time
+      </label>
+      <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer;color: #1d88f3;">
+        <input type="radio" name="competition-date-mode" value="custom"
+          onchange="competitionDateModeChanged()"> Select dates
+      </label>
+    </div>
+    <div id="competition-date-picker" style="margin-top:0.75rem;display:none;gap:0.5rem;align-items:center;flex-wrap:wrap;">
+      <label style="color:#ccc;font-size:0.85rem;">From:</label>
+      <input type="date" id="competition-start-date" class="form-input"
+        style="width:150px;padding:0.4rem;font-size:0.85rem;">
+      <label style="color:#ccc;font-size:0.85rem;">To:</label>
+      <input type="date" id="competition-end-date" class="form-input"
+        style="width:150px;padding:0.4rem;font-size:0.85rem;">
+      <span id="competition-date-range-info" style="font-size:0.75rem;color:#888;margin-left:0.5rem;"></span>
+    </div>
+  </div>
+</div>
+
             <div class="card" style="margin-bottom:1rem;background:#1a1919;border:1px solid #2a2828;">
               <div class="card-header"><span>📊 Select Stats</span>
                 <span class="muted" id="competition-stat-count" style="font-size:0.8rem;"></span>

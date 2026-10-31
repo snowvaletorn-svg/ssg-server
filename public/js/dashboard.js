@@ -8010,6 +8010,56 @@ async function loadCompetitionMeta() {
   }
 }
 
+
+// ─── Competition date selection ───────────────────────────────────────────────
+let COMP_SNAPSHOT_DATES = null;   // { dates: [...], minDate, maxDate }
+let COMP_DATE_MODE = 'all';      // 'all' or 'custom'
+
+async function loadCompetitionDates() {
+  try {
+    const res = await fetch('/api/competition/dates');
+    const data = await res.json();
+    if (!res.ok) return;
+    COMP_SNAPSHOT_DATES = data;
+    const startInput = document.getElementById('competition-start-date');
+    const endInput = document.getElementById('competition-end-date');
+    if (startInput && data.minDate) {
+      startInput.min = data.minDate.split('T')[0];
+      startInput.max = data.maxDate.split('T')[0];
+      startInput.value = data.minDate.split('T')[0];
+    }
+    if (endInput && data.maxDate) {
+      endInput.min = data.minDate.split('T')[0];
+      endInput.max = data.maxDate.split('T')[0];
+      endInput.value = data.maxDate.split('T')[0];
+    }
+    const info = document.getElementById('competition-date-range-info');
+    if (info && data.minDate && data.maxDate) {
+      const minD = new Date(data.minDate).toLocaleDateString();
+      const maxD = new Date(data.maxDate).toLocaleDateString();
+      info.textContent = 'Available: ' + minD + ' to ' + maxD;
+    }
+  } catch (err) {
+    console.error('Failed to load competition dates:', err.message);
+  }
+}
+
+function competitionDateModeChanged() {
+  const mode = document.querySelector('input[name="competition-date-mode"]:checked')?.value || 'all';
+  COMP_DATE_MODE = mode;
+  const picker = document.getElementById('competition-date-picker');
+  if (picker) picker.style.display = mode === 'custom' ? 'flex' : 'none';
+}
+
+function getCompetitionDateParams() {
+  const mode = document.querySelector('input[name="competition-date-mode"]:checked')?.value || 'all';
+  if (mode === 'all') return '';
+  const start = document.getElementById('competition-start-date')?.value;
+  const end = document.getElementById('competition-end-date')?.value;
+  if (start && end) return '&startDate=' + start + '&endDate=' + end;
+  return '';
+}
+
 function renderCompetitionStatPicker() {
   const container = document.getElementById('competition-stat-picker');
   if (!container || !COMP_META) return;
@@ -8135,10 +8185,11 @@ async function runCompetitionCompare() {
   }
 
   const statsParam = Array.from(COMP_SELECTED_STATS).join(',');
+  const dateParams = getCompetitionDateParams();
   results.innerHTML = '<div class="channel-loading">LOADING COMPARISON...</div>';
 
   try {
-    const url = `/api/competition/data?stats=${encodeURIComponent(statsParam)}&members=${encodeURIComponent(membersParam)}`;
+    const url = `/api/competition/data?stats=${encodeURIComponent(statsParam)}&members=${encodeURIComponent(membersParam)}${dateParams}`;
     const res = await fetch(url);
     const data = await res.json();
     if (!res.ok) { results.innerHTML = `<div class="channel-error">⚠️ ${data.error}</div>`; return; }

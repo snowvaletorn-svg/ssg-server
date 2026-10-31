@@ -28,6 +28,8 @@ const STAT_LABELS = {
   baserating: 'Base Rating',
   // Attack
   attackswon: 'Attacks Won',
+  attackswonabroad: 'Attacks Won Abroad',
+  attacksstealthed: 'Attacks Stealthed',
   attackslost: 'Attacks Lost',
   attacksdraw: 'Attacks Drawn',
   attacksassisted: 'Attacks Assisted',
@@ -46,8 +48,79 @@ const STAT_LABELS = {
   // Defense / record
   defendswon: 'Defends Won',
   defendslost: 'Defends Lost',
+  defendslostabroad: 'Defends Lost Abroad',
   defendsstalemated: 'Defends Stalemated',
-  elo: 'ELO'
+  elo: 'ELO',
+  arsonskill: 'Arson Skill',
+  bootleggingskill: 'Bootlegging Skill',
+  cardskimmingskill: 'Card Skimming Skill',
+  crackingskill: 'Cracking Skill',
+  bootlegging: 'Bootlegging',
+  burglary: 'Burglary',
+  card_skimming: 'Card Skimming',
+  cracking: 'Cracking',
+  disposal: 'Illegal Production',
+  forgery: 'Forgery',
+  graffiti: 'Graffiti',
+  hunting: 'Hunting',
+  hustling: 'Hustling',
+  pickpocketing: 'Pickpocketing',
+  racing: 'Racing Skill',
+  reviving: 'Reviving',
+  scammin: 'Scammin',
+  search_for_cash: 'Search for Cash',
+  shoplifting: 'Shoplifting',
+  burglaryskill: 'Burglary Skill',
+  searchforcashskill: 'Search for Cash Skill',
+  // Crime counts
+  arrestsmade: 'Arrests Made',
+  peoplebusted: 'People Busted',
+  failedbusts: 'Failed Busts',
+  peoplebought: 'People Bought',
+  peopleboughtspent: "Money Spent Buying People",
+  extortion: 'Extortion',
+  theft: 'Theft',
+  counterfeiting: 'Counterfeiting',
+  fraud: 'Fraud',
+  moneymugged: 'Money Mugged',
+  largestmug: 'Largest Mug',
+  criminaloffenses: 'Criminal Offenses',
+  organisedcrimes: 'Organised Crimes',
+  dumpfinds: 'Dump Finds',
+  cityfinds: 'City Finds',
+  dumpsearches: 'Dump Searches',
+  // Networth
+  networth: 'Net Worth',
+  networthwallet: 'Wallet',
+  networthvault: 'Vault',
+  networthbank: 'Bank',
+  networthbazaar: 'Bazaar',
+  // Racing
+  raceswon: 'Races Won',
+  racesentered: 'Races Entered',
+  racingpointsearned: 'Racing Points Earned',
+  racingskill: 'Racing Skill',
+  // Activity
+  useractivity: 'User Activity',
+  activestreak: 'Active Streak',
+  bestactivestreak: 'Best Active Streak',
+  hospital: 'Hospital Visits',
+  jailed: 'Times Jailed',
+  rehabs: 'Rehabs',
+  rehabcost: 'Rehab Cost',
+  respectforfaction: 'Respect for Faction',
+  daysbeendonator: 'Days Been Donator',
+  awards: 'Awards',
+  meritsbought: 'Merits Bought',
+  // Other
+  itemsbought: 'Items Bought',
+  trades: 'Trades',
+  // Travel
+  travel: 'Travel',
+  traveling: 'Traveling',
+  travelcountry: 'Travel Country',
+  travelticket: 'Travel Ticket',
+  travelcount: 'Travel Count'
 };
 
 function isBattleStat(key) {
@@ -64,15 +137,16 @@ function humaniseKey(key) {
 // lands in 'misc'.
 function categoriseStatKey(key) {
   if (BATTLE_STAT_KEYS.includes(key)) return 'battle';
-  if (key.startsWith('attack') || key.startsWith('defend') || key.includes('kill') ||
-      ['elo', 'unarmoredwon', 'yourunaway', 'theyrunaway', 'highestbeaten', 'bestdamage'].includes(key)) return 'attack';
+  if (key.startsWith('attack') || key.startsWith('defend') ||
+      ['elo', 'unarmoredwon', 'yourunaway', 'theyrunaway', 'highestbeaten', 'bestdamage', 'killstreak', 'bestkillstreak', 'onehitkills'].includes(key)) return 'attack';
   if (key.includes('travel')) return 'travel';
   if (key.startsWith('networth')) return 'networth';
   if (['racesentered', 'raceswon', 'racingpointsearned', 'racingskill'].includes(key)) return 'racing';
   if (['arrestsmade', 'peoplebusted', 'failedbusts', 'peoplebought', 'peopleboughtspent',
        'largestmug', 'moneymugged', 'extortion', 'theft', 'burglaryskill', 'counterfeiting',
        'fraud', 'criminaloffenses', 'organisedcrimes', 'dumpfinds', 'cityfinds', 'dumpsearches',
-       'searchforcashskill'].includes(key)) return 'crimes';
+       'searchforcashskill', 'cardskimmingskill', 'arsonskill', 'bootleggingskill',
+       'crackingskill'].includes(key)) return 'crimes';
   if (['useractivity', 'activestreak', 'bestactivestreak', 'hospital', 'jailed', 'rehabs',
        'rehabcost', 'respectforfaction', 'daysbeendonator', 'awards', 'meritsbought'].includes(key)) return 'activity';
   return 'misc';
@@ -83,7 +157,7 @@ const CATEGORY_LABELS = {
   attack: '🗡 Attack & Defense',
   travel: '✈ Travel',
   networth: '💰 Networth',
-  racing: '🏁 Racing',
+  racing: '🏁 Racing',  
   crimes: '🔨 Crimes',
   activity: '📅 Activity & Record',
   misc: '📊 Other'
