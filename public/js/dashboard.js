@@ -5969,13 +5969,19 @@ function renderTravelProfits() {
     return currentProfit > bestProfit ? current : best;
   }) : null;
 // Find best item to sell abroad (buy in Torn, sell in foreign country)
-  const bestSellRun = profits.length > 0 ? profits.reduce((best, current) => {
-    const sellPrice = ((current.type || '').toLowerCase() === 'other') ? current.buyPrice : current.buyPrice * 0.75;
-    const bestSellPrice = ((best.type || '').toLowerCase() === 'other') ? best.buyPrice : best.buyPrice * 0.75;
-    const bestProfit = (best.marketValue - bestSellPrice) * quantity;
-    const currentProfit = (current.marketValue - sellPrice) * quantity;
-    return currentProfit > bestProfit ? current : best;
-  }) : null;
+  // Use same country context as bestRun to ensure sell/buy items are from same country
+  const profitCountry = selectedCountry || (bestRun ? bestRun.country : '');
+  
+  // Find best item to sell abroad, filtered to profitCountry items
+  // Use items from the profitCountry to ensure sell and buy are from same country
+  const bestSellRun = profitCountry && profits.length > 0
+    ? profits.filter(p => p.country === profitCountry).reduce((best, current) => {
+        const sellPrice = ((current.type || '').toLowerCase() === 'other') ? current.buyPrice : current.buyPrice * 0.75;
+        const bestSellPrice = ((best.type || '').toLowerCase() === 'other') ? best.buyPrice : best.buyPrice * 0.75;
+        const bestProfit = (best.marketValue - bestSellPrice) * quantity;
+        const currentProfit = (current.marketValue - sellPrice) * quantity;
+        return currentProfit > bestProfit ? current : best;
+      }) : null;
 
   // bestBuyRun is the same as bestRun (best item to buy abroad and sell in Torn)
   const bestBuyRun = bestRun;
