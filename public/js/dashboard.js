@@ -5976,11 +5976,20 @@ function renderTravelProfits() {
   // Use items from the profitCountry to ensure sell and buy are from same country
   const bestSellRun = profitCountry && profits.length > 0
     ? profits.filter(p => p.country === profitCountry).reduce((best, current) => {
-        // 100% sell price for Drug and Other (Black Market) items, 75% for Plushie and Flower
-        const isBlackMarket = (current.type || '').toLowerCase() === 'other' || (current.type || '').toLowerCase() === 'drug';
-        const sellPrice = isBlackMarket ? current.buyPrice : current.buyPrice * 0.75;
-        const bestIsBlackMarket = (best.type || '').toLowerCase() === 'other' || (best.type || '').toLowerCase() === 'drug';
-        const bestSellPrice = bestIsBlackMarket ? best.buyPrice : best.buyPrice * 0.75;
+        // 100% sell price for specific black market items, 75% for everything else
+const blackMarketItems = new Set([
+  'ambergris lump', 'basalt point', 'bear gall', 'bearer bond', 'chalcedony point', 
+  'chert point', 'counterfeit manga', 'ephedrine powder', 'ergotamine ampoule', 
+  'insulin', 'meteorite fragment', 'natural pearls', 'obsidian point', 
+  'pangolin scales', 'patagonian fossil', 'quartz point', 'quartzite point', 
+  'raw ivory', 'safrole oil', 'shark fin', 'tiger bone powder', 'turtle shell', 
+  'uncut diamonds', 'whale meat'
+]);
+
+const isBlackMarket = blackMarketItems.has((current.name || '').toLowerCase());
+const sellPrice = isBlackMarket ? current.buyPrice : current.buyPrice * 0.75;
+const bestIsBlackMarket = blackMarketItems.has((best.name || '').toLowerCase());
+const bestSellPrice = bestIsBlackMarket ? best.buyPrice : best.buyPrice * 0.75;
         const bestProfit = (best.marketValue - bestSellPrice) * quantity;
         const currentProfit = (current.marketValue - sellPrice) * quantity;
         return currentProfit > bestProfit ? current : best;
