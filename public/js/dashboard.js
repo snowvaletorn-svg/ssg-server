@@ -5976,8 +5976,11 @@ function renderTravelProfits() {
   // Use items from the profitCountry to ensure sell and buy are from same country
   const bestSellRun = profitCountry && profits.length > 0
     ? profits.filter(p => p.country === profitCountry).reduce((best, current) => {
-        const sellPrice = ((current.type || '').toLowerCase() === 'other') ? current.buyPrice : current.buyPrice * 0.75;
-        const bestSellPrice = ((best.type || '').toLowerCase() === 'other') ? best.buyPrice : best.buyPrice * 0.75;
+        // 100% sell price for Drug and Other (Black Market) items, 75% for Plushie and Flower
+        const isBlackMarket = (current.type || '').toLowerCase() === 'other' || (current.type || '').toLowerCase() === 'drug';
+        const sellPrice = isBlackMarket ? current.buyPrice : current.buyPrice * 0.75;
+        const bestIsBlackMarket = (best.type || '').toLowerCase() === 'other' || (best.type || '').toLowerCase() === 'drug';
+        const bestSellPrice = bestIsBlackMarket ? best.buyPrice : best.buyPrice * 0.75;
         const bestProfit = (best.marketValue - bestSellPrice) * quantity;
         const currentProfit = (current.marketValue - sellPrice) * quantity;
         return currentProfit > bestProfit ? current : best;
