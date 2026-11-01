@@ -2912,11 +2912,14 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
 
     const itemRows = sorted.map(item => {
       const category = catalog?.[item.id] || '—';
+      const isBlackMarket = (category || '').toLowerCase() === 'other';
+      const sellPrice = isBlackMarket ? item.cost : item.cost * 0.75;
       return `<tr>
         <td>${item.name}</td>
         <td style="color:#888;font-size:0.85rem;">${category}</td>
         <td style="text-align:center;">${item.quantity.toLocaleString()}</td>
         <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.cost)}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(sellPrice)}</td>
       </tr>`;
     }).join('');
 
@@ -2925,7 +2928,7 @@ function renderYataStock(data, catalog, filterCountry = '', sortBy = 'type') {
         <div class="card-header">${name} <span style="float:right;font-size:0.75rem;color:#555;">Updated: ${lastUpdate}</span></div>
         <div style="overflow-x:auto;">
           <table class="members-table">
-            <thead><tr><th>Item</th><th>Type</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Cost</th></tr></thead>
+            <thead><tr><th>Item</th><th>Type</th><th style="text-align:center;">Qty</th><th style="text-align:right;">Buy</th><th style="text-align:right;">Sell</th></tr></thead>
             <tbody>${itemRows}</tbody>
           </table>
         </div>
@@ -5965,6 +5968,17 @@ function renderTravelProfits() {
     const currentProfit = (current.profit * quantity) - currentFlightCost;
     return currentProfit > bestProfit ? current : best;
   }) : null;
+// Find best item to sell abroad (buy in Torn, sell in foreign country)
+  const bestSellRun = profits.length > 0 ? profits.reduce((best, current) => {
+    const sellPrice = ((current.type || '').toLowerCase() === 'other') ? current.buyPrice : current.buyPrice * 0.75;
+    const bestSellPrice = ((best.type || '').toLowerCase() === 'other') ? best.buyPrice : best.buyPrice * 0.75;
+    const bestProfit = (best.marketValue - bestSellPrice) * quantity;
+    const currentProfit = (current.marketValue - sellPrice) * quantity;
+    return currentProfit > bestProfit ? current : best;
+  }) : null;
+
+  // bestBuyRun is the same as bestRun (best item to buy abroad and sell in Torn)
+  const bestBuyRun = bestRun;
 
   // Calculate maximum possible profit for selected country
   let selectedCountryTotal = 0;
@@ -5996,7 +6010,10 @@ function renderTravelProfits() {
           ${selectedCountry ? statTile(getCountryName(selectedCountry), 'Selected Country') : (bestRun ? statTile(getCountryName(bestRun.country), 'Best Country') : statTile('—', 'Best Country'))}
           ${selectedCountry ? statTile('$' + formatNum(selectedCountryTotal), 'Total Profit') : (bestRun ? statTile('+' + formatNum((bestRun.profit * quantity) - getFlightCost(bestRun.country, travelMethod)), 'Best Profit/Run') : statTile('—', 'Best Profit/Run'))}
           ${bestRun ? statTile(escapeHtml(bestRun.name), 'Best Item') : statTile('—', 'Best Item')}
+${bestSellRun ? statTile(escapeHtml(bestSellRun.name), 'Best Sell Abroad') : statTile('—', 'Best Sell Abroad')}
+          ${bestBuyRun ? statTile(escapeHtml(bestBuyRun.name), 'Best Buy Abroad') : statTile('—', 'Best Buy Abroad')}
           ${statTile(travelMethod === 'standard' ? '✈️ Standard' : travelMethod === 'airstrip' ? '🛫 Airstrip' : '🚀 Private', 'Travel Method')}
+${bestSellRun && bestRun ? statTile('$' + formatNum(bestSellRun.profit + bestBuyRun.profit), 'Est. Round-Trip Profit') : ''}
         </div>
       </div>
     </div>`;
@@ -6080,6 +6097,7 @@ function renderTravelProfits() {
           <td style="color:#888;font-size:0.85rem;">${escapeHtml(item.type)}</td>
           <td style="text-align:center;">${qtyDisplay}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.buyPrice)}</td>
+           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(((item.type||'').toLowerCase()==='other') ? item.buyPrice : item.buyPrice * 0.75)}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;">$${formatNum(item.marketValue)}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:${profitColor};">${item.profit > 0 ? '+$' + formatNum(item.profit) : '-$' + formatNum(Math.abs(item.profit))}</td>
           <td style="text-align:right;font-family:'Share Tech Mono',monospace;color:#f0a500;">${item.profit > 0 ? '+$' + formatNum(profitPerRun) : '-'}</td>
@@ -6139,6 +6157,7 @@ function renderTravelProfits() {
                 <th style="white-space:nowrap;">Type</th>
                 <th style="text-align:center;white-space:nowrap;">Avail</th>
                 <th style="text-align:right;white-space:nowrap;">Buy</th>
+                <th style="text-align:right;white-space:nowrap;">Sell</th>
                 <th style="text-align:right;white-space:nowrap;">Market</th>
                 <th style="text-align:right;white-space:nowrap;">Profit</th>
                 <th style="text-align:right;white-space:nowrap;">Run</th>
