@@ -799,6 +799,72 @@
   background: #2a2828;
 }
 
+/* Company Detail Modal Overlay - remove centering so modal can be freely resized */
+#company-detail-modal {
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  padding: 0 !important;
+}
+
+/* Company Detail Modal Window - allow it to grow beyond viewport height */
+#company-detail-modal .help-modal {
+  max-height: none !important;
+  max-width: none !important;
+  height: auto !important;
+  width: auto !important;
+}
+
+/* Company Detail Modal Body - allow content to expand fully, no scroll */
+#company-detail-body {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Company Detail Scroll Container - allow table to expand fully, no scroll */
+.company-detail-scroll {
+  overflow: visible;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Allow tables inside the company detail modal to shrink when modal is resized */
+.members-table {
+  min-width: 0;
+}
+
+/* ── Company Detail Modal Resize Handle ───────────────────────────────────── */
+.modal-resize-handle {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 12px;
+  height: 12px;
+  cursor: nwse-resize;
+  background: #3a3838;
+  border: 1px solid #444;
+  border-radius: 4px;
+  transition: background 0.2s;
+  z-index: 10;
+}
+
+.modal-resize-handle:hover {
+  background: #4a4848;
+}
+
+.modal-resize-handle span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -4px 0 0 -4px;
+  width: 8px;
+  height: 8px;
+  background: #c0bcbc;
+  border-radius: 2px;
+}
+
 /* ── Bank Rates ──────────────────────────────────────────────────────────── */
 .bank-rates-table {
   width: 100%;

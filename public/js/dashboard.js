@@ -5597,8 +5597,65 @@ async function openCompanyDetail(companyId) {
   const bodyEl = document.getElementById('company-detail-body');
 
   titleEl.textContent = 'Loading company data...';
+  
+  // Ensure modal has positioning context for the resize handle
+  modal.style.position = 'relative';
+  
+  // Make modal resizeable
+  const modalWindow = modal.querySelector('.help-modal');
+  modalWindow.style.position = 'relative';
+  modalWindow.style.display = 'flex';
+  modalWindow.style.flexDirection = 'column';
+  
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'modal-resize-handle';
+  resizeHandle.innerHTML = '<span></span>';
+  modalWindow.appendChild(resizeHandle);
+  
+  let isResizing = false;
+  let startX, startY, startWidth, startHeight;
+  
+  resizeHandle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    startWidth = modalWindow.offsetWidth;
+    startHeight = modalWindow.offsetHeight;
+    e.preventDefault();
+  });
+  
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
+    
+    let newWidth = startWidth + deltaX;
+    let newHeight = startHeight + deltaY;
+    
+    // Minimum size constraints
+    newWidth = Math.max(300, newWidth);
+    newHeight = Math.max(200, newHeight);
+    
+    // Maximum size constraints
+    newWidth = Math.min(window.innerWidth - 20, newWidth);
+    // No height limit - let modal grow to fit the entire table
+    // newHeight = Math.min(window.innerHeight - 20, newHeight);
+    
+    modalWindow.style.width = newWidth + 'px';
+    modalWindow.style.height = newHeight + 'px';
+  });
+  
+  document.addEventListener('mouseup', () => {
+    isResizing = false;
+  });
   bodyEl.innerHTML = '<div class="channel-loading">LOADING COMPANY DETAILS...</div>';
   modal.style.display = 'flex';
+  
+  // Force body content to be resizeable with modal
+  // (must be set after innerHTML is assigned)
+  bodyEl.style.flex = '1';
+  bodyEl.style.minWidth = '0';
+  bodyEl.style.minHeight = '0';
 
   try {
     const res = await fetch(`/api/company/${companyId}`);
@@ -5731,8 +5788,8 @@ async function openCompanyDetail(companyId) {
         </div>
         ${typeLabel}
         ${employees.length > 0 && positions.length > 0 ? `
-        <div style="overflow-x:auto;max-height:560px;overflow-y:auto;">
-          <table class="members-table" style="border-collapse:separate;border-spacing:0;">
+        <div class="company-detail-scroll">
+        <table class="members-table" style="border-collapse:separate;border-spacing:0;">
             <thead>
               <tr>
                 <th style="position:sticky;top:0;left:0;background:#1f1e1e;z-index:3;border-right:1px solid #2a2a2a;">Employee</th>

@@ -63,10 +63,7 @@ const {
 const { startScheduler } = require('./services/schedulerService');
 const {
   takeDailySnapshot,
-  getLatestCompetitionSnapshot,
-  getCompetitionSnapshotDates,
-  getCompetitionSnapshotByDate,
-  getCompetitionDataByDateRange
+  getLatestCompetitionSnapshot
 } = require('./services/snapshotService');
 const {
   buildStatCatalog,
@@ -5629,58 +5626,11 @@ app.get('/api/competition/meta', isAuthenticated, isFactionMember, async (req, r
   }
 });
 
-// ---- API: Competition snapshot dates -----------------------------------------
-// Returns all available snapshot dates with min/max for the date picker.
-app.get('/api/competition/dates', isAuthenticated, isFactionMember, async (req, res) => {
-  try {
-    const dates = await getCompetitionSnapshotDates();
-    res.json(dates);
-  } catch (err) {
-    console.error('Competition dates error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ---- API: Competition data (stats for selected members) -----------------------
 // Reads the stored snapshot only — no Torn API calls on page load.
 // Query: stats=comma,separated,keys   members=all | comma,separated,ids
-//        startDate=YYYY-MM-DD&endDate=YYYY-MM-DD  (optional date range)
 app.get('/api/competition/data', isAuthenticated, isFactionMember, async (req, res) => {
   try {
-    const startDate = req.query.startDate;
-    const endDate = req.query.endDate;
-
-    // If date range is provided, use the date-range comparison function
-    if (startDate || endDate) {
-      const effectiveStart = startDate || '2000-01-01';
-      const effectiveEnd = endDate || new Date().toISOString().split('T')[0];
-
-      const positionGroup = getEffectivePositionGroup(req);
-      const isAdmin = ['ownership', 'leadership'].includes(positionGroup);
-
-      const requestedStats = (req.query.stats || '')
-        .split(',')
-        .map(s => s.trim())
-        .filter(Boolean);
-
-      const membersParam = (req.query.members || 'all').trim();
-
-      const result = await getCompetitionDataByDateRange(
-        effectiveStart,
-        effectiveEnd,
-        requestedStats,
-        membersParam,
-        isAdmin
-      );
-
-      if (result.error) {
-        return res.status(result.error === 'No snapshot data found for the selected date range.' ? 404 : 400).json(result);
-      }
-
-      return res.json(result);
-    }
-
-    // Original behavior: single latest snapshot
     const result = await getLatestCompetitionSnapshot();
     if (!result || !result.snapshot) {
       return res.status(404).json({ error: 'No snapshot data yet. The first daily snapshot runs at 06:00 UTC.' });
@@ -6404,60 +6354,6 @@ app.get('/api/travel-recommendations', async (req, res) => {
     });
   } catch (err) {
     console.error('Travel recommendations error:', err.message);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// ---- API: Get stock observations dashboard data -------------------
-app.get('/api/stock-observations', async (req, res) => {
-  try {
-    const StockObservation = require('./models/StockObservation');
-    
-    // Get query parameters
-    const country = req.query.country; // Filter by country (optional)
-    const limit = parseInt(req.query.limit) || 50; // Max records to return
-    const sortBy = req.query.sort || 'observedAt'; // Sort field
-    const sortOrder = req.query.order === 'desc' ? -1 : 1; // Sort direction
-
-    // Build query filter
-    const filter = {};
-    if (country) {
-      filter['country'] = country.toLowerCase();
-    }
-
-    // Fetch observations, sorted by observedAt descending (newest first)
-    const observations = await StockObservation.find(filter)
-      .sort({ [sortBy]: sortOrder })
-      .limit(limit)
-      .lean();
-
-    // Count total for this filter
-    const totalCount = await StockObservation.countDocuments(filter);
-
-    // Group data by country for summary
-    const countryStats = await StockObservation.aggregate([
-      { $match: filter },
-      { $group: {
-          _id: '$country',
-          totalObservations: { $sum: 1 },
-          totalItems: { $sum: { $size: '$stocks' } },
-          lastObserved: { $max: '$observedAt' }
-        }
-      }
-    ]);
-
-    res.json({
-      success: true,
-      observations,
-      totalCount,
-      countryStats,
-      pagination: {
-        limit,
-        filteredCount: totalCount
-      }
-    });
-  } catch (err) {
-    console.error('Stock observations dashboard error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
