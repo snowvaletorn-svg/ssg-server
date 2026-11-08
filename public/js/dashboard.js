@@ -3626,6 +3626,9 @@ let lastWarStatsData = null;
 let warPayoutMembers = [];
 let warPayoutWar = null;
 let warPayoutLastResult = null;
+// Per-member overrides: { [memberId]: { hits?: number, assists?: number, payoutOverride?: number } }
+// Session-only — reset when war data reloads. Used to zero out or custom-set a member's payout.
+let warPayoutMemberOverrides = {};
 let warPayoutRecalcTimer = null;
 const warPayoutInputs = {
   total: '',
@@ -3655,6 +3658,7 @@ async function fetchWarPayout(force = false) {
 
   warPayoutWar = data.war || null;
   warPayoutMembers = data.memberHits || [];
+  warPayoutMemberOverrides = {};
   if (!warPayoutWar || !warPayoutMembers.length) {
     warPayoutLastResult = null;
     container.innerHTML = '<div class="empty-state"><span class="empty-icon">💰</span><p>No war data available. War data clears once Torn drops a finished war from its API — calculate and copy the breakdown before that happens.</p></div>';
@@ -3711,11 +3715,41 @@ function renderWarPayoutShell(container) {
       recalculateWarPayout();
     });
   });
+
+  // Delegate override input changes (hits/assists/payoutOverride per member)
+  container.addEventListener('change', e => {
+    const input = e.target.closest('input[data-id][data-field]');
+    if (!input) return;
+    const id = Number(input.dataset.id);
+    const field = input.dataset.field;
+    const val = input.value === '' ? null : Number(input.value);
+    if (!warPayoutMemberOverrides[id]) warPayoutMemberOverrides[id] = {};
+    if (val == null) delete warPayoutMemberOverrides[id][field];
+    else warPayoutMemberOverrides[id][field] = val;
+    // Clean up empty override objects
+    if (Object.keys(warPayoutMemberOverrides[id] || {}).length === 0) delete warPayoutMemberOverrides[id];
+    scheduleWarPayoutRecalc();
+  });
 }
 
 function scheduleWarPayoutRecalc() {
   clearTimeout(warPayoutRecalcTimer);
   warPayoutRecalcTimer = setTimeout(recalculateWarPayout, 300);
+}
+
+// Apply per-member overrides (hits/assists/payoutOverride) onto the member rows
+// before sending to the API. Session-only; does not persist.
+function applyMemberOverrides(members) {
+  return members.map(m => {
+    const ov = warPayoutMemberOverrides[m.id];
+    if (!ov) return m;
+    return {
+      ...m,
+      hits: ov.hits != null ? ov.hits : m.hits,
+      assists: ov.assists != null ? ov.assists : m.assists,
+      payoutOverride: ov.payoutOverride != null ? ov.payoutOverride : m.payoutOverride
+    };
+  });
 }
 
 async function recalculateWarPayout() {
@@ -3734,7 +3768,7 @@ async function recalculateWarPayout() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         total,
-        members: warPayoutMembers,
+        members: applyMemberOverrides(warPayoutMembers),
         includeAssists: warPayoutInputs.includeAssists,
         payoutStructure: warPayoutInputs.structure
       })
@@ -3784,9 +3818,12 @@ function renderWarPayoutResults(r) {
     : '🌱 No eligible growth members this war (first-war benefit, ≤21 days in faction).';
 
   const rows = r.rows.map((m, i) => {
+    const ov = warPayoutMemberOverrides[m.id] || {};
+    const hasOverride = ov.hits != null || ov.assists != null || ov.payoutOverride != null;
+    const overrideBadge = hasOverride ? ' <span title="Override active" style="color:#f39c12;font-size:0.65rem;">⚠</span>' : '';
     const lossStyle = m.losses > 0 ? 'color:#e74c3c;' : 'color:#aaa;';
     const payoutCell = `${fmtMoney(m.payout)}${m.growthPay > 0 ? `<span style="color:#2ecc71;"> + ${fmtMoney(m.growthPay)} 🌱</span>` : ''}`;
-    let nameCell = `${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}`;
+    let nameCell = `${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}${overrideBadge}`;
     if (m.isGrowthRole) {
       const btnStyle = 'padding:0.05rem 0.35rem;font-size:0.68rem;margin-left:0.3rem;line-height:1.3;';
       if (m.growthReason === 'used') {
@@ -3804,12 +3841,12 @@ function renderWarPayoutResults(r) {
       <tr>
         <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
         <td>${nameCell}</td>
-        <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.hits}</td>
-        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;">${m.assists > 0 ? m.assists : '—'}</td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;"><input type="number" min="0" data-id="${m.id}" data-field="hits" value="${m.hits}" style="${WP_FIELD}width:70px;text-align:center;padding:0.2rem 0.4rem;"></td>
+        <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;"><input type="number" min="0" data-id="${m.id}" data-field="assists" value="${m.assists > 0 ? m.assists : ''}" style="${WP_FIELD}width:70px;text-align:center;padding:0.2rem 0.4rem;"></td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;${lossStyle}">${m.losses > 0 ? m.losses : '—'}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;">${m.qualifying}</td>
         ${tiered ? `<td style="text-align:center;font-family:'Share Tech Mono',monospace;color:${m.multiplier === 1 ? '#2ecc71' : '#e67e22'};">${Math.round(m.multiplier * 100)}%</td>` : ''}
-        <td style="text-align:right;font-family:'Share Tech Mono',monospace;">${payoutCell}</td>
+        <td style="text-align:right;font-family:'Share Tech Mono',monospace;"><input type="number" min="0" data-id="${m.id}" data-field="payoutOverride" value="${m.payoutOverride != null ? m.payoutOverride : ''}" style="${WP_FIELD}width:110px;text-align:right;padding:0.2rem 0.4rem;${hasOverride ? 'background:#1a1a1a;' : ''}"> <span style="font-size:0.7rem;color:#666;">(${payoutCell})</span></td>
       </tr>`;
   }).join('');
 
@@ -3933,7 +3970,18 @@ async function growthBenefitAction(action, playerId) {
 async function markGrowthPaid() {
   const r = warPayoutLastResult;
   if (!r) { alert('Calculate payouts first — enter a total distribution.'); return; }
-  const recipients = (r.rows || []).filter(row => row.growthPay > 0);
+  const recipients = (r.rows || []).filter(row => {
+    if (row.growthPay === 0) return false;
+    const ov = warPayoutMemberOverrides[row.id];
+    // Don't mark growth paid for members who've been zeroed out via overrides:
+    // - explicit payoutOverride = 0 (custom total set to zero)
+    // - hits overridden to 0 with no payoutOverride (zeroed via hits)
+    if (ov) {
+      if (ov.payoutOverride === 0) return false;
+      if (ov.hits === 0 && ov.payoutOverride == null) return false;
+    }
+    return true;
+  });
   if (!recipients.length) { alert('No growth members are being paid in this calculation.'); return; }
   if (!confirm(`Mark the growth benefit as PAID for ${recipients.length} member(s)? This consumes their one-time benefit.`)) return;
   try {

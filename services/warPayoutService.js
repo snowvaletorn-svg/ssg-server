@@ -99,7 +99,12 @@ function toCount(value) {
 // Compute the full payout table.
 // Inputs: { total, members, includeAssists, payoutStructure }
 //   members: [{ id, name, hits, assists, losses, position, positionAtWarStart,
-//               daysInFaction, growthBenefitUsed, growthBenefitOverride }]
+//               daysInFaction, growthBenefitUsed, growthBenefitOverride,
+//               payoutOverride }]
+//   payoutOverride: optional fixed dollar amount paid to that member instead of
+//     the computed hit/growth share. Override amounts are deducted from the
+//     pool first; remaining members split what's left. Override rows do not
+//     count toward the hit basis and do not receive growth pay.
 //   payoutStructure: 'straight' (default) | 'tiered' (invalid values -> straight).
 // The server annotates growthBenefitUsed/Override from the GrowthBenefit
 // ledger (client-supplied flags are overwritten there) — this stays pure.
@@ -124,6 +129,7 @@ function computeWarPayout({ total, members = [], includeAssists = false, payoutS
     const growthEligible = isGrowthRole && growth.eligible;
     const qualifying = hits + (includeAssists ? assists : 0);
     const multiplier = tierMultiplier(qualifying, structure);
+    const payoutOverride = m.payoutOverride != null ? Math.max(0, Math.round(Number(m.payoutOverride))) : null;
     return {
       id: m.id,
       name: m.name,
@@ -139,30 +145,39 @@ function computeWarPayout({ total, members = [], includeAssists = false, payoutS
       growthPay: 0,
       qualifying,
       multiplier,
-      payout: 0
+      payout: 0,
+      payoutOverride
     };
   });
 
-  const totalBasis = rows.reduce((sum, r) => sum + r.qualifying, 0);
-  const weightedBasis = rows.reduce((sum, r) => sum + r.qualifying * r.multiplier, 0);
-  const growthEligibleRows = rows.filter(r => r.growthEligible);
+  const overrideRows = rows.filter(r => r.payoutOverride !== null);
+  const normalRows = rows.filter(r => r.payoutOverride === null);
+  const overrideTotal = overrideRows.reduce((sum, r) => sum + r.payoutOverride, 0);
+
+  // Normal rows only participate in basis/growth/hit distribution.
+  const totalBasis = normalRows.reduce((sum, r) => sum + r.qualifying, 0);
+  const weightedBasis = normalRows.reduce((sum, r) => sum + r.qualifying * r.multiplier, 0);
+  const growthEligibleRows = normalRows.filter(r => r.growthEligible);
+
+  // Effective pool after override amounts are deducted first.
+  const effectivePool = pool - overrideTotal;
 
   // Y-method: value growth at the PRE-growth per-hit value, deduct only what
   // they earn, then re-divide the remainder for hit pay. Zero hit basis falls
-  // back to splitting the pool across the baselines themselves.
+  // back to splitting the effective pool across the baselines themselves.
   const growthBaselineValue = totalBasis > 0
-    ? pool / totalBasis
-    : (growthEligibleRows.length > 0 ? pool / (GROWTH_BASELINE_HITS * growthEligibleRows.length) : 0);
-  rows.forEach(r => {
+    ? effectivePool / totalBasis
+    : (growthEligibleRows.length > 0 ? effectivePool / (GROWTH_BASELINE_HITS * growthEligibleRows.length) : 0);
+  normalRows.forEach(r => {
     r.growthPay = r.growthEligible ? Math.round(GROWTH_BASELINE_HITS * r.growthLossMultiplier * growthBaselineValue) : 0;
   });
   const growthEligibleCount = growthEligibleRows.length;
-  const growthPaidCount = rows.filter(r => r.growthPay > 0).length;
-  const growthTotal = rows.reduce((sum, r) => sum + r.growthPay, 0);
+  const growthPaidCount = normalRows.filter(r => r.growthPay > 0).length;
+  const growthTotal = normalRows.reduce((sum, r) => sum + r.growthPay, 0);
 
-  if (growthTotal > pool) {
+  if (growthTotal > effectivePool) {
     return {
-      error: `Growth baselines ($${growthTotal}) exceed the 80% member pool ($${pool}) — the roster's hit count is too small to fund ${growthEligibleCount} baseline(s). Check the roster or raise the total distribution.`,
+      error: `Growth baselines ($${growthTotal}) exceed the available member pool ($${effectivePool}) — the roster's hit count is too small to fund ${growthEligibleCount} baseline(s). Check the roster or raise the total distribution.`,
       total: payoutTotal,
       factionCut,
       pool,
@@ -170,23 +185,27 @@ function computeWarPayout({ total, members = [], includeAssists = false, payoutS
     };
   }
 
-  const hitPool = pool - growthTotal;
+  const hitPool = effectivePool - growthTotal;
   // Fixed value per hit (hitPool ÷ basis) in BOTH modes: tiered members are
   // paid a percentage OF this same value, so anything withheld from low-tier
   // members stays with the faction (recoups free-Xanax cost). Each member's
   // payout is THEIR share rounded to the nearest dollar — never a rounded
   // rate × hits (leadership spreadsheet method).
   const perHitValue = totalBasis > 0 ? hitPool / totalBasis : 0;
-  rows.forEach(r => { r.payout = Math.round(r.qualifying * r.multiplier * perHitValue); });
+  normalRows.forEach(r => { r.payout = Math.round(r.qualifying * r.multiplier * perHitValue); });
 
-  const hitPayoutTotal = rows.reduce((sum, r) => sum + r.payout, 0);
+  // Override rows receive their fixed amount; they do not draw from hit pool.
+  overrideRows.forEach(r => { r.payout = r.payoutOverride; });
+
+  const hitPayoutTotal = normalRows.reduce((sum, r) => sum + r.payout, 0);
   // Hit-tier discount only (growth shortfall is NOT retained — it flows to
   // the hit pool by construction). roundingDelta = member-level rounding
-  // drift. Identity: pool = hitPayoutTotal + growthTotal + tierDiscount + roundingDelta.
+  // drift. Identity: pool = overrideTotal + hitPayoutTotal + growthTotal
+  // + tierDiscount + roundingDelta.
   const exactPayoutTotal = totalBasis > 0 ? hitPool * weightedBasis / totalBasis : 0;
   const tierDiscount = totalBasis > 0 ? Math.round(hitPool - exactPayoutTotal) : 0;
   const roundingDelta = hitPool - hitPayoutTotal - tierDiscount;
-  const distributed = hitPayoutTotal + growthTotal;
+  const distributed = hitPayoutTotal + growthTotal + overrideTotal;
 
   return {
     total: payoutTotal,
@@ -207,6 +226,8 @@ function computeWarPayout({ total, members = [], includeAssists = false, payoutS
     tierDiscount,
     tierBands: TIER_BANDS,
     hitPayoutTotal,
+    overrideTotal,
+    overrideCount: overrideRows.length,
     distributed,
     roundingDelta,
     rows

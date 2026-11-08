@@ -247,7 +247,7 @@ describe('growth baseline (first-war) pay', () => {
       total: 1000, // pool 800; V0 = 800/5 = 160; one baseline = 1600 > pool
       members: [member({ hits: 5 }), member({ positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 0 })]
     });
-    expect(r.error).toMatch(/exceed the 80% member pool/);
+    expect(r.error).toMatch(/exceed the available member pool/);
     expect(r.pool).toBe(800);
   });
 
@@ -368,5 +368,105 @@ describe('tiered pay structure', () => {
     expect(r.hitPayoutTotal).toBe(0);
     expect(r.tierDiscount).toBe(0);     // no members -> no tier discounts claimed
     expect(r.roundingDelta).toBe(800);
+  });
+
+  describe('payout override (zero out / custom total)', () => {
+    test('zeroing out a member pays them $0 and redistributes to others', () => {
+      const r = computeWarPayout({
+        total: 10000,
+        members: [
+          member({ id: 1, name: 'Alice', hits: 10 }),
+          member({ id: 2, name: 'Bob', hits: 5, payoutOverride: 0 })
+        ]
+      });
+      expect(r.overrideTotal).toBe(0);
+      expect(r.overrideCount).toBe(1);
+      expect(r.rows.find(row => row.id === 2).payout).toBe(0);
+      // Alice gets the full 80% pool (no Bob diluting the basis)
+      expect(r.rows.find(row => row.id === 1).payout).toBe(8000);
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
+    });
+
+    test('custom payout override pays fixed amount, remainder redistributed', () => {
+      const r = computeWarPayout({
+        total: 10000,
+        members: [
+          member({ id: 1, name: 'Alice', hits: 10 }),
+          member({ id: 2, name: 'Bob', hits: 10, payoutOverride: 2000 })
+        ]
+      });
+      expect(r.overrideTotal).toBe(2000);
+      expect(r.rows.find(row => row.id === 2).payout).toBe(2000);
+      // Pool is 8000; Bob takes 2000; remaining 6000 goes to Alice's 10 hits
+      expect(r.rows.find(row => row.id === 1).payout).toBe(6000);
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
+    });
+
+    test('payoutOverride takes precedence over hits/assists', () => {
+      const r = computeWarPayout({
+        total: 10000,
+        members: [
+          member({ id: 1, name: 'Alice', hits: 10 }),
+          member({ id: 2, name: 'Bob', hits: 40, assists: 20, payoutOverride: 500 })
+        ]
+      });
+      expect(r.rows.find(row => row.id === 2).payout).toBe(500);
+      // Bob excluded from basis; only Alice's 10 hits count
+      expect(r.totalBasis).toBe(10);
+      expect(r.rows.find(row => row.id === 1).payout).toBe(7500); // (8000-500)/10 * 10
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
+    });
+
+    test('negative override coerces to zero', () => {
+      const r = computeWarPayout({
+        total: 10000,
+        members: [
+          member({ id: 1, name: 'Alice', hits: 10 }),
+          member({ id: 2, name: 'Bob', hits: 10, payoutOverride: -500 })
+        ]
+      });
+      expect(r.rows.find(row => row.id === 2).payout).toBe(0);
+      expect(r.overrideTotal).toBe(0);
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
+    });
+
+    test('override member does not receive growth pay', () => {
+      const r = computeWarPayout({
+        total: 10000,
+        members: [
+          member({ id: 1, name: 'Alice', hits: 10 }),
+          member({
+            id: 2, name: 'Bob', hits: 5,
+            positionAtWarStart: 'Recruit', daysInFaction: 5, losses: 0,
+            payoutOverride: 1000
+          })
+        ]
+      });
+      const bob = r.rows.find(row => row.id === 2);
+      expect(bob.payout).toBe(1000);
+      expect(bob.growthPay).toBe(0);
+      expect(bob.payoutOverride).toBe(1000);
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(10000);
+    });
+
+    test('multiple overrides and normal members reconcile', () => {
+      const r = computeWarPayout({
+        total: 50000,
+        members: [
+          member({ id: 1, name: 'Alice', hits: 20 }),
+          member({ id: 2, name: 'Bob', hits: 10, payoutOverride: 0 }),
+          member({ id: 3, name: 'Carol', hits: 10, payoutOverride: 5000 }),
+          member({ id: 4, name: 'Dave', hits: 10 })
+        ]
+      });
+      expect(r.overrideTotal).toBe(5000);
+      expect(r.overrideCount).toBe(2);
+      expect(r.rows.find(row => row.id === 2).payout).toBe(0);
+      expect(r.rows.find(row => row.id === 3).payout).toBe(5000);
+      // Pool 40000; overrides take 5000; remaining 35000 split across Alice+Dave (30 hits)
+      expect(r.rows.find(row => row.id === 1).payout).toBe(23333); // 20/30 * 35000
+      expect(r.rows.find(row => row.id === 4).payout).toBe(11667); // 10/30 * 35000
+      expect(r.factionCut + r.distributed + r.tierDiscount + r.roundingDelta).toBe(50000);
+    });
   });
 });
