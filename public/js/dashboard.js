@@ -320,8 +320,8 @@ function showSection(sectionId, el) {
 }
 
 // ── My Day Dashboard ──────────────────────────────────────────────────────────
-// Available Utilities armory items used to populate the request dropdown
-let utilityItems = [];
+// Available Armory items (Utilities, Weapons, Armor) used to populate the request dropdown
+let armoryItems = [];
 
 async function fetchMyDay() {
   const container = document.getElementById('my-day-data');
@@ -340,15 +340,15 @@ async function fetchMyDay() {
     } catch (e) {
       data.statGoals = [];
     }
-    // Load the list of available Utilities armory items for the request dropdown (non-fatal)
+    // Load the list of available Armory items (all armories) for the request dropdown (non-fatal)
     try {
-      const itemsRes = await fetch('/api/utilities/available');
+      const itemsRes = await fetch('/api/armory/available');
       if (itemsRes.ok) {
         const itemsData = await itemsRes.json();
-        utilityItems = itemsData.items || [];
+        armoryItems = itemsData.items || [];
       }
     } catch (e) {
-      console.error('Failed to load utilities items:', e);
+      console.error('Failed to load armory items:', e);
     }
     container.innerHTML = renderMyDay(data);
   } catch (err) {
@@ -444,7 +444,7 @@ function renderMyDay(d) {
           ${d.ocItemNeeded
             ? (d.ocItemHave
                 ? `<div class="myday-card-hint">✅ You have the required item: <strong>${d.ocItemNeeded}</strong></div>`
-                                : `<div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — <span style="color:#e74c3c;font-weight:600;">Request Item</span> below in the Utilities Armory Request card</div>`
+                                : `<div class="myday-card-action">📦 This OC requires: <strong>${d.ocItemNeeded}</strong> — <span style="color:#e74c3c;font-weight:600;">Request Item</span> below in the Armory Request card</div>`
             )
             : '<div class="myday-card-hint">✅ No item needed for your role.</div>'}
         </div>
@@ -493,11 +493,11 @@ function renderMyDay(d) {
     `);
   }
 
-  // ── Utilities Armory Request Ticket ──
-    cards.push(renderUtilitiesRequestCard());
+  // ── Armory Request Ticket ──
+    cards.push(renderArmoryRequestCard());
 
-  // ── Pending Item Requests (visible to Utility Loaning holders) ──
-  if (d.canLoanUtilities) {
+  // ── Pending Armory Requests (visible to Utility Loaning holders) ──
+  if (d.canLoanArmory) {
     cards.push(renderPendingRequestsCard(d.pendingRequests || []));
   }
 
@@ -506,7 +506,7 @@ function renderMyDay(d) {
     cards.push(renderMyRequestsCard(d.myRequestStatus || [], d.fulfilledRequests || []));
   }
 
-  // ── Items Loaned to this user (Utilities armory) ──
+  // ── Items Loaned to this user (Armory) ──
   if (d.loanedItems && d.loanedItems.length) {
     cards.push(renderLoanedItemsCard(d.loanedItems));
   }
@@ -665,31 +665,32 @@ function renderTravelProfits() {
   container.innerHTML = html;
 }
 }
-// ── Utilities Armory Request Ticket card (all faction members) ────────────────
-function renderUtilitiesRequestCard() {
-  const options = utilityItems.length
-    ? utilityItems.map(it => `<option value="${escapeHtml(it.name)}" data-item-id="${it.id || ''}">${escapeHtml(it.name)}${it.available > 0 ? ` (${it.available} avail)` : ' (out of stock)'}</option>`).join('')
+// ── Armory Request Ticket card (all faction members) ──────────────────────────
+function renderArmoryRequestCard() {
+  const sortedItems = armoryItems.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const options = sortedItems.length
+    ? sortedItems.map(it => `<option value="${escapeHtml(it.name)}" data-item-id="${it.id || ''}">${escapeHtml(it.name)} [${it.armory}]${it.available > 0 ? ` (${it.available} avail)` : ' (out of stock)'}</option>`).join('')
     : '<option value="">Loading items...</option>';
 
   return `
-    <div class="myday-card myday-request" id="utilities-request-card">
+    <div class="myday-card myday-request" id="armory-request-card">
       <div class="myday-card-icon">🧰</div>
       <div class="myday-card-body">
-        <div class="myday-card-title">Utilities Armory Request</div>
-        <div class="myday-card-value" style="font-size:0.95rem;">Request an item from the Utilities armory.</div>
+        <div class="myday-card-title">Armory Request</div>
+        <div class="myday-card-value" style="font-size:0.95rem;">Request an item from any armory (Armor, Temporary, Utilities, Weapons).</div>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap;margin-top:0.5rem;">
-          <select id="utilities-request-select" style="flex:1;min-width:180px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:6px 8px;font-size:0.85rem;">
+          <select id="armory-request-select" style="flex:1;min-width:180px;background:#1a1919;border:1px solid #333;color:#c0bcbc;border-radius:4px;padding:6px 8px;font-size:0.85rem;">
             ${options}
           </select>
-          <button class="btn btn-primary btn-small" onclick="submitUtilityRequest()">Request Item</button>
+          <button class="btn btn-primary btn-small" onclick="submitArmoryRequest()">Request Item</button>
         </div>
-        <div id="utilities-request-status" style="font-size:0.8rem;color:#888;margin-top:0.35rem;"></div>
-        ${utilityItems.length ? '' : '<div class="myday-card-hint">⚠️ Could not load available items.</div>'}
+        <div id="armory-request-status" style="font-size:0.8rem;color:#888;margin-top:0.35rem;"></div>
+        ${armoryItems.length ? '' : '<div class="myday-card-hint">⚠️ Could not load available items.</div>'}
       </div>
     </div>`;
 }
 
-// ── Pending item requests card (Utility Loaning holders) ──────────────────────
+// ── Pending armory requests card (Utility Loaning holders) ────────────────────
 function renderPendingRequestsCard(requests) {
   const rows = requests.length
     ? requests.map(r => {
@@ -701,7 +702,7 @@ function renderPendingRequestsCard(requests) {
               <div style="font-size:0.75rem;color:#888;">Requested by <a href="https://www.torn.com/profiles.php?XID=${r.requesterId}" target="_blank" rel="noopener" style="color:#a78df5;text-decoration:none;">${escapeHtml(r.requesterName || ('#' + r.requesterId))}</a> &middot; ${time}</div>
             </div>
                         <button class="btn btn-small" onclick="openTornArmory()" style="flex-shrink:0;margin-right:0.25rem;">🔗 Open Armory</button>
-            <button class="btn btn-small btn-success" onclick="fulfillUtilityRequest('${r._id}')" style="flex-shrink:0;">✅ Fulfill</button>
+            <button class="btn btn-small btn-success" onclick="fulfillArmoryRequest('${r._id}')" style="flex-shrink:0;">✅ Fulfill</button>
           </div>`;
       }).join('')
     : '<div class="myday-card-hint">No open item requests.</div>';
@@ -723,9 +724,9 @@ function renderMyRequestsCard(myRequests, fulfilled) {
   // (loaned === 0 in the Torn armory). Items that are currently loaned (even to the
   // requester themselves) should keep their fulfilled notification visible until the
   // item is returned (at which point loaned goes back to 0).
-  // utilityItems is a module-level variable loaded when My Day renders,
+  // armoryItems is a module-level variable loaded when My Day renders,
   // containing items with their loaned/available counts.
-  const nonLoanedItems = utilityItems.filter(i => (i.loaned || 0) === 0).map(i => i.name.toLowerCase());
+  const nonLoanedItems = armoryItems.filter(i => (i.loaned || 0) === 0).map(i => i.name.toLowerCase());
   const nonLoanedItemNames = new Set(nonLoanedItems);
   
   const myRows = myRequests.length
@@ -737,7 +738,7 @@ function renderMyRequestsCard(myRequests, fulfilled) {
               <div style="font-size:0.85rem;">🧰 ${escapeHtml(r.itemName)} — <span style="color:#f39c12;">⏳ Awaiting fulfilment</span></div>
               <div style="font-size:0.75rem;color:#888;">Requested ${time}</div>
             </div>
-            <button class="btn btn-small btn-outline" onclick="cancelUtilityRequest('${r._id}')" style="flex-shrink:0;">✕ Cancel</button>
+            <button class="btn btn-small btn-outline" onclick="cancelArmoryRequest('${r._id}')" style="flex-shrink:0;">✕ Cancel</button>
           </div>`;
       }).join('')
     : '';
@@ -759,17 +760,17 @@ function renderMyRequestsCard(myRequests, fulfilled) {
     <div class="myday-card myday-request">
       <div class="myday-card-icon">📋</div>
       <div class="myday-card-body">
-        <div class="myday-card-title">Your Utilities Requests</div>
+        <div class="myday-card-title">Your Armory Requests</div>
         ${myRows ? `<div style="margin-top:0.5rem;">${myRows}</div>` : ''}
         ${fulfilledRows ? `<div style="margin-top:0.5rem;">${fulfilledRows}</div>` : ''}
       </div>
     </div>`;
 }
 
-// ── Utilities request actions ─────────────────────────────────────────────────
-async function submitUtilityRequest() {
-  const select = document.getElementById('utilities-request-select');
-  const statusEl = document.getElementById('utilities-request-status');
+// ── Armory request actions ────────────────────────────────────────────────────
+async function submitArmoryRequest() {
+  const select = document.getElementById('armory-request-select');
+  const statusEl = document.getElementById('armory-request-status');
   if (!select || !statusEl) return;
   const name = select.value;
   const option = select.selectedOptions && select.selectedOptions[0];
@@ -778,7 +779,7 @@ async function submitUtilityRequest() {
 
   statusEl.textContent = 'Submitting...';
   try {
-    const res = await fetch('/api/utilities/requests', {
+    const res = await fetch('/api/armory/requests', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ itemId: itemId ? parseInt(itemId) : null, itemName: name })
@@ -788,17 +789,17 @@ async function submitUtilityRequest() {
       statusEl.textContent = `⚠️ ${data.error || 'Failed to submit request.'}`;
       return;
     }
-    statusEl.textContent = `✅ Request submitted for ${name}. A Utility Loaning holder has been notified.`;
+    statusEl.textContent = `✅ Request submitted for ${name}. An Armory Loaning holder has been notified.`;
     setTimeout(fetchMyDay, 800);
   } catch (err) {
     statusEl.textContent = `⚠️ ${err.message}`;
   }
 }
 
-async function fulfillUtilityRequest(id) {
+async function fulfillArmoryRequest(id) {
   if (!confirm('Mark this item request as fulfilled after loaning it in Torn? The requester will be notified.')) return;
   try {
-    const res = await fetch(`/api/utilities/requests/${id}/fulfill`, { method: 'POST' });
+    const res = await fetch(`/api/armory/requests/${id}/fulfill`, { method: 'POST' });
     const data = await res.json();
     if (!res.ok) { alert(`⚠️ ${data.error || 'Failed to fulfil request.'}`); return; }
     // Refresh the current My Day view to reflect the fulfilled status
@@ -810,13 +811,13 @@ async function fulfillUtilityRequest(id) {
   }
 }
 
-// ─── Open the Torn faction armory utilities page in a new window ──────────────
+// ─── Open the Torn faction armory page in a new window ────────────────────────
 function openTornArmory() {
-  const win = window.open('https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0&sub=utilities', '_blank');
+  const win = window.open('https://www.torn.com/factions.php?step=your&type=1#/tab=armoury&start=0', '_blank');
   if (win) win.focus();
 }
 
-// ─── Items Loaned to the user (Utilities armory) card ─────────────────────────
+// ─── Items Loaned to the user (Armory) card ───────────────────────────────────
 // Each loaned item gets a "Return Item" button that opens the Torn item page where
 // the user can return the item after they are done using it.
 function renderLoanedItemsCard(loanedItems) {
@@ -842,10 +843,10 @@ function renderLoanedItemsCard(loanedItems) {
     </div>`;
 }
 
-async function cancelUtilityRequest(id) {
+async function cancelArmoryRequest(id) {
   if (!confirm('Cancel this request?')) return;
   try {
-    const res = await fetch(`/api/utilities/requests/${id}`, { method: 'DELETE' });
+    const res = await fetch(`/api/armory/requests/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) { alert(`⚠️ ${data.error || 'Failed to cancel request.'}`); return; }
     fetchMyDay();
@@ -3629,6 +3630,8 @@ let warPayoutLastResult = null;
 // Per-member overrides: { [memberId]: { hits?: number, assists?: number, payoutOverride?: number } }
 // Session-only — reset when war data reloads. Used to zero out or custom-set a member's payout.
 let warPayoutMemberOverrides = {};
+// Session-only set of member IDs marked as "paid" — visual tracking only, not persisted.
+let warPayoutPaidMembers = {};
 let warPayoutRecalcTimer = null;
 const warPayoutInputs = {
   total: '',
@@ -3659,6 +3662,7 @@ async function fetchWarPayout(force = false) {
   warPayoutWar = data.war || null;
   warPayoutMembers = data.memberHits || [];
   warPayoutMemberOverrides = {};
+  warPayoutPaidMembers = {};
   if (!warPayoutWar || !warPayoutMembers.length) {
     warPayoutLastResult = null;
     container.innerHTML = '<div class="empty-state"><span class="empty-icon">💰</span><p>No war data available. War data clears once Torn drops a finished war from its API — calculate and copy the breakdown before that happens.</p></div>';
@@ -3718,12 +3722,21 @@ function renderWarPayoutShell(container) {
 
   // Delegate override input changes (hits/assists/payoutOverride per member)
   container.addEventListener('change', e => {
-    const input = e.target.closest('input[data-id][data-field]');
+    const input = e.target.closest('input[data-id]');
     if (!input) return;
     const id = Number(input.dataset.id);
     const field = input.dataset.field;
-    const val = input.value === '' ? null : Number(input.value);
+
+    // Paid checkbox (visual tracking only, not saved)
+    if (input.type === 'checkbox' && !field) {
+      if (input.checked) warPayoutPaidMembers[id] = true;
+      else delete warPayoutPaidMembers[id];
+      return;
+    }
+
+    // Override inputs (hits/assists/payoutOverride)
     if (!warPayoutMemberOverrides[id]) warPayoutMemberOverrides[id] = {};
+    const val = input.value === '' ? null : Number(input.value);
     if (val == null) delete warPayoutMemberOverrides[id][field];
     else warPayoutMemberOverrides[id][field] = val;
     // Clean up empty override objects
@@ -3819,11 +3832,13 @@ function renderWarPayoutResults(r) {
 
   const rows = r.rows.map((m, i) => {
     const ov = warPayoutMemberOverrides[m.id] || {};
+    const isPaid = !!warPayoutPaidMembers[m.id];
     const hasOverride = ov.hits != null || ov.assists != null || ov.payoutOverride != null;
     const overrideBadge = hasOverride ? ' <span title="Override active" style="color:#f39c12;font-size:0.65rem;">⚠</span>' : '';
     const lossStyle = m.losses > 0 ? 'color:#e74c3c;' : 'color:#aaa;';
     const payoutCell = `${fmtMoney(m.payout)}${m.growthPay > 0 ? `<span style="color:#2ecc71;"> + ${fmtMoney(m.growthPay)} 🌱</span>` : ''}`;
-    let nameCell = `${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}${overrideBadge}`;
+    const nameStyle = isPaid ? 'text-decoration:line-through;color:#888;' : '';
+    let nameCell = `<span style="${nameStyle}">${m.isGrowthRole ? '<span title="Growth role at war start">🌱 </span>' : ''}${escapeHtml(m.name || '—')}${overrideBadge}</span>`;
     if (m.isGrowthRole) {
       const btnStyle = 'padding:0.05rem 0.35rem;font-size:0.68rem;margin-left:0.3rem;line-height:1.3;';
       if (m.growthReason === 'used') {
@@ -3840,6 +3855,7 @@ function renderWarPayoutResults(r) {
     return `
       <tr>
         <td style="color:#555;font-size:0.8rem;text-align:center;">${i + 1}</td>
+        <td style="text-align:center;"><input type="checkbox" data-id="${m.id}" ${isPaid ? 'checked' : ''} title="Mark as paid (visual only)"></td>
         <td>${nameCell}</td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;"><input type="number" min="0" data-id="${m.id}" data-field="hits" value="${m.hits}" style="${WP_FIELD}width:70px;text-align:center;padding:0.2rem 0.4rem;"></td>
         <td style="text-align:center;font-family:'Share Tech Mono',monospace;color:#aaa;"><input type="number" min="0" data-id="${m.id}" data-field="assists" value="${m.assists > 0 ? m.assists : ''}" style="${WP_FIELD}width:70px;text-align:center;padding:0.2rem 0.4rem;"></td>
@@ -3861,7 +3877,9 @@ function renderWarPayoutResults(r) {
     <div style="overflow-x:auto;">
       <table class="members-table">
         <thead><tr>
-          <th>#</th><th>Member</th>
+          <th style="width:34px;">#</th>
+          <th style="width:30px;" title="Mark as paid (visual tracking only, not saved)">Paid</th>
+          <th>Member</th>
           <th style="text-align:center;">Hits</th>
           <th style="text-align:center;">Assists</th>
           <th style="text-align:center;">Losses</th>
@@ -3869,7 +3887,7 @@ function renderWarPayoutResults(r) {
           ${tiered ? '<th style="text-align:center;">Rate</th>' : ''}
           <th style="text-align:right;">Payout</th>
         </tr></thead>
-        <tbody>${rows || `<tr><td colspan="${tiered ? 8 : 7}" class="muted" style="padding:1rem;">No members to pay.</td></tr>`}</tbody>
+        <tbody>${rows || `<tr><td colspan="${tiered ? 9 : 8}" class="muted" style="padding:1rem;">No members to pay.</td></tr>`}</tbody>
       </table>
     </div>
     <p style="font-size:0.8rem;color:#666;margin-top:0.75rem;padding:0 0.25rem;">

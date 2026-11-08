@@ -4449,50 +4449,68 @@ app.get('/api/admin/utilities-inventory', isAuthenticated, isLeadershipOrOwnersh
 });
 
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// UTILITIES ARMORY REQUEST TICKETS
+// ARMORY REQUEST TICKETS
 // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// Members request a Utilities armory item from a dropdown on My Day. Each request
-// is stored as an AppNotification (type 'utilities_request') that appears on the
+// Members request an armory item (Utilities, Weapons or Armor) from a dropdown on My Day.
+// Each request is stored as an AppNotification (type 'armory_request') that appears on the
 // My Day of everyone with the Utility Loaning permission until it is fulfilled.
-// Fulfilment creates a 'utilities_fulfilled' notification targeted to the requester
-// and deletes the open request. The Utilities armory page reflects the actual loan
+// Fulfilment creates an 'armory_fulfilled' notification targeted to the requester
+// and deletes the open request. The armory pages reflect the actual loan
 // automatically through the existing Torn API integration.
 
-// ---- Helper: Fetch the available Utilities armory items (name, id, available) --
-async function fetchUtilitiesArmoryItems() {
-  const factionKey = await getFactionApiKey();
-  if (!factionKey) return [];
-  let utilitiesData = [];
-  try {
-    const utilsRes = await axios.get(`https://api.torn.com/faction/?selections=utilities&key=${encodeURIComponent(factionKey)}`);
-    const raw = utilsRes.data;
-    if (Array.isArray(raw?.utilities)) utilitiesData = raw.utilities;
-    else if (Array.isArray(raw?.items)) utilitiesData = raw.items;
-    else if (Array.isArray(raw)) utilitiesData = raw;
-  } catch (err) {
-    console.error('Error fetching utilities data:', err.message);
-  }
-    return utilitiesData.map(item => ({
-    id: item.id || null,
-    name: item.name || 'Unknown',
-    available: item.available || 0,
-    loaned: item.loaned || 0,
-    total: item.quantity || 0
-  }));
+// ---- Helper: Fetch available items from all faction armories (armor, temporary, utilities, weapons) ----
+const ARMORY_SELECTIONS = [
+  { selection: 'armor', dataKey: 'armor', label: 'Armor' },
+  { selection: 'temporary', dataKey: 'temporary', label: 'Temporary' },
+  { selection: 'utilities', dataKey: 'utilities', label: 'Utilities' },
+  { selection: 'weapons', dataKey: 'weapons', label: 'Weapons' }
+];
+
+function extractArmoryItems(raw, dataKey) {
+  if (Array.isArray(raw)) return raw;
+  if (dataKey && Array.isArray(raw?.[dataKey])) return raw[dataKey];
+  if (Array.isArray(raw?.items)) return raw.items;
+  return [];
 }
 
-// ---- API: List available utilities armory items (for the request dropdown) ----
-app.get('/api/utilities/available', isAuthenticated, isFactionMember, async (req, res) => {
+async function fetchArmoryItems() {
+  const factionKey = await getFactionApiKey();
+  if (!factionKey) return [];
+  const allItems = [];
+  await Promise.all(ARMORY_SELECTIONS.map(async ({ selection, dataKey, label }) => {
+    let data = [];
+    try {
+      const res = await axios.get(`https://api.torn.com/faction/?selections=${selection}&key=${encodeURIComponent(factionKey)}`);
+      data = extractArmoryItems(res.data, dataKey);
+    } catch (err) {
+      console.error(`Error fetching ${label} armory data:`, err.message);
+    }
+    data.forEach(item => {
+      allItems.push({
+        id: item.id || null,
+        name: item.name || 'Unknown',
+        armory: label,
+        available: item.available || 0,
+        loaned: item.loaned || 0,
+        total: item.quantity || 0
+      });
+    });
+  }));
+  return allItems;
+}
+
+// ---- API: List available armory items (for the request dropdown) ----
+app.get('/api/armory/available', isAuthenticated, isFactionMember, async (req, res) => {
   try {
-    const items = await fetchUtilitiesArmoryItems();
+    const items = await fetchArmoryItems();
     res.json({ items });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ---- API: Open a new utilities item request (ticket) --------------------------
-app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req, res) => {
+// ---- API: Open a new armory item request (ticket) --------------------------
+app.post('/api/armory/requests', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const { itemId, itemName } = req.body || {};
     if (!itemId && !itemName) {
@@ -4503,7 +4521,7 @@ app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req
     const requesterName = dbUser?.tornName || dbUser?.username || ('#' + requesterId);
 
     // Prevent duplicate open requests from the same requester for the same item
-    const dupFilter = { type: 'utilities_request', requesterId };
+    const dupFilter = { type: 'armory_request', requesterId };
     if (itemId) dupFilter.itemId = itemId;
     else dupFilter.itemName = itemName;
     const existing = await AppNotification.findOne(dupFilter);
@@ -4512,9 +4530,9 @@ app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req
     }
 
     const notification = await AppNotification.create({
-      type: 'utilities_request',
-      title: `ðŸ§° Utilities Request: ${itemName}`,
-      message: `${requesterName} is requesting ${itemName} from the Utilities armory.`,
+      type: 'armory_request',
+      title: `ðŸ§° Armory Request: ${itemName}`,
+      message: `${requesterName} is requesting ${itemName} from the armory.`,
       requesterId,
       requesterName,
       itemId: itemId || null,
@@ -4524,31 +4542,31 @@ app.post('/api/utilities/requests', isAuthenticated, isFactionMember, async (req
 
     res.status(201).json({ success: true, request: notification });
   } catch (err) {
-    console.error('Error creating utilities request:', err.message);
+    console.error('Error creating armory request:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ---- API: Get utilities requests (requester's own + all open for holders) ------
-app.get('/api/utilities/requests', isAuthenticated, isFactionMember, async (req, res) => {
+// ---- API: Get armory requests (requester's own + all open for holders) ------
+app.get('/api/armory/requests', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const userId = parseInt(req.session.userId);
     const canLoan = await isUtilityLoaningUser(req.session.user);
 
     const myRequests = await AppNotification.find({
-      type: 'utilities_request',
+      type: 'armory_request',
       requesterId: userId
     }).sort({ createdAt: -1 }).lean();
 
     let allOpenRequests = [];
     let fulfilledRequests = [];
     if (canLoan) {
-      allOpenRequests = await AppNotification.find({ type: 'utilities_request' })
+      allOpenRequests = await AppNotification.find({ type: 'armory_request' })
         .sort({ createdAt: -1 }).lean();
     }
     // The requester's fulfillment notifications
     fulfilledRequests = await AppNotification.find({
-      type: 'utilities_fulfilled',
+      type: 'armory_fulfilled',
       recipientId: userId
     }).sort({ createdAt: -1 }).lean();
 
@@ -4558,12 +4576,12 @@ app.get('/api/utilities/requests', isAuthenticated, isFactionMember, async (req,
   }
 });
 
-// ---- API: Fulfil a utilities request (creates requester notification + deletes) --
-app.post('/api/utilities/requests/:id/fulfill', isAuthenticated, isFactionMember, isUtilityLoaning, async (req, res) => {
+// ---- API: Fulfil an armory request (creates requester notification + deletes) --
+app.post('/api/armory/requests/:id/fulfill', isAuthenticated, isFactionMember, isUtilityLoaning, async (req, res) => {
   try {
     const request = await AppNotification.findOne({
       _id: req.params.id,
-      type: 'utilities_request'
+      type: 'armory_request'
     });
     if (!request) {
       return res.status(404).json({ error: 'Request not found or already fulfilled.' });
@@ -4575,8 +4593,8 @@ app.post('/api/utilities/requests/:id/fulfill', isAuthenticated, isFactionMember
     const requester = await User.findOne({ tornPlayerId: request.requesterId });
     if (requester) {
       await AppNotification.create({
-        type: 'utilities_fulfilled',
-        title: `âœ… Your Utilities Request Was Fulfilled`,
+        type: 'armory_fulfilled',
+        title: `âœ… Your Armory Request Was Fulfilled`,
         message: `${request.itemName} has been loaned to you by ${fulfilledBy}.`,
         requesterId: request.requesterId,
         requesterName: request.requesterName,
@@ -4591,17 +4609,17 @@ app.post('/api/utilities/requests/:id/fulfill', isAuthenticated, isFactionMember
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Error fulfilling utilities request:', err.message);
+    console.error('Error fulfilling armory request:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
 
-// ---- API: Cancel / delete an open utilities request --------------------------
-app.delete('/api/utilities/requests/:id', isAuthenticated, isFactionMember, async (req, res) => {
+// ---- API: Cancel / delete an open armory request --------------------------
+app.delete('/api/armory/requests/:id', isAuthenticated, isFactionMember, async (req, res) => {
   try {
     const request = await AppNotification.findOne({
       _id: req.params.id,
-      type: 'utilities_request'
+      type: 'armory_request'
     });
     if (!request) {
       return res.status(404).json({ error: 'Request not found or already fulfilled.' });
@@ -5152,7 +5170,7 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
       ocItemChannelLink: null,
       war: null,
       hasApiKey: !!dbUser?.tornApiKey,
-      canLoanUtilities: false,
+      canLoanArmory: false,
       pendingRequests: [],
       myRequestStatus: [],
       fulfilledRequests: [],
@@ -5321,65 +5339,68 @@ app.get('/api/my-day', isAuthenticated, isFactionMember, async (req, res) => {
       }
     }
 
-    // 4. Utilities armory request tickets
+    // 4. Armory request tickets (all armories: utilities, weapons, armor)
     try {
-      result.canLoanUtilities = await isUtilityLoaningUser(req.session.user);
+      result.canLoanArmory = await isUtilityLoaningUser(req.session.user);
 
       // Requester's own open requests + fulfillment notifications
       result.myRequestStatus = await AppNotification.find({
-        type: 'utilities_request',
+        type: 'armory_request',
         requesterId: userId
       }).sort({ createdAt: -1 }).lean();
       result.fulfilledRequests = await AppNotification.find({
-        type: 'utilities_fulfilled',
+        type: 'armory_fulfilled',
         recipientId: userId
       }).sort({ createdAt: -1 }).lean();
 
       // Open requests visible to anyone with the Utility Loaning permission
-      if (result.canLoanUtilities) {
-        result.pendingRequests = await AppNotification.find({ type: 'utilities_request' })
+      if (result.canLoanArmory) {
+        result.pendingRequests = await AppNotification.find({ type: 'armory_request' })
           .sort({ createdAt: -1 }).lean();
       }
     } catch (err) {
-      console.error('My Day: Error loading utilities requests:', err.message);
+      console.error('My Day: Error loading armory requests:', err.message);
     }
 
-    // 5. Utilities armory items currently loaned to this user
+    // 5. Armory items currently loaned to this user (all armories)
     try {
       result.loanedItems = [];
       if (factionKey) {
-        const utilsRes = await axios.get(
-          `https://api.torn.com/faction/?selections=utilities&key=${encodeURIComponent(factionKey)}`
-        );
-        const raw = utilsRes.data;
-        let utilsData = [];
-        if (Array.isArray(raw?.utilities)) utilsData = raw.utilities;
-        else if (Array.isArray(raw?.items)) utilsData = raw.items;
-        else if (Array.isArray(raw)) utilsData = raw;
-
         const myLoaned = [];
-        utilsData.forEach(item => {
-          if (!item.loaned_to || (item.loaned || 0) === 0) return;
-          let ids = [];
-          if (typeof item.loaned_to === 'string') ids = item.loaned_to.split(',').map(s => s.trim());
-          else if (Array.isArray(item.loaned_to)) ids = item.loaned_to;
-          else ids = [String(item.loaned_to)];
-
-          const loanedToMe = ids.some(idStr => {
-            const pid = parseInt(idStr);
-            return !isNaN(pid) && pid === userId;
-          });
-
-          if (loanedToMe) {
-            myLoaned.push({
-              itemId: item.id || null,
-              itemName: item.name || 'Unknown',
-              total: item.quantity || 0,
-              loaned: item.loaned || 0,
-              available: item.available || 0
-            });
+        await Promise.all(ARMORY_SELECTIONS.map(async ({ selection, dataKey, label }) => {
+          let data = [];
+          try {
+            const res = await axios.get(
+              `https://api.torn.com/faction/?selections=${selection}&key=${encodeURIComponent(factionKey)}`
+            );
+            data = extractArmoryItems(res.data, dataKey);
+          } catch (err) {
+            console.error(`Error fetching ${label} armory loans:`, err.message);
           }
-        });
+          data.forEach(item => {
+            if (!item.loaned_to || (item.loaned || 0) === 0) return;
+            let ids = [];
+            if (typeof item.loaned_to === 'string') ids = item.loaned_to.split(',').map(s => s.trim());
+            else if (Array.isArray(item.loaned_to)) ids = item.loaned_to;
+            else ids = [String(item.loaned_to)];
+
+            const loanedToMe = ids.some(idStr => {
+              const pid = parseInt(idStr);
+              return !isNaN(pid) && pid === userId;
+            });
+
+            if (loanedToMe) {
+              myLoaned.push({
+                itemId: item.id || null,
+                itemName: item.name || 'Unknown',
+                armory: label,
+                total: item.quantity || 0,
+                loaned: item.loaned || 0,
+                available: item.available || 0
+              });
+            }
+          });
+        }));
         result.loanedItems = myLoaned;
       }
     } catch (err) {

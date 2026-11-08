@@ -4,7 +4,7 @@ const appNotificationSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['application', 'weekly_report', 'employee_removal', 'utilities_request', 'utilities_fulfilled', 'director_change']
+    enum: ['application', 'weekly_report', 'employee_removal', 'armory_request', 'armory_fulfilled', 'director_change']
   },
   title: {
     type: String,
@@ -28,13 +28,13 @@ const appNotificationSchema = new mongoose.Schema({
   employeeId: { type: Number, default: null },
   companyName: { type: String, default: null },
   companyId: { type: Number, default: null },
-  // For utilities armory request notifications - store requester + item details
+  // For armory request notifications - store requester + item details
   requesterId: { type: Number, default: null },
   requesterName: { type: String, default: null },
   itemId: { type: Number, default: null },
   itemName: { type: String, default: null },
   // Targeted recipient for notifications addressed to a single player (e.g. the
-  // requester receiving a 'utilities_fulfilled' notification). Null = visible to all.
+  // requester receiving an 'armory_fulfilled' notification). Null = visible to all.
   recipientId: { type: Number, default: null },
   // Read tracking
   readBy: [{ type: Number }], // array of tornPlayerIds who have read it
