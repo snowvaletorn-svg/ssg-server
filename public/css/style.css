@@ -1,17 +1,10 @@
-/* ... existing styles ... */
-:root {
-  /* BACKGROUND COLORS */
-  --main-bg: #201f1f;
-  /* Overall page background */
-  --card-bg: #c0bcbc;
-  /* Cards and sections */
-  --footer-bg: #98a3ae;
 
-  /* FONTS */
+:root {
+  --main-bg: #201f1f;
+  --card-bg: #c0bcbc;
+  --footer-bg: #98a3ae;
   --body-font: 'Inter', sans-serif;
   --heading-font: 'Montserrat', sans-serif;
-
-  /* ACCENT COLORS */
   --primary-color: #3611b0;
   --strength-color: #e67e22;
   --strategy-color: #ff0000;
@@ -19,43 +12,105 @@
   --leadership-color: #cf3ee5;
   --ownership-color: #004cff;
   --black: #0c0c0c;
+  --space-xs: 0.35rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-xxl: 3rem;
 }
 
-img {
-  max-width: 100%;
-  height: auto;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   background-color: var(--main-bg);
+  color: var(--black);
   font-family: var(--body-font);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
 }
 
-h1,
-h2 {
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+h1, h2, h3, h4 {
   font-family: var(--heading-font);
   color: var(--ownership-color);
+  margin: 0 0 var(--space-sm);
 }
 
-h3,
-h4 {
-  font-family: var(--heading-font);
-  color: var(--black);
-}
+h1 { font-size: clamp(1.6rem, 2.5vw + 0.5rem, 2.25rem); }
+h2 { font-size: clamp(1.4rem, 2vw + 0.4rem, 1.9rem); }
+h3 { font-size: clamp(1.2rem, 1.6vw + 0.3rem, 1.6rem); }
+h4 { font-size: clamp(1.05rem, 1.4vw + 0.25rem, 1.3rem); }
 
-/* Update your .container to prevent content hitting screen edges */
 .container {
-  width: 95%;
-  max-width: 1200px;
+  width: 90%;
+  max-width: 1140px;
   margin: 0 auto;
+  padding: 0 1.25rem;
 }
 
-/* Faction Description */
+.landscape-notice {
+  display: none;
+  background: #ff9800;
+  color: #000;
+  text-align: center;
+  padding: 0.85rem 1rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .landscape-notice {
+    display: block;
+  }
+}
+
+.navbar {
+  min-height: 70px;
+  padding: var(--space-sm) 0;
+}
+
+.nav-links {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.nav-links .btn {
+  width: auto;
+  min-width: 180px;
+  text-align: center;
+  padding: 10px 20px;
+  font-size: 0.95rem;
+}
+
 .faction-description {
-  font-size: 1.1rem;
+  font-size: 1rem;
   color: var(--card-bg);
   line-height: 1.6;
-  margin: 1.5rem 0;
+  margin: var(--space-lg) 0;
   max-width: 800px;
   margin-left: auto;
   margin-right: auto;
@@ -63,21 +118,20 @@ h4 {
 
 .subtitle {
   color: #393939;
-  font-size: 1.1rem;
-  margin-bottom: 1rem;
+  font-size: 1.05rem;
+  margin-bottom: var(--space-lg);
 }
 
-/* Faction Stats */
 .faction-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin: 3rem 0;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-lg);
+  margin: var(--space-xl) 0;
 }
 
 .stat-card {
   background: var(--card-bg);
-  padding: 2rem;
+  padding: var(--space-lg);
   border-radius: 8px;
   text-align: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -86,20 +140,16 @@ h4 {
 }
 
 .stat-card h4 {
-  font-size: 2.5rem;
+  font-size: clamp(1.4rem, 2vw, 2rem);
   color: var(--primary-color);
   margin-bottom: 0.5rem;
 }
 
-.stat-card p {
-  color: var(--black);
-  font-size: 1rem;
-}
+.stat-card p { font-size: 0.95rem; }
 
-/* Groups Section */
 .groups-section {
-  margin: 4rem 0;
-  padding: 3rem 0;
+  margin: var(--space-xxl) 0;
+  padding: var(--space-lg) 0;
   border-top: 2px solid #e9ecef;
   border-bottom: 2px solid #e9ecef;
 }
@@ -107,56 +157,45 @@ h4 {
 .groups-section h2 {
   text-align: center;
   margin-bottom: 0.5rem;
-  /*color: var(--primary-color);*/
 }
 
-.section-intro {
-  text-align: center;
-  color: var(--card-bg);
-  margin-bottom: 2rem;
-  font-size: 1.1rem;
-}
 
-/* Description Area */
+
 .desc-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2.5rem 1.5rem;
-  margin-top: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-xl) 1.5rem;
+  margin-top: var(--space-lg);
 }
 
 .desc-card {
-  height: 100%;
-  /* Ensures the card fills the entire grid cell height */
+  min-height: 180px;
   display: flex;
   flex-direction: column;
   background: var(--card-bg);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s, box-shadow 0.3s;
   border-left: 5px solid var(--primary-color);
-  display: flex;
-  flex-direction: column;
   color: var(--black);
 }
 
-/* Perks Area */
 .perks-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 2.5rem 1rem;
-  margin-top: 2rem;
+  gap: var(--space-xl) 1rem;
+  margin-top: var(--space-lg);
 }
 
 .perks-list {
   list-style: none;
-  margin: 0.5rem 0 0;
+  margin: var(--space-sm) 0 0;
   padding: 0;
 }
 
 .perks-item {
-  margin-bottom: 0.6rem;
+  margin-bottom: var(--space-sm);
   font-size: 0.9rem;
 }
 
@@ -175,7 +214,6 @@ h4 {
 
 .perks-card {
   height: 100%;
-  /* Ensures the card fills the entire grid cell height */
   display: flex;
   flex-direction: column;
   background: var(--card-bg);
@@ -184,73 +222,35 @@ h4 {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s, box-shadow 0.3s;
   border-left: 5px solid var(--primary-color);
-  display: flex;
-  flex-direction: column;
   color: var(--black);
 }
 
-/* Groups Grid */
 .groups-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  gap: 2rem;
-  margin-top: 2rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-xl);
+  margin-top: var(--space-lg);
 }
 
-.owner-card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
-  border-left: 5px solid var(--ownership-color);
-  display: flex;
-  flex-direction: column;
-}
-
-.lead-card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
-  border-left: 5px solid var(--leadership-color);
-  display: flex;
-  flex-direction: column;
-}
-
-.strat-card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
-  border-left: 5px solid var(--strategy-color);
-  display: flex;
-  flex-direction: column;
-}
-
-.stren-card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.3s, box-shadow 0.3s;
-  border-left: 5px solid var(--strength-color);
-  display: flex;
-  flex-direction: column;
-}
-
+.owner-card,
+.lead-card,
+.strat-card,
+.stren-card,
 .grow-card {
   background: var(--card-bg);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s, box-shadow 0.3s;
-  border-left: 5px solid var(--growth-color);
+  border-left: 5px solid var(--primary-color);
   display: flex;
   flex-direction: column;
 }
+
+.lead-card { border-left-color: var(--leadership-color); }
+.grow-card { border-left-color: var(--growth-color); }
+.strat-card {border-left-color: var(--strategy-color);}
+.stren-card{ border-left-color: var(--strength-color);}
 
 .group-card:hover {
   transform: translateY(-5px);
@@ -258,32 +258,31 @@ h4 {
 }
 
 .group-header {
-  padding: 1.5rem;
+  padding: var(--space-lg);
   border-bottom: 1px solid #e9ecef;
   display: flex;
   justify-content: space-between;
-  align-items: start;
+  align-items: flex-start;
 }
 
 .group-header h3 {
   margin: 0;
   color: var(--primary-color);
   flex: 1;
+  font-size: 1.25rem;
 }
 
 .group-members {
   background-color: var(--card-bg);
-  padding: 0.3rem 0.6rem;
+  padding: 0.25rem 0.6rem;
   border-radius: 4px;
   font-size: 0.8rem;
-  /*color: var(--primary-color);*/
   white-space: nowrap;
   margin-left: 1rem;
 }
 
 .group-description {
-  padding: 1.5rem;
-  /*color: var(--primary-color);*/
+  padding: var(--space-lg);
   line-height: 1.6;
   flex: 1;
 }
@@ -293,48 +292,34 @@ h4 {
   background-color: var(--footer-bg);
   border-top: 1px solid #e9ecef;
   font-size: 0.9rem;
-  /*color: var(--footer-bg);*/
 }
 
-.group-footer p {
-  margin: 0;
-}
 
-/* Footer */
+
 .footer {
   background-color: var(--card-bg);
   color: var(--ownership-color);
-  padding: 2rem 0;
+  padding: var(--space-xxl) 0;
   text-align: center;
-  margin-top: 4rem;
+  margin-top: var(--space-xxl);
 }
 
-.footer p {
-  margin: 0;
-}
+.footer p { margin: 0; }
 
-/* 3. Ensure the navbar doesn't cut off the image */
-.navbar {
-  min-height: 80px;
-}
-
-/* ── Application Form ────────────────────────────────────────────────────── */
 .apply-section {
-  padding: 3rem 0;
+  padding: var(--space-xxl) 0;
 }
 
 .apply-card {
   background: var(--card-bg, #161515);
   border: 1px solid #2a2828;
   border-radius: 10px;
-  padding: 2rem;
+  padding: var(--space-lg);
   max-width: 700px;
   margin: 0 auto;
 }
 
-.apply-field {
-  margin-bottom: 1.25rem;
-}
+.apply-field { margin-bottom: 1.25rem; }
 
 .apply-label {
   display: block;
@@ -361,12 +346,10 @@ h4 {
   transition: border-color 0.2s;
 }
 
-.apply-input:focus {
-  border-color: #3611b0;
-}
+.apply-input:focus { border-color: #3611b0; }
 
 .apply-questions {
-  margin: 1.5rem 0;
+  margin: var(--space-lg) 0;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -389,6 +372,7 @@ h4 {
 .apply-radio-group {
   display: flex;
   gap: 1.5rem;
+  flex-wrap: wrap;
 }
 
 .apply-radio {
@@ -425,38 +409,38 @@ h4 {
   transition: background 0.2s;
 }
 
-.apply-btn:hover {
-  background: #4a1fd4;
+.apply-btn:hover { background: #4a1fd4; }
+
+@media (min-width: 480px) {
+  .apply-radio-group { gap: 2rem; }
 }
 
-@media (max-width: 768px) {
-  h1 {
-    font-size: 1.5rem;
-  }
+@media (min-width: 700px) {
+  .apply-radio-group { flex-direction: row; }
+}
+
+@media (min-width: 768px) {
+  .navbar { min-height: 80px; }
 
   .group-header {
-    flex-direction: column;
-    align-items: flex-start;
+    flex-direction: row;
+    align-items: center;
   }
 
   .group-members {
-    margin-left: 0;
-    margin-top: 10px;
-  }
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .groups-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .group-header {
-    flex-direction: column;
+    margin-left: 1rem;
+    margin-top: 0;
   }
 
   .faction-stats {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   }
-
 }
+
+@media (min-width: 1024px) {
+  .container { padding: 0 1.5rem; }
+  .groups-grid { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+  .desc-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .perks-grid { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .stat-card { padding: 2rem; }
+  
