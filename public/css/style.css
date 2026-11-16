@@ -68,7 +68,7 @@ h4 { font-size: clamp(1.05rem, 1.4vw + 0.25rem, 1.3rem); }
   background: #ff9800;
   color: #000;
   text-align: center;
-  padding: 0.85rem 1rem;
+  padding: 0.85rem .90rem;
   font-size: 0.95rem;
   font-weight: 700;
   position: sticky;
