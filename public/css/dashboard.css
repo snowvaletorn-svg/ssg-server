@@ -1438,3 +1438,124 @@
   font-size: 0.74rem;
   margin-left: auto;
 }
+
+/* ── Gym Gains Estimator ─────────────────────────────────────────────────────── */
+.gym-gains-card {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.gym-gains-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.gym-gains-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gym-gains-label {
+  font-size: 0.7rem;
+  color: #888;
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gym-gains-select,
+.gym-gains-input {
+  background: #1a1919;
+  border: 1px solid #2a2828;
+  border-radius: 6px;
+  color: #c0bcbc;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.gym-gains-select:focus,
+.gym-gains-input:focus {
+  outline: none;
+  border-color: #3611b0;
+}
+
+.gym-gains-auto {
+  background: #0f0e0e;
+  color: #888;
+  border-color: #333;
+}
+
+.gym-gains-hint {
+  font-size: 0.7rem;
+  color: #666;
+}
+
+.gym-gains-results {
+  background: #161515;
+  border: 1px solid #2a2828;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.gym-gains-result-header h4 {
+  margin: 0 0 0.75rem 0;
+  color: #c0bcbc;
+  font-size: 0.95rem;
+}
+
+.gym-gains-result-grid {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.gym-gains-result-box {
+  flex: 1;
+  min-width: 150px;
+  background: #0f0e0e;
+  border: 1px solid #2a2828;
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.gym-gains-result-label {
+  font-size: 0.7rem;
+  color: #888;
+  font-family: 'Rajdhani', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gym-gains-result-value {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #4caf50;
+  font-family: 'Share Tech Mono', monospace;
+}
+
+.gym-gains-note {
+  border-top: 1px solid #2a2828;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .gym-gains-grid {
+    grid-template-columns: 1fr;
+  }
+  .gym-gains-result-grid {
+    flex-direction: column;
+  }
+}

@@ -206,6 +206,7 @@ function showSection(sectionId, el) {
 
   if (sectionId === 'my-day') { fetchMyDay(); }
   if (sectionId === 'torn') { fetchTornUser(); fetchStatGoals(); }
+  if (sectionId === 'gym-gains') { initGymGains(); }
   if (sectionId === 'faction') { fetchFaction(); }
   if (sectionId === 'travel') { fetchTravel(); fetchTravelProfits(); }
   if (sectionId === 'admin') { fetchMemberOverview(); }
@@ -7994,11 +7995,245 @@ function renderTargets(targets, meta) {
     </div>`;
 }
 
-// ── Initialize dashboard features on page load ────────────────────────────────
+// ── Gym Gains Estimator ───────────────────────────────────────────────────────
+// Implements Vladar's Training Formula V2.0 (community-accepted gym gain model).
+// All data is client-side — no API calls needed except optional user stat fetch.
+
+// Gym data: { name, energy, cost, dots: { strength, defense, speed, dexterity } }
+// Dashes (null) mean the gym does NOT train that stat.
+// API stores dots ×10; we display ÷10.
+const GYM_DATA = [
+  { name: 'Premier Fitness', energy: 5, cost: 10, dots: { strength: 2.0, defense: 2.0, speed: 2.0, dexterity: 2.0 } },
+  { name: "Average Joe's", energy: 5, cost: 100, dots: { strength: 2.4, defense: 2.8, speed: 2.4, dexterity: 2.4 } },
+  { name: "Woody's Workout", energy: 5, cost: 250, dots: { strength: 2.8, defense: 3.0, speed: 3.2, dexterity: 2.8 } },
+  { name: 'Beach Bods', energy: 5, cost: 500, dots: { strength: 3.2, defense: 3.2, speed: 3.2, dexterity: null } },
+  { name: 'Silver Gym', energy: 5, cost: 1000, dots: { strength: 3.4, defense: 3.4, speed: 3.6, dexterity: 3.2 } },
+  { name: 'Pour Femme', energy: 5, cost: 2500, dots: { strength: 3.4, defense: 3.6, speed: 3.6, dexterity: 3.8 } },
+  { name: "Davies' Den", energy: 5, cost: 5000, dots: { strength: 3.7, defense: 3.7, speed: null, dexterity: 3.7 } },
+  { name: 'Global Gym', energy: 5, cost: 10000, dots: { strength: 4.0, defense: 4.0, speed: 4.0, dexterity: 4.0 } },
+  { name: "Knuckle Heads", energy: 10, cost: 50000, dots: { strength: 4.8, defense: 4.0, speed: 4.4, dexterity: 4.2 } },
+  { name: 'Pioneer Fitness', energy: 10, cost: 100000, dots: { strength: 4.4, defense: 4.8, speed: 4.5, dexterity: 4.4 } },
+  { name: 'Anabolic Anomalies', energy: 10, cost: 250000, dots: { strength: 5.0, defense: 5.2, speed: 4.5, dexterity: 4.5 } },
+  { name: 'Core', energy: 10, cost: 500000, dots: { strength: 5.0, defense: 5.0, speed: 5.2, dexterity: 5.0 } },
+  { name: 'Racing Fitness', energy: 10, cost: 1000000, dots: { strength: 5.0, defense: 4.8, speed: 5.4, dexterity: 5.2 } },
+  { name: 'Complete Cardio', energy: 10, cost: 2000000, dots: { strength: 5.5, defense: 5.5, speed: 5.8, dexterity: 5.2 } },
+  { name: "Legs, Bums and Tums", energy: 10, cost: 3000000, dots: { strength: null, defense: 5.6, speed: 5.6, dexterity: 5.8 } },
+  { name: 'Deep Burn', energy: 10, cost: 5000000, dots: { strength: 6.0, defense: 6.0, speed: 6.0, dexterity: 6.0 } },
+  { name: 'Apollo Gym', energy: 10, cost: 7500000, dots: { strength: 6.0, defense: 6.4, speed: 6.2, dexterity: 6.2 } },
+  { name: 'Gun Shop', energy: 10, cost: 10000000, dots: { strength: 6.6, defense: 6.2, speed: 6.4, dexterity: 6.2 } },
+  { name: 'Force Training', energy: 10, cost: 15000000, dots: { strength: 6.4, defense: 6.4, speed: 6.6, dexterity: 6.8 } },
+  { name: "Cha Cha's", energy: 10, cost: 20000000, dots: { strength: 6.4, defense: 6.8, speed: 6.4, dexterity: 7.0 } },
+  { name: 'Atlas', energy: 10, cost: 30000000, dots: { strength: 7.0, defense: 6.4, speed: 6.4, dexterity: 6.6 } },
+  { name: 'Last Round', energy: 10, cost: 50000000, dots: { strength: 6.8, defense: 7.0, speed: 6.6, dexterity: 6.6 } },
+  { name: "The Edge", energy: 10, cost: 75000000, dots: { strength: 6.8, defense: 7.0, speed: 7.0, dexterity: 6.8 } },
+  { name: "George's", energy: 10, cost: 100000000, dots: { strength: 7.3, defense: 7.3, speed: 7.3, dexterity: 7.3 } },
+  { name: "Balboa's Gym", energy: 25, cost: 50000000, dots: { strength: null, defense: 7.5, speed: null, dexterity: 7.5 } },
+  { name: 'Frontline Fitness', energy: 25, cost: 50000000, dots: { strength: 7.5, defense: null, speed: 7.5, dexterity: null } },
+  { name: 'Gym 3000', energy: 50, cost: 100000000, dots: { strength: 8.0, defense: null, speed: null, dexterity: null } },
+  { "name": "Mr. Isoyama's", energy: 50, cost: 100000000, dots: { strength: null, defense: 8.0, speed: null, dexterity: null } },
+  { name: 'Total Rebound', energy: 50, cost: 100000000, dots: { strength: null, defense: null, speed: 8.0, dexterity: null } },
+  { name: 'The Elites', energy: 50, cost: 100000000, dots: { strength: null, defense: null, speed: null, dexterity: 8.0 } },
+  { name: 'The Sports Science Lab', energy: 25, cost: 500000000, dots: { strength: 9.0, defense: 9.0, speed: 9.0, dexterity: 9.0 } },
+  { name: 'Fight Club', energy: 10, cost: 0, dots: { strength: 10.0, defense: 10.0, speed: 10.0, dexterity: 10.0 } },
+  { name: "Crim's Gym", energy: 5, cost: 0, dots: { strength: 3.4, defense: 4.5, speed: 3.4, dexterity: null } }
+];
+
+// Per-stat constants from Vladar's V2.0 formula (A, B)
+// C is the random spread — excluded from predictions (expected value only).
+const STAT_CONSTANTS = {
+  strength: { A: 1600, B: 1700 },
+  defense: { A: 2100, B: -600 },
+  speed: { A: 1600, B: 2000 },
+  dexterity: { A: 1800, B: 1500 }
+};
+
+let GYM_USER_STATS = null;
+
+function initGymGains() {
+  const gymSelect = document.getElementById('gym-gym');
+  const statSelect = document.getElementById('gym-stat');
+  const dotsInput = document.getElementById('gym-dots');
+  const energyInput = document.getElementById('gym-energy');
+  const gymHint = document.getElementById('gym-gym-hint');
+
+  gymSelect.innerHTML = GYM_DATA.map(g => `<option value="${g.name}">${g.name} (${g.energy}E, $${g.cost.toLocaleString()})</option>`).join('');
+
+  gymSelect.value = "Legs, Bums and Tums";
+  statSelect.value = 'dexterity';
+
+  function updateAutoFields() {
+    const gymName = gymSelect.value;
+    const stat = statSelect.value;
+    const gym = GYM_DATA.find(g => g.name === gymName);
+    if (!gym) return;
+
+    const dots = gym.dots[stat];
+    const energy = gym.energy;
+
+    if (dots === null || dots === undefined) {
+      dotsInput.value = '—';
+      energyInput.value = '—';
+      gymHint.textContent = 'This gym does not train that stat.';
+      gymHint.style.color = '#e74c3c';
+    } else {
+      dotsInput.value = dots.toFixed(1);
+      energyInput.value = energy;
+      gymHint.textContent = 'Cost: $' + gym.cost.toLocaleString() + ' · ' + energy + ' energy per train';
+      gymHint.style.color = '#888';
+    }
+
+    calcGymGains();
+  }
+
+  gymSelect.addEventListener('change', updateAutoFields);
+  statSelect.addEventListener('change', updateAutoFields);
+
+  const inputs = [
+    'gym-perk-faction', 'gym-perk-property', 'gym-perk-edu-stat', 'gym-perk-edu-gen',
+    'gym-perk-job', 'gym-perk-book', 'gym-happy', 'gym-stat-total', 'gym-total-energy'
+  ];
+  inputs.forEach(function(id) {
+    var el = document.getElementById(id);
+    el.addEventListener('input', function() {
+      clampIntInput(el);
+      calcGymGains();
+    });
+  });
+
+  updateAutoFields();
+
+  fetch('/api/torn/user')
+    .then(function(res) { return res.ok ? res.json() : null; })
+    .then(function(data) {
+      if (!data) return;
+      var ps = data.personalstats || {};
+      var es = data.effectiveStats || {};
+      GYM_USER_STATS = {
+        strength: ps.strength || 0,
+        defense: ps.defense || 0,
+        speed: ps.speed || 0,
+        dexterity: ps.dexterity || 0,
+        happy: data.happy ? data.happy.current : 0
+      };
+
+      var stat = statSelect.value;
+      var statTotal = 0;
+      if (es && es[stat] !== undefined) {
+        statTotal = es[stat];
+      } else if (ps[stat] !== undefined) {
+        statTotal = ps[stat];
+      }
+
+      document.getElementById('gym-happy').value = GYM_USER_STATS.happy || '';
+      document.getElementById('gym-stat-total').value = statTotal ? statTotal.toLocaleString() : '';
+      var statusEl = document.getElementById('gym-gains-api-status');
+      statusEl.textContent = '✓ Stats loaded from your Torn API';
+      statusEl.style.color = '#4caf50';
+
+      calcGymGains();
+    })
+    .catch(function() {
+      var statusEl = document.getElementById('gym-gains-api-status');
+      statusEl.textContent = 'Could not load stats — enter manually';
+      statusEl.style.color = '#e74c3c';
+    });
+}
+
+function clampIntInput(el) {
+  var v = el.value.replace(/[^0-9-]/g, '');
+  if (v === '') return;
+  var n = parseInt(v, 10);
+  var id = el.id;
+  if (id === 'gym-perk-faction' || id === 'gym-perk-property' || id === 'gym-perk-edu-stat' ||
+      id === 'gym-perk-edu-gen' || id === 'gym-perk-job' || id === 'gym-perk-book') {
+    if (n < 0) n = 0; if (n > 10) n = 10;
+  } else if (id === 'gym-total-energy') {
+    if (n < 1) n = 1; if (n > 1000) n = 1000;
+  } else if (id === 'gym-happy') {
+    if (n < 0) n = 0;
+  } else if (id === 'gym-stat-total') {
+    if (n < 0) n = 0;
+  }
+  el.value = n;
+}
+
+function calcGymGains() {
+  var gymName = document.getElementById('gym-gym').value;
+  var stat = document.getElementById('gym-stat').value;
+  var gym = GYM_DATA.find(function(g) { return g.name === gymName; });
+  if (!gym) return;
+
+  var dots = gym.dots[stat];
+  var energyPerTrain = gym.energy;
+  if (dots === null || dots === undefined) {
+    document.getElementById('gym-result-trains').textContent = '—';
+    document.getElementById('gym-result-single').textContent = '—';
+    document.getElementById('gym-result-total').textContent = '—';
+    return;
+  }
+
+  var perkFaction = parseInt(document.getElementById('gym-perk-faction').value.replace(/,/g, '')) || 0;
+  var perkProperty = parseInt(document.getElementById('gym-perk-property').value.replace(/,/g, '')) || 0;
+  var perkEduStat = parseInt(document.getElementById('gym-perk-edu-stat').value.replace(/,/g, '')) || 0;
+  var perkEduGen = parseInt(document.getElementById('gym-perk-edu-gen').value.replace(/,/g, '')) || 0;
+  var perkJob = parseInt(document.getElementById('gym-perk-job').value.replace(/,/g, '')) || 0;
+  var perkBook = parseInt(document.getElementById('gym-perk-book').value.replace(/,/g, '')) || 0;
+  var happy = parseInt(document.getElementById('gym-happy').value.replace(/,/g, '')) || 0;
+  var statTotal = parseInt(document.getElementById('gym-stat-total').value.replace(/,/g, '')) || 0;
+  var totalEnergy = parseInt(document.getElementById('gym-total-energy').value.replace(/,/g, '')) || 0;
+
+  var A = STAT_CONSTANTS[stat].A;
+  var B = STAT_CONSTANTS[stat].B;
+
+  var perkMultiplier = (1 + perkFaction / 100) *
+    (1 + perkProperty / 100) *
+    (1 + perkEduStat / 100) *
+    (1 + perkEduGen / 100) *
+    (1 + perkJob / 100) *
+    (1 + perkBook / 100);
+
+  var lnTerm = Math.round(Math.log(1 + happy / 250) * 10000) / 10000;
+  var happyMult = Math.round((1 + 0.07 * lnTerm) * 10000) / 10000;
+  var happyTerm = 8 * Math.pow(happy, 1.05);
+  var decayTerm = (1 - Math.pow(happy / 99999, 2)) * A;
+
+  // Number of trains (exact division, no flooring — matches spreadsheet)
+  var numTrains = totalEnergy / energyPerTrain;
+  var fullTrains = Math.floor(numTrains);
+
+  if (fullTrains < 1) {
+    document.getElementById('gym-result-trains').textContent = '—';
+    document.getElementById('gym-result-single').textContent = '—';
+    document.getElementById('gym-result-total').textContent = '—';
+    return;
+  }
+
+  // ── Incremental calculation ──
+  // Each train increases the stat total, which becomes the base for the next train.
+  // Precompute the parts of the formula that don't change per train.
+  var baseMult = dots * energyPerTrain * perkMultiplier / 200000;
+  var happyPart = happyTerm + decayTerm + B;
+
+  var totalGain = 0;
+  var currentStat = statTotal;
+  var lastSingleGain = 0;
+
+  for (var i = 0; i < fullTrains; i++) {
+    var cappedS = Math.min(currentStat, 50000000);
+    lastSingleGain = (cappedS * happyMult + happyPart) * baseMult;
+    totalGain += lastSingleGain;
+    currentStat += lastSingleGain;
+  }
+
+  document.getElementById('gym-result-trains').textContent = numTrains.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+  document.getElementById('gym-result-single').textContent = lastSingleGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  document.getElementById('gym-result-total').textContent = totalGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 (function initDashboard() {
   // Check URL hash for a specific section to navigate to
   const hash = window.location.hash.replace('#', '');
-  const validSections = ['my-day', 'profile', 'torn', 'targets', 'faction', 'travel', 'training', 'bank-rates', 'war', 'stocks', 'oc', 'scripts', 'companies', 'competition', 'admin'];
+  const validSections = ['my-day', 'profile', 'torn', 'gym-gains', 'targets', 'faction', 'travel', 'training', 'bank-rates', 'war', 'stocks', 'oc', 'scripts', 'companies', 'competition', 'admin'];
   
   if (hash && validSections.includes(hash)) {
     // Navigate to the section specified in the URL hash

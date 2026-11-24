@@ -55,6 +55,7 @@
             <a href="#my-day" class="nav-item active" onclick="showSection('my-day', this)">🏠 My Day</a>
             <a href="#profile" class="nav-item" onclick="showSection('profile', this)">👤 Profile</a>
             <a href="#torn" class="nav-item" onclick="showSection('torn', this)">🎮 Personal Stats</a>
+            <a href="#gym-gains" class="nav-item" onclick="showSection('gym-gains', this)">💪 Gym Gains</a>
             <% } %>
             <a href="#targets" class="nav-item <%= isEmployee ? 'active' : '' %>" onclick="showSection('targets', this)">🎯 Targets</a>
             <% if (!isEmployee) { %>
@@ -414,8 +415,145 @@
             </div>
           </section>
 
+          <!-- ── GYM GAINS ── -->
+          <section id="gym-gains" class="section">
+            <div class="section-header">
+              <h3>💪 Gym Gains Estimator</h3>
+              <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;">
+                <button class="btn btn-primary btn-small" onclick="calcGymGains()">🔄 Calculate</button>
+                <button class="btn btn-small btn-outline" onclick="openHelp('gymGains')">❓ Help</button>
+                <span id="gym-gains-api-status" class="muted" style="font-size:0.75rem;"></span>
+              </div>
+            </div>
+
+            <div class="gym-gains-card">
+              <div class="gym-gains-grid">
+
+                <!-- Gym -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Gym</label>
+                  <select id="gym-gym" class="gym-gains-select"></select>
+                  <span class="gym-gains-hint" id="gym-gym-hint"></span>
+                </div>
+
+                <!-- Stat to train -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Stat to Train</label>
+                  <select id="gym-stat" class="gym-gains-select">
+                    <option value="strength">Strength</option>
+                    <option value="defense">Defense</option>
+                    <option value="speed">Speed</option>
+                    <option value="dexterity">Dexterity</option>
+                  </select>
+                </div>
+
+                <!-- Gym Dots (auto) -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Gym Dots</label>
+                  <input type="text" id="gym-dots" class="gym-gains-input gym-gains-auto" readonly />
+                </div>
+
+                <!-- Energy per Train (auto) -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Energy per Train</label>
+                  <input type="text" id="gym-energy" class="gym-gains-input gym-gains-auto" readonly />
+                </div>
+
+                <!-- Faction Perks -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Faction Perks (%)</label>
+                  <input type="text" id="gym-perk-faction" class="gym-gains-input int-input" value="0" maxlength="2" />
+                  <span class="gym-gains-hint">0-10</span>
+                </div>
+
+                <!-- Property Perks -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Property Perks (%)</label>
+                  <input type="text" id="gym-perk-property" class="gym-gains-input int-input" value="0" maxlength="2" />
+                  <span class="gym-gains-hint">0-10</span>
+                </div>
+
+                <!-- Education (Stat Specific) -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Education (Stat Specific) (%)</label>
+                  <input type="text" id="gym-perk-edu-stat" class="gym-gains-input int-input" value="0" maxlength="2" />
+                  <span class="gym-gains-hint">0-10</span>
+                </div>
+
+                <!-- Education (General) -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Education (General) (%)</label>
+                  <input type="text" id="gym-perk-edu-gen" class="gym-gains-input int-input" value="0" maxlength="2" />
+                  <span class="gym-gains-hint">0-10</span>
+                </div>
+
+                <!-- Job Perks -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Job Perks (%)</label>
+                  <input type="text" id="gym-perk-job" class="gym-gains-input int-input" value="0" maxlength="2" />
+                  <span class="gym-gains-hint">0-10</span>
+                </div>
+
+                <!-- Book Perks -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Book Perks (%)</label>
+                  <input type="text" id="gym-perk-book" class="gym-gains-input int-input" value="0" maxlength="2" />
+                  <span class="gym-gains-hint">0-10</span>
+                </div>
+
+                <!-- Happy Level -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Happy Level</label>
+                  <input type="text" id="gym-happy" class="gym-gains-input int-input" value="" />
+                  <span class="gym-gains-hint">Integer only</span>
+                </div>
+
+                <!-- Stat Total -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Stat Total (to train)</label>
+                  <input type="text" id="gym-stat-total" class="gym-gains-input int-input" value="" />
+                  <span class="gym-gains-hint">From your API stats</span>
+                </div>
+
+                <!-- Total Energy to Spend -->
+                <div class="gym-gains-field">
+                  <label class="gym-gains-label">Total Energy to Spend</label>
+                  <input type="text" id="gym-total-energy" class="gym-gains-input int-input" value="" maxlength="4" />
+                  <span class="gym-gains-hint">1-1000</span>
+                </div>
+
+              </div>
+
+              <!-- Predictive Gains Results -->
+              <div class="gym-gains-results">
+                <div class="gym-gains-result-header">
+                  <h4>📊 Predictive Gains</h4>
+                </div>
+                <div class="gym-gains-result-grid">
+                  <div class="gym-gains-result-box">
+                    <div class="gym-gains-result-label">Number of Trains</div>
+                    <div class="gym-gains-result-value" id="gym-result-trains">—</div>
+                  </div>
+                  <div class="gym-gains-result-box">
+                    <div class="gym-gains-result-label">Single Train Gain</div>
+                    <div class="gym-gains-result-value" id="gym-result-single">—</div>
+                  </div>
+                  <div class="gym-gains-result-box">
+                    <div class="gym-gains-result-label">Total Estimated Gain</div>
+                    <div class="gym-gains-result-value" id="gym-result-total">—</div>
+                  </div>
+                </div>
+                <div class="gym-gains-note">
+                  <p class="muted" style="font-size:0.78rem;">
+                    <strong>Note:</strong> Perk bonuses are <strong>multiplicative</strong>, not additive. E.g. +10% faction × +5% property = ×1.10 × 1.05 ≈ +15.5% total bonus.<br>
+                    Some gyms don't train certain stats (shown as "—"). Select a compatible gym/stat combination.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
           <!-- ── TARGETS ── -->
-          <section id="targets" class="section">
             <div class="section-header">
               <h3>🎯 Target Finder</h3>
               <button class="btn btn-primary btn-small" onclick="fetchTargets()">↻ Load Targets</button>
