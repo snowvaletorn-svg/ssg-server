@@ -8082,6 +8082,11 @@ function initGymGains() {
       gymHint.style.color = '#888';
     }
 
+    // Auto-fill Stat Total with the base stat for the currently selected stat
+    if (GYM_USER_STATS && GYM_USER_STATS[stat] !== undefined) {
+      document.getElementById('gym-stat-total').value = GYM_USER_STATS[stat].toLocaleString();
+    }
+
     calcGymGains();
   }
 
@@ -8118,10 +8123,10 @@ function initGymGains() {
 
       var stat = statSelect.value;
       var statTotal = 0;
-      if (es && es[stat] !== undefined) {
-        statTotal = es[stat];
-      } else if (ps[stat] !== undefined) {
-        statTotal = ps[stat];
+      if (ps[stat] !== undefined) {
+        statTotal = ps[stat]; // base stat (no buffs/debuffs)
+      } else if (es && es[stat] !== undefined) {
+        statTotal = es[stat]; // fall back to effective stat if base is unavailable
       }
 
       document.getElementById('gym-happy').value = GYM_USER_STATS.happy || '';
