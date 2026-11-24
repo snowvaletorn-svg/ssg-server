@@ -8149,8 +8149,12 @@ function clampIntInput(el) {
   if (v === '') return;
   var n = parseInt(v, 10);
   var id = el.id;
-  if (id === 'gym-perk-faction' || id === 'gym-perk-property' || id === 'gym-perk-edu-stat' ||
-      id === 'gym-perk-edu-gen' || id === 'gym-perk-job' || id === 'gym-perk-book') {
+  if (id === 'gym-perk-faction') {
+    if (n < 0) n = 0; if (n > 20) n = 20;
+  } else if (id === 'gym-perk-book') {
+    if (n < 0) n = 0; if (n > 30) n = 30;
+  } else if (id === 'gym-perk-property' || id === 'gym-perk-edu-stat' ||
+      id === 'gym-perk-edu-gen' || id === 'gym-perk-job') {
     if (n < 0) n = 0; if (n > 10) n = 10;
   } else if (id === 'gym-total-energy') {
     if (n < 1) n = 1; if (n > 1000) n = 1000;
