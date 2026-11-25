@@ -8095,7 +8095,7 @@ function initGymGains() {
 
   const inputs = [
     'gym-perk-faction', 'gym-perk-property', 'gym-perk-edu-stat', 'gym-perk-edu-gen',
-    'gym-perk-job', 'gym-perk-book', 'gym-happy', 'gym-stat-total', 'gym-total-energy'
+    'gym-perk-job', 'gym-perk-book', 'gym-happy', 'gym-happy-loss', 'gym-stat-total', 'gym-total-energy'
   ];
   inputs.forEach(function(id) {
     var el = document.getElementById(id);
@@ -8160,6 +8160,8 @@ function clampIntInput(el) {
     if (n < 1) n = 1; if (n > 1000) n = 1000;
   } else if (id === 'gym-happy') {
     if (n < 0) n = 0;
+  } else if (id === 'gym-happy-loss') {
+    if (n < 0) n = 0;
   } else if (id === 'gym-stat-total') {
     if (n < 0) n = 0;
   }
@@ -8188,6 +8190,7 @@ function calcGymGains() {
   var perkJob = parseInt(document.getElementById('gym-perk-job').value.replace(/,/g, '')) || 0;
   var perkBook = parseInt(document.getElementById('gym-perk-book').value.replace(/,/g, '')) || 0;
   var happy = parseInt(document.getElementById('gym-happy').value.replace(/,/g, '')) || 0;
+  var happyLoss = parseInt(document.getElementById('gym-happy-loss').value.replace(/,/g, '')) || 0;
   var statTotal = parseInt(document.getElementById('gym-stat-total').value.replace(/,/g, '')) || 0;
   var totalEnergy = parseInt(document.getElementById('gym-total-energy').value.replace(/,/g, '')) || 0;
 
@@ -8200,11 +8203,6 @@ function calcGymGains() {
     (1 + perkEduGen / 100) *
     (1 + perkJob / 100) *
     (1 + perkBook / 100);
-
-  var lnTerm = Math.round(Math.log(1 + happy / 250) * 10000) / 10000;
-  var happyMult = Math.round((1 + 0.07 * lnTerm) * 10000) / 10000;
-  var happyTerm = 8 * Math.pow(happy, 1.05);
-  var decayTerm = (1 - Math.pow(happy / 99999, 2)) * A;
 
   // Number of trains (exact division, no flooring — matches spreadsheet)
   var numTrains = totalEnergy / energyPerTrain;
@@ -8219,19 +8217,28 @@ function calcGymGains() {
 
   // ── Incremental calculation ──
   // Each train increases the stat total, which becomes the base for the next train.
-  // Precompute the parts of the formula that don't change per train.
+  // Happy decreases per train, so happy-dependent terms are recomputed each iteration.
   var baseMult = dots * energyPerTrain * perkMultiplier / 200000;
-  var happyPart = happyTerm + decayTerm + B;
 
   var totalGain = 0;
   var currentStat = statTotal;
+  var curHappy = happy;
   var lastSingleGain = 0;
 
   for (var i = 0; i < fullTrains; i++) {
+    var lnTerm = Math.round(Math.log(1 + curHappy / 250) * 10000) / 10000;
+    var happyMult = Math.round((1 + 0.07 * lnTerm) * 10000) / 10000;
+    var happyTerm = 8 * Math.pow(curHappy, 1.05);
+    var decayTerm = (1 - Math.pow(curHappy / 99999, 2)) * A;
+    var happyPart = happyTerm + decayTerm + B;
+
     var cappedS = Math.min(currentStat, 50000000);
     lastSingleGain = (cappedS * happyMult + happyPart) * baseMult;
     totalGain += lastSingleGain;
     currentStat += lastSingleGain;
+
+    curHappy -= happyLoss;
+    if (curHappy < 1) curHappy = 1;
   }
 
   document.getElementById('gym-result-trains').textContent = numTrains.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 1 });
