@@ -721,7 +721,7 @@ const isFactionMember = (req, res, next) => {
 //
 // Note: utilities / OC crime items map to Torn's "temporary" armory category.
 // We treat a position as having Utility Loaning when its temporary (or a possible
-// dedicated utilities) loan capacity is > 0, OR the position is ownership/leadership.
+// dedicated utilities) loan capacity is > 0, OR the position is ownership/leadership/strategy.
 let utilityLoaningCache = null;
 let utilityLoaningCacheAt = 0;
 const UTILITY_LOANING_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
@@ -790,8 +790,8 @@ async function getUtilityLoaningPositions() {
 // Does a given session user have the Utility Loaning permission?
 async function isUtilityLoaningUser(user) {
   if (!user?.factionPosition) return false;
-  // Ownership / leadership always qualify
-  if (hasPositionGroup(user, 'ownership') || hasPositionGroup(user, 'leadership')) return true;
+  // Ownership / leadership / strategy always qualify
+  if (hasPositionGroup(user, 'ownership') || hasPositionGroup(user, 'leadership') || hasPositionGroup(user, 'strategy')) return true;
   try {
     const positions = await getUtilityLoaningPositions();
     return positions.has(user.factionPosition);
