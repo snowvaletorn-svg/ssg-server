@@ -231,14 +231,13 @@ const ROLL_SCOPES = ['all', 'growth', 'strength', 'strategy'];
 // Map a Torn faction position string to a roll scope group (or null if the
 // position is not part of any role-based scope). Mirrors the POSITIONS groups
 // used for permissions on the server: growth = Team Growth + Recruit,
-// strength = Team Strength + Murder Child, strategy = Team Strategy
-// (both the underscore and space variants occur on the server).
+// strength = Team Strength + Murder Child, strategy = Team Strategy I / II / III
 // Warlord, ownership/leadership/matriarch and unknown roles return null —
 // they still roll under the 'all' scope.
 function roleGroupForPosition(position) {
   if (position == null) return null;
   const normalized = String(position).replace(/_/g, ' ').trim();
-  if (normalized === 'Team Strategy') return 'strategy';
+  if (normalized === 'Team Strategy I' || normalized === 'Team Strategy II' || normalized === 'Team Strategy III') return 'strategy';
   if (normalized === 'Team Strength' || normalized === 'Murder Child') return 'strength';
   if (normalized === 'Team Growth' || normalized === 'Recruit') return 'growth';
   return null;

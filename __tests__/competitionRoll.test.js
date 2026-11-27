@@ -13,9 +13,10 @@ describe('ROLL_SCOPES', () => {
 });
 
 describe('roleGroupForPosition', () => {
-  test('maps Team Strategy (both variants) to strategy', () => {
-    expect(roleGroupForPosition('Team Strategy')).toBe('strategy');
-    expect(roleGroupForPosition('Team_Strategy')).toBe('strategy');
+  test('maps Team Strategy I, II, and III to strategy', () => {
+    expect(roleGroupForPosition('Team Strategy I')).toBe('strategy');
+    expect(roleGroupForPosition('Team Strategy II')).toBe('strategy');
+    expect(roleGroupForPosition('Team Strategy III')).toBe('strategy');
   });
 
   test('maps Team Strength and Murder Child to strength', () => {
@@ -43,13 +44,13 @@ describe('roleGroupForPosition', () => {
 describe('selectRollCandidates', () => {
   const members = [
     { playerId: 1, playerName: 'Alice', position: 'Leader' },
-    { playerId: 2, playerName: 'Bob', position: 'Team_Strategy' },
+    { playerId: 2, playerName: 'Bob', position: 'Team Strategy II' },
     { playerId: 3, playerName: 'Carol', position: 'Murder Child' },
     { playerId: 4, playerName: 'Dave', position: 'Team Growth' },
     { playerId: 5, playerName: 'Eve', position: 'Recruit' },
     { playerId: 6, playerName: 'Frank', position: 'Warlord' },
     { playerId: 7, playerName: 'Grace', position: 'Team Strength' },
-    { playerId: 8, playerName: 'Heidi', position: 'Team Strategy' }
+    { playerId: 8, playerName: 'Heidi', position: 'Team Strategy I' }
   ];
 
   test('all scope returns every member including ownership and warlord', () => {

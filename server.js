@@ -286,7 +286,7 @@ const POSITIONS = {
   ownership: ['Leader', 'Co-leader', 'Matriarch'],
   leadership: ['Leadership'],
   warlord: ['Warlord'],
-  strategy: ['Team Strategy', 'Team_Strategy'],
+  strategy: ['Team Strategy II', 'Team Strategy III'],
   strength: ['Team Strength', 'Murder Child'],
   growth: ['Team Growth', 'Recruit'],
 };
@@ -925,8 +925,9 @@ app.get('/', async (req, res) => {
             'Matriarch': 'Ownership',
             'Leadership': 'Leadership',
             'Warlord': 'Warlord',
-            'Team Strategy': 'Strategy',
-            'Team_Strategy': 'Strategy',
+            'Team Strategy I': 'Strategy',
+            'Team Strategy II': 'Strategy',
+            'Team Strategy III': 'Strategy',
             'Team Strength': 'Strength',
             'Murder Child' : 'Strength',
             'Team Growth': 'Growth',
@@ -3474,7 +3475,7 @@ app.get('/api/war/target-comparison', isAuthenticated, isOwnership, async (req, 
     // Sort members by position, enemies by stats (descending)
     const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
     ssgMembers.sort((a, b) => {

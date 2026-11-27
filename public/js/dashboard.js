@@ -2359,7 +2359,7 @@ function renderFaction(d, statsMap = {}, travelMap = {}, skillsMap = {}) {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
   const memberRows = members
@@ -3407,7 +3407,7 @@ function renderWarOverview() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
   const sorted = [...warDataOverview].sort((a, b) => {
@@ -3955,7 +3955,7 @@ function renderMemberOverview() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
   const sorted = [...overviewData].sort((a, b) => {
@@ -4174,7 +4174,7 @@ function renderFactionLoans(members, totals, armoryItems) {
   // Sort by position hierarchy then name (matching Member Overview table order)
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
   const sorted = [...members].sort((a, b) => {
@@ -4309,7 +4309,7 @@ function renderMemberEquipment(members, meta = {}) {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
   const sorted = [...members].sort((a, b) => {
@@ -4517,7 +4517,7 @@ function exportOverviewCSV() {
 
   const positionOrder = {
     'Leader': 0, 'Co-leader': 1, 'Matriarch': 2, 'Leadership': 3, 'Warlord': 4,
-    'Team_Strategy': 5, 'Team Strategy': 6, 'Team Strength': 7, 'Murder Child': 8, 'Team Growth': 9, 'Recruit': 10
+    'Team Strategy I': 5, 'Team Strategy II': 6, 'Team Strategy III': 7, 'Team Strength': 8, 'Murder Child': 9, 'Team Growth': 10, 'Recruit': 11
   };
 
   const sorted = [...overviewData].sort((a, b) => {
@@ -4899,7 +4899,7 @@ const HELP_CONTENT = {
           <div class="help-step"><div class="help-step-num">1</div><div class="help-step-text"><strong style="color:#c0bcbc;">All faction members</strong> — draws from every member in the snapshot</div></div>
           <div class="help-step"><div class="help-step-num">2</div><div class="help-step-text"><strong style="color:#c0bcbc;">growth</strong> — Team Growth and Recruit roles</div></div>
           <div class="help-step"><div class="help-step-num">3</div><div class="help-step-text"><strong style="color:#c0bcbc;">strength</strong> — Team Strength and Murder Child roles</div></div>
-          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text"><strong style="color:#c0bcbc;">strategy</strong> — Team Strategy roles</div></div>
+          <div class="help-step"><div class="help-step-num">4</div><div class="help-step-text"><strong style="color:#c0bcbc;">strategy</strong> — Team Strategy I, II, and III roles</div></div>
           <div class="help-callout">💡 The draw happens on the server against the latest daily snapshot. If a scope has no members yet, the roll reports that instead of drawing.</div>
         `
       }
